@@ -115,3 +115,7 @@ lint/tmp/
 .DS_Store
 
 checkouts/**
+
+# Local planning notes and generated knowledge graph — not part of the app
+/project/
+graphify-out/
