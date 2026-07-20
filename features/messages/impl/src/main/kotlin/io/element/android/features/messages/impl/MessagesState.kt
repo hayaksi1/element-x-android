@@ -63,6 +63,8 @@ data class MessagesState(
     val successorRoom: SuccessorRoom?,
     val threads: Threads,
     val showLiveLocationShareBanner: Boolean,
+    /** Whether the message search entry point is available in the top bar. */
+    val canSearch: Boolean,
     val redactEventAction: AsyncAction<Unit>,
     val eventSink: (MessagesEvent) -> Unit
 ) {
