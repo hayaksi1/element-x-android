@@ -193,6 +193,22 @@ class RustMatrixClientFactory(
             )
             .enableShareHistoryOnInvite(true)
             .threadsEnabled(featureFlagService.isFeatureEnabled(FeatureFlags.Threads), threadSubscriptions = false)
+            .run {
+                // Note: every ClientBuilder call returns a NEW reference, so this must stay in
+                // expression position — using `if (flag) withSearchIndexStore(...)` as a statement
+                // would silently drop the result and leave the index disabled.
+                if (featureFlagService.isFeatureEnabled(FeatureFlags.MessageSearch) && clientSecret != null) {
+                    // The index is encrypted at rest with the session secret, reusing the exact
+                    // string the SDK's SQLite stores already use. When there is no secret we skip
+                    // indexing entirely rather than writing message bodies to disk in plaintext.
+                    withSearchIndexStore(
+                        path = File(sessionPaths.fileDirectory, SEARCH_INDEX_DIRECTORY).absolutePath,
+                        password = clientSecret.formattedAsString(),
+                    )
+                } else {
+                    this
+                }
+            }
             .dmRoomDefinition(DmRoomDefinition.TWO_MEMBERS)
             .requestConfig(
                 RequestConfig(
@@ -220,6 +236,12 @@ class RustMatrixClientFactory(
             }
     }
 }
+
+/**
+ * Directory holding the local message search index, under the session's file directory.
+ * Not the cache directory: the index is not disposable, and a cache wipe should not destroy it.
+ */
+internal const val SEARCH_INDEX_DIRECTORY = "search-index"
 
 sealed interface ClientBuilderSlidingSync {
     // The proxy will be supplied when restoring the Session.
