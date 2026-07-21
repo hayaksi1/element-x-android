@@ -117,7 +117,8 @@ class MessageSearchPresenter(
             // Rust service believing it is still loading. `collect` suspends its own source instead,
             // so a page always finishes and the loop notices the change on its next pass.
             snapshotFlow { isListEndVisible }.collect {
-                while (true) {
+                var keepPaginating = true
+                while (keepPaginating) {
                     // Awaited, not sampled. The SDK reports its pagination state through a listener
                     // on its own thread, so it can still read Loading for a moment after paginate()
                     // has returned. Treating that as "stop" would end the search on a race, and
@@ -125,15 +126,15 @@ class MessageSearchPresenter(
                     val idle = messageSearch.paginationState
                         .filterIsInstance<MessageSearchPaginationState.Idle>()
                         .first()
-                    if (idle.endReached) break
                     // Two reasons to pull a page, covering two different screens. A room-scoped
                     // search with nothing to show yet is filtering a globally-ranked set, so it
                     // walks the whole set on its own — the pages come from the local index, and
                     // any one of them could be the one holding this room's hits. A list that
                     // already has rows pulls only while the user is looking at the end of it.
                     val roomScopedAndEmpty = roomId != null && messageSearch.results.value.isEmpty()
-                    if (!roomScopedAndEmpty && !isListEndVisible) break
-                    if (!paginate()) break
+                    val shouldPaginate = !idle.endReached && (roomScopedAndEmpty || isListEndVisible)
+                    // The loop stops on the first pass that has no reason to pull, or on a failure.
+                    keepPaginating = shouldPaginate && paginate()
                 }
             }
         }

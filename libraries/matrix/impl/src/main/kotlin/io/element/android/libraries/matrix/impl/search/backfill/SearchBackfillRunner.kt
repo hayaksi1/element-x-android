@@ -57,43 +57,18 @@ internal class SearchBackfillRunner(
         }
 
         var pagesThisExecution = 0
+        var stopped = false
 
-        while (!cursor.isDrained) {
-            if (!currentCoroutineContext().isActive) {
-                Timber.tag(LOG_TAG).d("Cancelled, stopping at index ${cursor.index}")
-                break
-            }
-            if (pagesThisExecution >= budget.maxPagesPerExecution) {
-                Timber.tag(LOG_TAG).d("Page budget spent after $pagesThisExecution pages")
-                cursor = cursor.copy(stoppedByBudget = true)
-                break
-            }
-            if (currentTimeMillis() - startedAt >= budget.executionDeadline.inWholeMilliseconds) {
-                Timber.tag(LOG_TAG).d("Execution deadline reached")
-                cursor = cursor.copy(stoppedByBudget = true)
-                break
-            }
-
-            val roomId = cursor.roomAt(cursor.index) ?: break
-            val result = sweepRoom(roomId, remainingPages = budget.maxPagesPerExecution - pagesThisExecution)
-            pagesThisExecution += result.pagesIssued
-
-            cursor = cursor.copy(
-                index = cursor.index + 1,
-                pagesDone = cursor.pagesDone + (roomId.value to result.pagesIssued),
-                outcomes = cursor.outcomes + (roomId.value to result.outcome),
-                failures = if (result.outcome == RoomSweepOutcome.FAILED) {
-                    cursor.failures + (roomId.value to (cursor.failures[roomId.value] ?: 0) + 1)
-                } else {
-                    cursor.failures
-                },
-                pagesIssued = cursor.pagesIssued + result.pagesIssued,
-            )
-            // Persisted after every room so process death costs at most one room of progress.
-            store.setCursor(cursor)
-
-            if (!cursor.isDrained) {
-                delay(budget.delayBetweenRooms)
+        while (!stopped && !cursor.isDrained) {
+            when (val step = sweepNextRoom(cursor, startedAt, pagesThisExecution)) {
+                is SweepStep.Stop -> {
+                    cursor = step.cursor
+                    stopped = true
+                }
+                is SweepStep.Continue -> {
+                    cursor = step.cursor
+                    pagesThisExecution += step.pagesIssued
+                }
             }
         }
 
@@ -106,6 +81,54 @@ internal class SearchBackfillRunner(
             finished.pagesIssued,
         )
         return finished
+    }
+
+    /**
+     * One iteration of the sweep: the budget and cancellation guards, then at most one room.
+     *
+     * Extracted so the loop above is a single decision — carry on, or stop with this cursor — instead
+     * of a stack of early exits. The guards keep the order they had inline: cancellation, then the
+     * page budget, then the deadline, so the clock is read exactly once per surviving iteration.
+     */
+    private suspend fun sweepNextRoom(
+        cursor: SearchBackfillCursor,
+        startedAt: Long,
+        pagesThisExecution: Int,
+    ): SweepStep {
+        if (!currentCoroutineContext().isActive) {
+            Timber.tag(LOG_TAG).d("Cancelled, stopping at index ${cursor.index}")
+            return SweepStep.Stop(cursor)
+        }
+        if (pagesThisExecution >= budget.maxPagesPerExecution) {
+            Timber.tag(LOG_TAG).d("Page budget spent after $pagesThisExecution pages")
+            return SweepStep.Stop(cursor.copy(stoppedByBudget = true))
+        }
+        if (currentTimeMillis() - startedAt >= budget.executionDeadline.inWholeMilliseconds) {
+            Timber.tag(LOG_TAG).d("Execution deadline reached")
+            return SweepStep.Stop(cursor.copy(stoppedByBudget = true))
+        }
+
+        val roomId = cursor.roomAt(cursor.index) ?: return SweepStep.Stop(cursor)
+        val result = sweepRoom(roomId, remainingPages = budget.maxPagesPerExecution - pagesThisExecution)
+
+        val updated = cursor.copy(
+            index = cursor.index + 1,
+            pagesDone = cursor.pagesDone + (roomId.value to result.pagesIssued),
+            outcomes = cursor.outcomes + (roomId.value to result.outcome),
+            failures = if (result.outcome == RoomSweepOutcome.FAILED) {
+                cursor.failures + (roomId.value to (cursor.failures[roomId.value] ?: 0) + 1)
+            } else {
+                cursor.failures
+            },
+            pagesIssued = cursor.pagesIssued + result.pagesIssued,
+        )
+        // Persisted after every room so process death costs at most one room of progress.
+        store.setCursor(updated)
+
+        if (!updated.isDrained) {
+            delay(budget.delayBetweenRooms)
+        }
+        return SweepStep.Continue(updated, result.pagesIssued)
     }
 
     private suspend fun resumeOrStartGeneration(startedAt: Long): SearchBackfillCursor {
@@ -180,4 +203,13 @@ internal class SearchBackfillRunner(
         val outcome: RoomSweepOutcome,
         val pagesIssued: Int,
     )
+
+    /** Outcome of one sweep iteration: the loop either carries on with [cursor], or ends on it. */
+    private sealed interface SweepStep {
+        val cursor: SearchBackfillCursor
+
+        data class Continue(override val cursor: SearchBackfillCursor, val pagesIssued: Int) : SweepStep
+
+        data class Stop(override val cursor: SearchBackfillCursor) : SweepStep
+    }
 }
