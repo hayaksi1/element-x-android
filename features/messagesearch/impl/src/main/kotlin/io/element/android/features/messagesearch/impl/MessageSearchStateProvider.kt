@@ -25,8 +25,9 @@ open class MessageSearchStateProvider : PreviewParameterProvider<MessageSearchSt
             aMessageSearchState(query = "hello", isSearching = true),
             // Results.
             aMessageSearchState(query = "hello", results = aMessageSearchResultItemList(), endReached = true),
-            // Results with more pages available.
-            aMessageSearchState(query = "hello", results = aMessageSearchResultItemList()),
+            // Results, with the next page on its way. The footer spinner is tied to a page being in
+            // flight, so this is the only state that renders it.
+            aMessageSearchState(query = "hello", results = aMessageSearchResultItemList(), isPaginating = true),
             // Genuinely nothing found.
             aMessageSearchState(query = "hello", endReached = true),
             // Search failed.
