@@ -9,6 +9,7 @@
 package io.element.android.libraries.matrix.impl
 
 import com.google.common.truth.Truth.assertThat
+import io.element.android.libraries.featureflag.api.FeatureFlags
 import io.element.android.libraries.featureflag.test.FakeFeatureFlagService
 import io.element.android.libraries.matrix.api.core.SessionId
 import io.element.android.libraries.matrix.impl.auth.FakeProxyProvider
@@ -42,6 +43,40 @@ class RustMatrixClientFactoryTest {
         scheduleVacuumLambda.assertions().isCalledOnce()
         result.destroy()
     }
+
+    @Test
+    fun `create - message search is unavailable when the client secret is missing`() = runTest {
+        val featureFlagService = FakeFeatureFlagService(
+            initialState = mapOf(FeatureFlags.MessageSearch.key to true),
+        )
+        val sut = createRustMatrixClientFactory(
+            featureFlagService = featureFlagService,
+            workManagerScheduler = FakeWorkManagerScheduler(submitLambda = {}),
+        )
+
+        val result = sut.create(aSessionData().copy(passphrase = null))
+
+        assertThat(result.isMessageSearchAvailable).isFalse()
+        result.destroy()
+    }
+
+    @Test
+    fun `create - message search availability uses the client builder decision`() = runTest {
+        val featureFlagService = FakeFeatureFlagService(
+            initialState = mapOf(FeatureFlags.MessageSearch.key to true),
+        )
+        val sut = createRustMatrixClientFactory(
+            featureFlagService = featureFlagService,
+            workManagerScheduler = FakeWorkManagerScheduler(submitLambda = {}),
+        )
+
+        val result = sut.create(aSessionData().copy(passphrase = "aSecret"))
+
+        assertThat(result.isMessageSearchAvailable).isTrue()
+        featureFlagService.setFeatureEnabled(FeatureFlags.MessageSearch, false)
+        assertThat(result.isMessageSearchAvailable).isTrue()
+        result.destroy()
+    }
 }
 
 fun TestScope.createRustMatrixClientFactory(
@@ -51,6 +86,8 @@ fun TestScope.createRustMatrixClientFactory(
     ),
     clientBuilderProvider: ClientBuilderProvider = FakeClientBuilderProvider(),
     workManagerScheduler: FakeWorkManagerScheduler = FakeWorkManagerScheduler(),
+    contentScannerUrlProvider: ContentScannerUrlProvider = { Result.success(null) },
+    featureFlagService: FakeFeatureFlagService = FakeFeatureFlagService(),
 ) = RustMatrixClientFactory(
     cacheDirectory = cacheDirectory,
     appCoroutineScope = backgroundScope,
@@ -60,7 +97,7 @@ fun TestScope.createRustMatrixClientFactory(
     proxyProvider = FakeProxyProvider(),
     clock = FakeSystemClock(),
     analyticsService = FakeAnalyticsService(),
-    featureFlagService = FakeFeatureFlagService(),
+    featureFlagService = featureFlagService,
     timelineEventFilterFactory = FakeTimelineEventFilterFactory(),
     clientBuilderProvider = clientBuilderProvider,
     sqliteStoreBuilderProvider = FakeSqliteStoreBuilderProvider(),
