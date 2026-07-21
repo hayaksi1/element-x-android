@@ -11,8 +11,8 @@ sealed interface MessageSearchEvents {
     data class QueryChanged(val query: String) : MessageSearchEvents
 
     /**
-     * Load another page. In a room-scoped search this also lifts the automatic pagination cap for
-     * another [MAX_AUTO_PAGINATIONS] pages.
+     * Load another page. Only reachable from the global search's empty-with-pages-remaining
+     * prompt; a room-scoped search walks the result set to the end on its own.
      */
     data object LoadMore : MessageSearchEvents
 
