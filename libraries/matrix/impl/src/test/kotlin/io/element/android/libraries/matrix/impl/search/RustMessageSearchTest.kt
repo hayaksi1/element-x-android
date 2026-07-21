@@ -52,17 +52,19 @@ class RustMessageSearchTest {
     }
 
     @Test
-    fun `the query handed to the SDK is escaped for tantivy`() = runTest {
+    fun `the query handed to the SDK is escaped and made conjunctive for tantivy`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         val scope = CoroutineScope(dispatcher)
         var queryReceived: String? = null
         val service = FakeFfiSearchService(setQueryLambda = { queryReceived = it })
         val search = RustMessageSearch(inner = service, onClose = {}, scope = scope, dispatcher = dispatcher)
 
-        // Unescaped, tantivy reads `https` as a field name and fails the entire search.
+        // Unescaped, tantivy reads `https` as a field name and fails the entire search. The `+`
+        // makes the term mandatory: without it tantivy is OR-by-default and a multi-word query
+        // matches anything containing any one of its words.
         search.setQuery("https://github.com/foo")
 
-        assertThat(queryReceived).isEqualTo("https\\://github.com/foo")
+        assertThat(queryReceived).isEqualTo("+https\\://github.com/foo")
 
         scope.cancel()
     }

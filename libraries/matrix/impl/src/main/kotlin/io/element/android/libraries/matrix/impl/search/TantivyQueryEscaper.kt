@@ -33,30 +33,45 @@ private val WHITESPACE_REGEX = Regex("\\s+")
 private const val ESCAPE_HEADROOM = 8
 
 /**
- * Escapes a user-typed search string so tantivy's query parser reads it as literal text instead of
- * query syntax.
+ * Escapes a user-typed search string so tantivy's query parser reads it as literal text, and makes
+ * every word of it mandatory.
  *
- * `matrix-sdk-search` hands the query to the **strict** `QueryParser::parse_query` with `body` as the
- * only default field, so an unescaped `:` sends tantivy looking for a field named `https` and the
- * whole search fails — pasting a link finds nothing at all. Unbalanced quotes and brackets, a leading
- * `-`, and elastic ranges like `>5` fail the same way, and the error arrives as an opaque
- * `ClientError` string we cannot tell apart from an I/O failure.
+ * **Escaping.** `matrix-sdk-search` hands the query to the **strict** `QueryParser::parse_query` with
+ * `body` as the only default field, so an unescaped `:` sends tantivy looking for a field named
+ * `https` and the whole search fails — pasting a link finds nothing at all. Unbalanced quotes and
+ * brackets, a leading `-`, and elastic ranges like `>5` fail the same way, and the error arrives as
+ * an opaque `ClientError` string we cannot tell apart from an I/O failure.
  *
  * Escaping is per token rather than wrapping the whole query in quotes: whitespace stays the term
- * separator, so the parser's default OR across words is preserved and only a token that actually
- * contained an operator changes shape. Wrapping instead would turn `design review notes` into one
- * ordered phrase and quietly break every ordinary search.
+ * separator, and only a token that actually contained an operator changes shape. Wrapping instead
+ * would turn `design review notes` into one ordered phrase and quietly break every ordinary search.
  *
- * The cost, stated plainly: deliberate `"phrase"`, `-exclude` and boolean syntax stop working as
- * operators. None of it was advertised in the UI, and a malformed use of it currently kills the
- * search outright.
+ * **Conjunction.** tantivy's parser is OR-by-default and the FFI takes a bare string, so
+ * `set_conjunction_by_default()` is unreachable from here — `check the photo` matched every message
+ * containing `the`, and buried the wanted one under hundreds of unrelated hits ranked by relevance.
+ * Prefixing each token with `+` makes it a Must clause, which parses to exactly the query
+ * `set_conjunction_by_default()` would have built.
+ *
+ * The `+` goes on **after** escaping, never before: `+` is escaped in leading position, so prefixing
+ * first would hand the escaper its own operator and produce a literal `\+`. That parses cleanly and
+ * silently restores OR, so it cannot be caught by anything but an assertion on the exact string.
+ *
+ * The costs, stated plainly: deliberate `"phrase"`, `-exclude` and boolean syntax stop working as
+ * operators; and a query is now only as good as its worst word — one typo, or one word the user
+ * misremembers, empties the result set where before it degraded to partial matches.
  *
  * Pinned to tantivy 0.26.1 grammar. PII: the query is never logged.
  */
 internal fun String.escapeForTantivy(): String =
     split(WHITESPACE_REGEX)
         .filter { it.isNotEmpty() }
-        .joinToString(separator = " ") { it.escapeToken() }
+        .joinToString(separator = " ") { token ->
+            // tantivy's default tokenizer splits on non-alphanumerics, so a token like `:)` or an
+            // emoji indexes no terms at all. Required, such a token could only ever subtract, and a
+            // single emoji beside real words would silently empty the results. Optional, it is
+            // inert — which is what it was before conjunctions too.
+            if (token.any(Char::isLetterOrDigit)) "+${token.escapeToken()}" else token.escapeToken()
+        }
 
 private fun String.escapeToken(): String = buildString(length + ESCAPE_HEADROOM) {
     if (this@escapeToken in OPERATOR_WORDS) append('\\')
