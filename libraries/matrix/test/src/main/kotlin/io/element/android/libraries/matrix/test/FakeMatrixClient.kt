@@ -93,6 +93,7 @@ class FakeMatrixClient(
     override val syncService: SyncService = FakeSyncService(),
     override val encryptionService: EncryptionService = FakeEncryptionService(),
     override val roomDirectoryService: RoomDirectoryService = FakeRoomDirectoryService(),
+    override val isMessageSearchAvailable: Boolean = false,
     override val messageSearchService: MessageSearchService = FakeMessageSearchService(),
     override val mediaPreviewService: MediaPreviewService = FakeMediaPreviewService(),
     override val roomMembershipObserver: RoomMembershipObserver = RoomMembershipObserver(),

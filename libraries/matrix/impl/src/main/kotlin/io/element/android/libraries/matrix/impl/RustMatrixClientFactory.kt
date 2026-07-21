@@ -81,11 +81,12 @@ class RustMatrixClientFactory(
     suspend fun create(sessionData: SessionData): RustMatrixClient = withContext(coroutineDispatchers.io) {
         // This secret is called 'passphrase' for historical reasons, but it can be a raw key or an actual passphrase
         val clientSecret = sessionData.passphrase?.let(ClientSecret::fromString)
-        val client = getBaseClientBuilder(
+        val baseClientBuilder = getBaseClientBuilder(
             sessionPaths = sessionData.getSessionPaths(),
             clientSecret = clientSecret,
             slidingSyncType = ClientBuilderSlidingSync.Restored,
         )
+        val client = baseClientBuilder.clientBuilder
             .homeserverUrl(sessionData.homeserverUrl)
             .username(sessionData.userId)
             .use { it.build() }
@@ -105,10 +106,14 @@ class RustMatrixClientFactory(
 
         client.restoreSession(sessionData.toSession())
 
-        create(client, sessionData)
+        create(client, sessionData, baseClientBuilder.isMessageSearchAvailable)
     }
 
-    suspend fun create(client: Client, sessionData: SessionData): RustMatrixClient {
+    suspend fun create(
+        client: Client,
+        sessionData: SessionData,
+        isMessageSearchAvailable: Boolean,
+    ): RustMatrixClient {
         val (anonymizedAccessToken, anonymizedRefreshToken) = client.session().anonymizedTokens()
 
         // Must be called before creating the sync service, timelines etc.
@@ -155,6 +160,7 @@ class RustMatrixClientFactory(
             analyticsService = analyticsService,
             workManagerScheduler = workManagerScheduler,
             contentScanner = contentScanner,
+            isMessageSearchAvailable = isMessageSearchAvailable,
         ).also {
             Timber.tag("RustMatrixClient").i("Creating Client with access token '$anonymizedAccessToken' and refresh token '$anonymizedRefreshToken'")
         }
@@ -164,8 +170,9 @@ class RustMatrixClientFactory(
         sessionPaths: SessionPaths,
         clientSecret: ClientSecret?,
         slidingSyncType: ClientBuilderSlidingSync,
-    ): ClientBuilder {
-        return clientBuilderProvider.provide()
+    ): BaseClientBuilder {
+        val isMessageSearchAvailable = featureFlagService.isFeatureEnabled(FeatureFlags.MessageSearch) && clientSecret != null
+        val clientBuilder = clientBuilderProvider.provide()
             .run {
                 sqliteStoreBuilderProvider.provide(sessionPaths)
                     .secret(clientSecret)
@@ -197,7 +204,7 @@ class RustMatrixClientFactory(
                 // Note: every ClientBuilder call returns a NEW reference, so this must stay in
                 // expression position — using `if (flag) withSearchIndexStore(...)` as a statement
                 // would silently drop the result and leave the index disabled.
-                if (featureFlagService.isFeatureEnabled(FeatureFlags.MessageSearch) && clientSecret != null) {
+                if (isMessageSearchAvailable) {
                     // The index is encrypted at rest with the session secret, reusing the exact
                     // string the SDK's SQLite stores already use. When there is no secret we skip
                     // indexing entirely rather than writing message bodies to disk in plaintext.
@@ -234,8 +241,17 @@ class RustMatrixClientFactory(
                 // Workaround for non-nullable proxy parameter in the SDK, since each call to the ClientBuilder returns a new reference we need to keep
                 proxyProvider.provides()?.let { proxy(it) } ?: this
             }
+        return BaseClientBuilder(
+            clientBuilder = clientBuilder,
+            isMessageSearchAvailable = isMessageSearchAvailable,
+        )
     }
 }
+
+internal data class BaseClientBuilder(
+    val clientBuilder: ClientBuilder,
+    val isMessageSearchAvailable: Boolean,
+)
 
 /**
  * Directory holding the local message search index, under the session's file directory.
