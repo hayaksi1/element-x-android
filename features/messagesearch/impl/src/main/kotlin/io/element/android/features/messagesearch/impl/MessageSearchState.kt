@@ -21,6 +21,8 @@ data class MessageSearchState(
     val endReached: Boolean,
     /** True when this search is limited to a single room. */
     val isRoomScoped: Boolean,
+    /** True when setting the query or loading another page failed. */
+    val hasError: Boolean,
     /**
      * Room-scoped only: automatic pagination gave up before finding anything in this room, so the
      * user is offered the choice to keep looking rather than being shown an indefinite spinner.
@@ -29,11 +31,14 @@ data class MessageSearchState(
     val eventSink: (MessageSearchEvents) -> Unit,
 ) {
     /** Nothing has been typed yet — prompt rather than claim there are no results. */
-    val displayInitialState: Boolean = query.isBlank()
+    val displayInitialState: Boolean = query.isBlank() && !hasError
+
+    val displayErrorState: Boolean = hasError
 
     /** The query genuinely produced nothing and there is nothing left to load. */
     val displayEmptyState: Boolean = query.isNotBlank() &&
         results.isEmpty() &&
+        !hasError &&
         !isSearching &&
         !isPaginating &&
         endReached
@@ -41,11 +46,12 @@ data class MessageSearchState(
     /** Results are empty but pages remain — offer to keep loading instead of claiming "no results". */
     val displayKeepLoadingPrompt: Boolean = query.isNotBlank() &&
         results.isEmpty() &&
+        !hasError &&
         !isSearching &&
         !isPaginating &&
         !endReached
 
-    val displayLoadMoreIndicator: Boolean = results.isNotEmpty() && !endReached
+    val displayLoadMoreIndicator: Boolean = results.isNotEmpty() && !endReached && !hasError
 }
 
 data class MessageSearchResultItem(

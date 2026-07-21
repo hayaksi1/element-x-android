@@ -26,7 +26,9 @@ import io.element.android.libraries.matrix.test.timeline.aMessageContent
 import io.element.android.tests.testutils.test
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
 
@@ -137,6 +139,27 @@ class MessageSearchPresenterTest {
     }
 
     @Test
+    fun `present - a failed query is not presented as an empty result`() = runTest {
+        val messageSearch = FakeMessageSearch(
+            setQueryResult = { Result.failure(IllegalStateException("Search failed")) },
+        ).apply {
+            emitPaginationState(MessageSearchPaginationState.Idle(endReached = true))
+        }
+        val presenter = createMessageSearchPresenter(messageSearch = messageSearch)
+
+        presenter.test {
+            awaitItem().eventSink(MessageSearchEvents.QueryChanged("hello"))
+            advanceUntilIdle()
+
+            expectMostRecentItem().also { state ->
+                assertThat(state.displayEmptyState).isFalse()
+                assertThat(state.displayErrorState).isTrue()
+            }
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `present - results are mapped for display`() = runTest {
         val messageSearch = FakeMessageSearch()
         val formatter = FakeRoomLatestEventFormatter().apply { givenFormatResult("a formatted preview") }
@@ -178,6 +201,32 @@ class MessageSearchPresenterTest {
         // Globally-ranked results mean this room's matches may be pages deep, so we keep pulling —
         // but only up to the cap, never forever.
         assertThat(messageSearch.paginateCallCount).isEqualTo(MAX_AUTO_PAGINATIONS)
+    }
+
+    @Test
+    fun `present - auto-pagination awaits each page without cancelling it`() = runTest {
+        val messageSearch = FakeMessageSearch(controllablePagination = true)
+        val presenter = createMessageSearchPresenter(roomId = A_ROOM_ID, messageSearch = messageSearch)
+
+        presenter.test {
+            awaitItem().eventSink(MessageSearchEvents.QueryChanged("hello"))
+            advanceTimeBy(251)
+            runCurrent()
+
+            repeat(MAX_AUTO_PAGINATIONS) { completedPageCount ->
+                assertThat(messageSearch.paginateCallCount).isEqualTo(completedPageCount + 1)
+                assertThat(messageSearch.cancelledPaginateCallCount).isEqualTo(0)
+                messageSearch.completePagination()
+                runCurrent()
+            }
+
+            assertThat(messageSearch.completedPaginateCallCount).isEqualTo(MAX_AUTO_PAGINATIONS)
+            assertThat(messageSearch.paginateCallCount).isEqualTo(MAX_AUTO_PAGINATIONS)
+            expectMostRecentItem().also { state ->
+                assertThat(state.hasReachedAutoPaginationCap).isTrue()
+            }
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 
     @Test
