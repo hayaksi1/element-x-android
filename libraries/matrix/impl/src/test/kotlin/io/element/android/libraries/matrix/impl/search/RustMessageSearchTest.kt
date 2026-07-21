@@ -52,6 +52,22 @@ class RustMessageSearchTest {
     }
 
     @Test
+    fun `the query handed to the SDK is escaped for tantivy`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val scope = CoroutineScope(dispatcher)
+        var queryReceived: String? = null
+        val service = FakeFfiSearchService(setQueryLambda = { queryReceived = it })
+        val search = RustMessageSearch(inner = service, onClose = {}, scope = scope, dispatcher = dispatcher)
+
+        // Unescaped, tantivy reads `https` as a field name and fails the entire search.
+        search.setQuery("https://github.com/foo")
+
+        assertThat(queryReceived).isEqualTo("https\\://github.com/foo")
+
+        scope.cancel()
+    }
+
+    @Test
     fun `paginate failure surfaces as Result failure without throwing`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         val scope = CoroutineScope(dispatcher)

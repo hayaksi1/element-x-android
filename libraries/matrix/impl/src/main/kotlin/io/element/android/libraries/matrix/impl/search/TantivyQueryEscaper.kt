@@ -1,0 +1,70 @@
+/*
+ * Copyright (c) 2026 Element Creations Ltd.
+ *
+ * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
+ * Please see LICENSE files in the repository root for full details.
+ */
+
+package io.element.android.libraries.matrix.impl.search
+
+/**
+ * Characters that terminate a bare word wherever they appear in it. Escaping them keeps the token a
+ * single literal word. `\` is included so a backslash the user typed cannot escape one of ours, and
+ * `*` is the prefix/all-documents operator rather than a word breaker.
+ */
+private val ESCAPED_ANYWHERE = charArrayOf('\\', '^', '`', ':', '{', '}', '"', '\'', '[', ']', '(', ')', '*')
+
+/**
+ * Characters that are operators only in the first position of a term: `-`/`+` occurrence, `/` regex,
+ * `>`/`<` elastic range, `!` field separator, `~` slop. Inside a word they are ordinary text, so
+ * escaping them there would be over-broad — `C++` and `1/2/2024` must survive untouched.
+ */
+private val ESCAPED_WHEN_LEADING = charArrayOf('-', '+', '/', '>', '<', '!', '~')
+
+/**
+ * Bare-word operators, neutralised so the query stays literal text end to end: `a AND b` searches
+ * for the three words rather than silently switching to a boolean AND. Mid-query these change
+ * meaning rather than failing; only a dangling operator is a syntax error.
+ */
+private val OPERATOR_WORDS = setOf("AND", "OR", "NOT", "IN", "TO")
+
+private val WHITESPACE_REGEX = Regex("\\s+")
+
+private const val ESCAPE_HEADROOM = 8
+
+/**
+ * Escapes a user-typed search string so tantivy's query parser reads it as literal text instead of
+ * query syntax.
+ *
+ * `matrix-sdk-search` hands the query to the **strict** `QueryParser::parse_query` with `body` as the
+ * only default field, so an unescaped `:` sends tantivy looking for a field named `https` and the
+ * whole search fails — pasting a link finds nothing at all. Unbalanced quotes and brackets, a leading
+ * `-`, and elastic ranges like `>5` fail the same way, and the error arrives as an opaque
+ * `ClientError` string we cannot tell apart from an I/O failure.
+ *
+ * Escaping is per token rather than wrapping the whole query in quotes: whitespace stays the term
+ * separator, so the parser's default OR across words is preserved and only a token that actually
+ * contained an operator changes shape. Wrapping instead would turn `design review notes` into one
+ * ordered phrase and quietly break every ordinary search.
+ *
+ * The cost, stated plainly: deliberate `"phrase"`, `-exclude` and boolean syntax stop working as
+ * operators. None of it was advertised in the UI, and a malformed use of it currently kills the
+ * search outright.
+ *
+ * Pinned to tantivy 0.26.1 grammar. PII: the query is never logged.
+ */
+internal fun String.escapeForTantivy(): String =
+    split(WHITESPACE_REGEX)
+        .filter { it.isNotEmpty() }
+        .joinToString(separator = " ") { it.escapeToken() }
+
+private fun String.escapeToken(): String = buildString(length + ESCAPE_HEADROOM) {
+    if (this@escapeToken in OPERATOR_WORDS) append('\\')
+    this@escapeToken.forEachIndexed { index, char ->
+        // One forward pass: chained replace() calls would re-escape the backslashes they just added.
+        if (char in ESCAPED_ANYWHERE || (index == 0 && char in ESCAPED_WHEN_LEADING)) {
+            append('\\')
+        }
+        append(char)
+    }
+}
