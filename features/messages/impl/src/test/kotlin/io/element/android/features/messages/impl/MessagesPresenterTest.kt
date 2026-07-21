@@ -149,6 +149,31 @@ class MessagesPresenterTest {
     }
 
     @Test
+    fun `present - message search stays unavailable when only the live feature flag is enabled`() = runTest {
+        val featureFlagService = FakeFeatureFlagService(
+            initialState = mapOf(FeatureFlags.MessageSearch.key to true),
+        )
+        val presenter = createMessagesPresenter(featureFlagService = featureFlagService)
+
+        presenter.testWithLifecycleOwner {
+            val state = consumeItemsUntilTimeout().last()
+            assertThat(state.canSearch).isFalse()
+        }
+    }
+
+    @Test
+    fun `present - message search is available when the live client has an index`() = runTest {
+        val presenter = createMessagesPresenter(
+            matrixClient = FakeMatrixClient(isMessageSearchAvailable = true),
+        )
+
+        presenter.testWithLifecycleOwner {
+            val state = consumeItemsUntilTimeout().last()
+            assertThat(state.canSearch).isTrue()
+        }
+    }
+
+    @Test
     fun `present - exposes live location sharing banner visibility for current room`() = runTest {
         val liveLocationShareManager = FakeActiveLiveLocationShareManager(
             startShareLambda = { _, _ -> Result.success(Unit) },
@@ -1458,6 +1483,7 @@ class MessagesPresenterTest {
         },
         encryptionService: FakeEncryptionService = FakeEncryptionService(),
         featureFlagService: FakeFeatureFlagService = FakeFeatureFlagService(),
+        matrixClient: FakeMatrixClient = FakeMatrixClient(),
         actionListEventSink: (ActionListEvent) -> Unit = {},
         addRecentEmoji: AddRecentEmoji = AddRecentEmoji { _ -> lambdaError() },
         markAsFullyRead: MarkAsFullyRead = FakeMarkAsFullyRead(),
@@ -1489,6 +1515,7 @@ class MessagesPresenterTest {
             analyticsService = analyticsService,
             encryptionService = encryptionService,
             featureFlagService = featureFlagService,
+            matrixClient = matrixClient,
             addRecentEmoji = addRecentEmoji,
             markAsFullyRead = markAsFullyRead,
             liveLocationShareManager = liveLocationShareManager,
