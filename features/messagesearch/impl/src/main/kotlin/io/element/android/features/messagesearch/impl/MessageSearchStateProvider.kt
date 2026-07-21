@@ -32,8 +32,8 @@ open class MessageSearchStateProvider : PreviewParameterProvider<MessageSearchSt
             aMessageSearchState(query = "hello", endReached = true),
             // Search failed.
             aMessageSearchState(query = "hello", hasError = true),
-            // Room-scoped, automatic pagination gave up.
-            aMessageSearchState(query = "hello", isRoomScoped = true, hasReachedAutoPaginationCap = true),
+            // Room-scoped, nothing to show yet while the walk over the global results runs.
+            aMessageSearchState(query = "hello", isRoomScoped = true),
         )
 }
 
@@ -45,7 +45,6 @@ fun aMessageSearchState(
     endReached: Boolean = false,
     isRoomScoped: Boolean = false,
     hasError: Boolean = false,
-    hasReachedAutoPaginationCap: Boolean = false,
     eventSink: (MessageSearchEvents) -> Unit = {},
 ) = MessageSearchState(
     query = query,
@@ -55,7 +54,6 @@ fun aMessageSearchState(
     endReached = endReached,
     isRoomScoped = isRoomScoped,
     hasError = hasError,
-    hasReachedAutoPaginationCap = hasReachedAutoPaginationCap,
     eventSink = eventSink,
 )
 

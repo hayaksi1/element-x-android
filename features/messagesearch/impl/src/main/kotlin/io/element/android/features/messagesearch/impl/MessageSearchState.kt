@@ -23,11 +23,6 @@ data class MessageSearchState(
     val isRoomScoped: Boolean,
     /** True when setting the query or loading another page failed. */
     val hasError: Boolean,
-    /**
-     * Room-scoped only: automatic pagination gave up before finding anything in this room, so the
-     * user is offered the choice to keep looking rather than being shown an indefinite spinner.
-     */
-    val hasReachedAutoPaginationCap: Boolean,
     val eventSink: (MessageSearchEvents) -> Unit,
 ) {
     /** Nothing has been typed yet — prompt rather than claim there are no results. */
@@ -43,13 +38,28 @@ data class MessageSearchState(
         !isPaginating &&
         endReached
 
-    /** Results are empty but pages remain — offer to keep loading instead of claiming "no results". */
+    /**
+     * Nothing to show yet, but the search is still working. A room-scoped search walks the whole
+     * globally-ranked result set on its own, so any empty moment before [endReached] belongs to
+     * that walk — claiming "no results" or asking the user to load more would both be dishonest.
+     */
+    val displaySearchingState: Boolean = query.isNotBlank() &&
+        results.isEmpty() &&
+        !hasError &&
+        !endReached &&
+        (isSearching || isPaginating || isRoomScoped)
+
+    /**
+     * Global search only: results are empty, pages remain and nothing is in flight. A room-scoped
+     * search never rests in this state — its walk continues to the end on its own.
+     */
     val displayKeepLoadingPrompt: Boolean = query.isNotBlank() &&
         results.isEmpty() &&
         !hasError &&
         !isSearching &&
         !isPaginating &&
-        !endReached
+        !endReached &&
+        !isRoomScoped
 
     /**
      * The SDK still has pages for this query. Room-scoped searches filter a globally-ranked set, so
