@@ -36,6 +36,8 @@ import io.element.android.libraries.matrix.api.timeline.item.event.getAvatarUrl
 import io.element.android.libraries.matrix.api.timeline.item.event.getDisambiguatedDisplayName
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.filterIsInstance
+import kotlinx.coroutines.flow.first
 
 /**
  * iOS uses 250 ms and it feels right; long enough to skip intermediate keystrokes, short enough
@@ -125,7 +127,13 @@ class MessageSearchPresenter(
             // so a page always finishes and the loop notices the change on its next pass.
             snapshotFlow { isListEndVisible }.collect {
                 while (true) {
-                    val idle = messageSearch.paginationState.value as? MessageSearchPaginationState.Idle ?: break
+                    // Awaited, not sampled. The SDK reports its pagination state through a listener
+                    // on its own thread, so it can still read Loading for a moment after paginate()
+                    // has returned. Treating that as "stop" would end the search on a race, and
+                    // nothing would restart it until the user scrolled away and back.
+                    val idle = messageSearch.paginationState
+                        .filterIsInstance<MessageSearchPaginationState.Idle>()
+                        .first()
                     if (idle.endReached) break
                     // Two reasons to pull a page, covering two different screens. A room-scoped
                     // search showing nothing yet is filtering a globally-ranked set and may simply
