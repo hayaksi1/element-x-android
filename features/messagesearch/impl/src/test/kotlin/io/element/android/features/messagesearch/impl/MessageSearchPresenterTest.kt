@@ -333,6 +333,28 @@ class MessageSearchPresenterTest {
     }
 
     @Test
+    fun `present - a pagination state still reading Loading is waited for, not treated as the end`() = runTest {
+        // The SDK publishes its pagination state from a listener on its own thread, so Loading can
+        // outlive the paginate() call that caused it. Sampling the state instead of awaiting it
+        // would end the search on that race, with nothing left to restart it.
+        val messageSearch = FakeMessageSearch().apply {
+            emitPaginationState(MessageSearchPaginationState.Loading)
+        }
+        val presenter = createMessageSearchPresenter(roomId = A_ROOM_ID, messageSearch = messageSearch)
+        presenter.test {
+            awaitItem().eventSink(MessageSearchEvents.QueryChanged("hello"))
+            advanceUntilIdle()
+            assertThat(messageSearch.paginateCallCount).isEqualTo(0)
+
+            messageSearch.emitPaginationState(MessageSearchPaginationState.Idle(endReached = false))
+            advanceUntilIdle()
+
+            assertThat(messageSearch.paginateCallCount).isEqualTo(MAX_AUTO_PAGINATIONS)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `present - scrolling away from the end stops after the page in flight`() = runTest {
         // Scroll position must not cancel a request that is already out: the SDK would be left
         // believing it is still loading, and its own paginate() no-ops in that state.
