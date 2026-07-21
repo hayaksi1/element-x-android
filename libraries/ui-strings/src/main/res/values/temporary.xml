@@ -11,6 +11,6 @@
     <string name="a11y_active">Active</string>
     <string name="a11y_inactive">Inactive</string>
     <string name="screen_message_search_title">Search messages</string>
-    <string name="screen_message_search_index_notice">Only messages received on this device since search was turned on can be found.</string>
     <string name="screen_message_search_room_no_results_yet">No matches in this room yet.</string>
+    <string name="screen_message_search_error">Something went wrong while searching. Please try again.</string>
 </resources>
