@@ -188,61 +188,53 @@ class MessageSearchPresenterTest {
     }
 
     @Test
-    fun `present - a room-scoped search auto-paginates while its room has nothing to show`() = runTest {
-        val messageSearch = FakeMessageSearch()
-        val presenter = createMessageSearchPresenter(roomId = A_ROOM_ID, messageSearch = messageSearch)
-        presenter.test {
-            awaitItem().also { state ->
-                state.eventSink(MessageSearchEvents.QueryChanged("hello"))
-            }
-            advanceUntilIdle()
-            cancelAndIgnoreRemainingEvents()
-        }
-        // Globally-ranked results mean this room's matches may be pages deep, so we keep pulling —
-        // but only up to the cap, never forever.
-        assertThat(messageSearch.paginateCallCount).isEqualTo(MAX_AUTO_PAGINATIONS)
-    }
-
-    @Test
-    fun `present - auto-pagination awaits each page without cancelling it`() = runTest {
+    fun `present - a room-scoped search paginates to the end while its room has nothing to show`() = runTest {
         val messageSearch = FakeMessageSearch(controllablePagination = true)
         val presenter = createMessageSearchPresenter(roomId = A_ROOM_ID, messageSearch = messageSearch)
-
         presenter.test {
             awaitItem().eventSink(MessageSearchEvents.QueryChanged("hello"))
             advanceTimeBy(251)
             runCurrent()
 
-            repeat(MAX_AUTO_PAGINATIONS) { completedPageCount ->
+            // Globally-ranked results mean this room's matches may be arbitrarily deep in the
+            // list, and the index is local, so the walk runs to the end rather than stopping at
+            // an arbitrary page count. Seven pages pins that the old cap of five is gone.
+            repeat(7) { completedPageCount ->
                 assertThat(messageSearch.paginateCallCount).isEqualTo(completedPageCount + 1)
                 assertThat(messageSearch.cancelledPaginateCallCount).isEqualTo(0)
                 messageSearch.completePagination()
                 runCurrent()
             }
 
-            assertThat(messageSearch.completedPaginateCallCount).isEqualTo(MAX_AUTO_PAGINATIONS)
-            assertThat(messageSearch.paginateCallCount).isEqualTo(MAX_AUTO_PAGINATIONS)
+            messageSearch.completePagination(endReached = true)
+            advanceUntilIdle()
+            assertThat(messageSearch.paginateCallCount).isEqualTo(8)
             expectMostRecentItem().also { state ->
-                assertThat(state.hasReachedAutoPaginationCap).isTrue()
+                // Every page has been read, so "no results" is now an honest claim.
+                assertThat(state.displayEmptyState).isTrue()
+                assertThat(state.displayKeepLoadingPrompt).isFalse()
+                assertThat(state.displaySearchingState).isFalse()
             }
             cancelAndIgnoreRemainingEvents()
         }
     }
 
     @Test
-    fun `present - auto-pagination stops at the cap and offers to keep looking`() = runTest {
-        val messageSearch = FakeMessageSearch()
+    fun `present - a room-scoped search shows a searching state while the walk is running`() = runTest {
+        val messageSearch = FakeMessageSearch(controllablePagination = true)
         val presenter = createMessageSearchPresenter(roomId = A_ROOM_ID, messageSearch = messageSearch)
         presenter.test {
-            awaitItem().also { state ->
-                state.eventSink(MessageSearchEvents.QueryChanged("hello"))
-            }
-            advanceUntilIdle()
+            awaitItem().eventSink(MessageSearchEvents.QueryChanged("hello"))
+            advanceTimeBy(251)
+            runCurrent()
+
+            assertThat(messageSearch.paginateCallCount).isEqualTo(1)
             expectMostRecentItem().also { state ->
-                assertThat(state.hasReachedAutoPaginationCap).isTrue()
-                // Never claim "no results" while pages remain unread.
+                // Pages remain and the walk is in flight: neither "no results" nor a load-more
+                // prompt would be honest, so the UI reports that it is still searching.
+                assertThat(state.displaySearchingState).isTrue()
                 assertThat(state.displayEmptyState).isFalse()
-                assertThat(state.displayKeepLoadingPrompt).isTrue()
+                assertThat(state.displayKeepLoadingPrompt).isFalse()
             }
             cancelAndIgnoreRemainingEvents()
         }
@@ -337,7 +329,7 @@ class MessageSearchPresenterTest {
         // The SDK publishes its pagination state from a listener on its own thread, so Loading can
         // outlive the paginate() call that caused it. Sampling the state instead of awaiting it
         // would end the search on that race, with nothing left to restart it.
-        val messageSearch = FakeMessageSearch().apply {
+        val messageSearch = FakeMessageSearch(controllablePagination = true).apply {
             emitPaginationState(MessageSearchPaginationState.Loading)
         }
         val presenter = createMessageSearchPresenter(roomId = A_ROOM_ID, messageSearch = messageSearch)
@@ -347,9 +339,12 @@ class MessageSearchPresenterTest {
             assertThat(messageSearch.paginateCallCount).isEqualTo(0)
 
             messageSearch.emitPaginationState(MessageSearchPaginationState.Idle(endReached = false))
-            advanceUntilIdle()
+            runCurrent()
 
-            assertThat(messageSearch.paginateCallCount).isEqualTo(MAX_AUTO_PAGINATIONS)
+            assertThat(messageSearch.paginateCallCount).isEqualTo(1)
+            messageSearch.completePagination(endReached = true)
+            advanceUntilIdle()
+            assertThat(messageSearch.paginateCallCount).isEqualTo(1)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -383,24 +378,23 @@ class MessageSearchPresenterTest {
     }
 
     @Test
-    fun `present - an explicit load more lifts the cap for another budget of pages`() = runTest {
+    fun `present - an explicit load more pulls another page for a global search`() = runTest {
         val messageSearch = FakeMessageSearch()
-        val presenter = createMessageSearchPresenter(roomId = A_ROOM_ID, messageSearch = messageSearch)
+        val presenter = createMessageSearchPresenter(roomId = null, messageSearch = messageSearch)
         presenter.test {
             awaitItem().also { state ->
                 state.eventSink(MessageSearchEvents.QueryChanged("hello"))
             }
             advanceUntilIdle()
-            assertThat(messageSearch.paginateCallCount).isEqualTo(MAX_AUTO_PAGINATIONS)
+            assertThat(messageSearch.paginateCallCount).isEqualTo(0)
 
-            awaitItem().also { state ->
+            expectMostRecentItem().also { state ->
                 state.eventSink(MessageSearchEvents.LoadMore)
             }
             advanceUntilIdle()
             cancelAndIgnoreRemainingEvents()
         }
-        // The explicit page plus a fresh automatic budget.
-        assertThat(messageSearch.paginateCallCount).isEqualTo(MAX_AUTO_PAGINATIONS * 2 + 1)
+        assertThat(messageSearch.paginateCallCount).isEqualTo(1)
     }
 }
 

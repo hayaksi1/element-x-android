@@ -145,9 +145,11 @@ private fun MessageSearchContent(
             state.displayEmptyState -> {
                 CenteredMessage(text = stringResource(CommonStrings.common_no_results))
             }
+            state.displaySearchingState -> {
+                SearchingIndicator()
+            }
             state.displayKeepLoadingPrompt -> {
                 KeepLookingPrompt(
-                    isRoomScoped = state.isRoomScoped,
                     onLoadMoreClick = { state.eventSink(MessageSearchEvents.LoadMore) },
                 )
             }
@@ -203,8 +205,21 @@ private fun CenteredMessage(
 }
 
 @Composable
+private fun SearchingIndicator(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 24.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        CircularProgressIndicator(
+            strokeWidth = 2.dp,
+        )
+    }
+}
+
+@Composable
 private fun KeepLookingPrompt(
-    isRoomScoped: Boolean,
     onLoadMoreClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -215,11 +230,7 @@ private fun KeepLookingPrompt(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            text = if (isRoomScoped) {
-                stringResource(CommonStrings.screen_message_search_room_no_results_yet)
-            } else {
-                stringResource(CommonStrings.common_no_results)
-            },
+            text = stringResource(CommonStrings.common_no_results),
             style = ElementTheme.typography.fontBodyLgRegular,
             color = ElementTheme.colors.textSecondary,
             textAlign = TextAlign.Center,
