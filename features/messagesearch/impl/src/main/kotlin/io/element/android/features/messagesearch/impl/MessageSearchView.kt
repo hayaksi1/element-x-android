@@ -27,6 +27,10 @@ import androidx.compose.material3.TextFieldColors
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -101,6 +105,14 @@ private fun MessageSearchContent(
     onResultClick: (MessageSearchResultItem) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var lastLoadMoreResultCount by remember(state.query) { mutableIntStateOf(-1) }
+    LaunchedEffect(state.results.size, state.isPaginating, state.displayLoadMoreIndicator) {
+        if (state.displayLoadMoreIndicator && !state.isPaginating && lastLoadMoreResultCount != state.results.size) {
+            lastLoadMoreResultCount = state.results.size
+            state.eventSink(MessageSearchEvents.LoadMore)
+        }
+    }
+
     Column(modifier = modifier) {
         SearchTextField(
             query = state.query,
@@ -110,7 +122,10 @@ private fun MessageSearchContent(
         )
         when {
             state.displayInitialState -> {
-                CenteredMessage(text = stringResource(CommonStrings.screen_message_search_index_notice))
+                // Nothing typed yet: stay quiet rather than prompting or caveating.
+            }
+            state.displayErrorState -> {
+                CenteredMessage(text = stringResource(CommonStrings.screen_message_search_error))
             }
             state.displayEmptyState -> {
                 CenteredMessage(text = stringResource(CommonStrings.common_no_results))
@@ -126,7 +141,6 @@ private fun MessageSearchContent(
                     results = state.results,
                     displayLoadMoreIndicator = state.displayLoadMoreIndicator,
                     onResultClick = onResultClick,
-                    onReachedLoadMore = { state.eventSink(MessageSearchEvents.LoadMore) },
                 )
             }
         }
@@ -138,7 +152,6 @@ private fun MessageSearchResultList(
     results: ImmutableList<MessageSearchResultItem>,
     displayLoadMoreIndicator: Boolean,
     onResultClick: (MessageSearchResultItem) -> Unit,
-    onReachedLoadMore: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(modifier = modifier) {
@@ -151,9 +164,6 @@ private fun MessageSearchResultList(
         if (displayLoadMoreIndicator) {
             item {
                 LoadMoreIndicator(modifier = Modifier.fillMaxWidth())
-                LaunchedEffect(onReachedLoadMore) {
-                    onReachedLoadMore()
-                }
             }
         }
     }
