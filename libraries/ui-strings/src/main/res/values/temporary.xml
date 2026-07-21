@@ -7,6 +7,5 @@
 
 <resources>
     <string name="screen_message_search_title">Search messages</string>
-    <string name="screen_message_search_room_no_results_yet">No matches in this room yet.</string>
     <string name="screen_message_search_error">Something went wrong while searching. Please try again.</string>
 </resources>
