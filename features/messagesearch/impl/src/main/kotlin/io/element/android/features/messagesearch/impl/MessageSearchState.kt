@@ -51,7 +51,19 @@ data class MessageSearchState(
         !isPaginating &&
         !endReached
 
-    val displayLoadMoreIndicator: Boolean = results.isNotEmpty() && !endReached && !hasError
+    /**
+     * The SDK still has pages for this query. Room-scoped searches filter a globally-ranked set, so
+     * a page can add nothing to this room's list and more pages still be worth pulling — which is
+     * why this deliberately says nothing about how many rows the last page contributed.
+     */
+    val canLoadMore: Boolean = results.isNotEmpty() && !endReached && !hasError
+
+    /**
+     * A page is genuinely in flight. Gated on [isPaginating] rather than on "more pages exist":
+     * an indeterminate spinner parked under a list that is not loading anything reads as a hang,
+     * and was reported as one.
+     */
+    val displayLoadMoreIndicator: Boolean = canLoadMore && isPaginating
 }
 
 data class MessageSearchResultItem(
