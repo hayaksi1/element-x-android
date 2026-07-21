@@ -71,8 +71,10 @@ class MessageSearchPresenter(
 
         var query by rememberSaveable { mutableStateOf("") }
         var isSearching by remember { mutableStateOf(false) }
+        var hasError by remember { mutableStateOf(false) }
         var autoPaginationCount by remember { mutableIntStateOf(0) }
         var loadMoreCount by remember { mutableIntStateOf(0) }
+        var handledLoadMoreCount by remember { mutableIntStateOf(0) }
 
         val results by messageSearch.results.collectAsState()
         val paginationState by messageSearch.paginationState.collectAsState()
@@ -80,6 +82,9 @@ class MessageSearchPresenter(
         LaunchedEffect(query) {
             // A new query invalidates the previous pagination budget.
             autoPaginationCount = 0
+            loadMoreCount = 0
+            handledLoadMoreCount = 0
+            hasError = false
             if (query.isBlank()) {
                 isSearching = false
                 return@LaunchedEffect
@@ -90,26 +95,33 @@ class MessageSearchPresenter(
             // Relaunching this effect cancels the previous one, so a still-pending query is
             // superseded by the newer one — the user typing again always wins.
             delay(DEBOUNCE_MILLIS)
-            messageSearch.setQuery(query)
+            hasError = messageSearch.setQuery(query).isFailure
             isSearching = false
         }
 
-        // Room-scoped only: keep pulling pages while this room has nothing to show, up to a cap.
-        LaunchedEffect(roomId, query, isSearching, results, paginationState, autoPaginationCount, loadMoreCount) {
-            if (roomId == null) return@LaunchedEffect
-            if (query.isBlank() || isSearching) return@LaunchedEffect
-            if (results.isNotEmpty()) return@LaunchedEffect
-            val idle = paginationState as? MessageSearchPaginationState.Idle ?: return@LaunchedEffect
-            if (idle.endReached) return@LaunchedEffect
-            if (autoPaginationCount >= MAX_AUTO_PAGINATIONS) return@LaunchedEffect
-            autoPaginationCount++
-            messageSearch.paginate()
-        }
+        // Explicit load-more performs one page. Room-scoped searches then keep pulling pages while
+        // this room has nothing to show, up to a cap. The loop owns each page until it completes,
+        // so updating the completed-page budget cannot cancel the in-flight SDK call.
+        LaunchedEffect(roomId, query, isSearching, loadMoreCount) {
+            if (query.isBlank() || isSearching || hasError) return@LaunchedEffect
 
-        // Explicit load-more, from the list footer or the "keep looking" prompt.
-        LaunchedEffect(loadMoreCount) {
-            if (loadMoreCount == 0) return@LaunchedEffect
-            messageSearch.paginate()
+            suspend fun paginate(): Boolean {
+                val result = messageSearch.paginate()
+                hasError = result.isFailure
+                return result.isSuccess
+            }
+
+            if (loadMoreCount > handledLoadMoreCount) {
+                handledLoadMoreCount = loadMoreCount
+                if (!paginate()) return@LaunchedEffect
+            }
+
+            if (roomId == null) return@LaunchedEffect
+            while (messageSearch.results.value.isEmpty() && autoPaginationCount < MAX_AUTO_PAGINATIONS) {
+                val idle = messageSearch.paginationState.value as? MessageSearchPaginationState.Idle ?: break
+                if (idle.endReached || !paginate()) break
+                autoPaginationCount++
+            }
         }
 
         val items = remember(results) {
@@ -123,6 +135,7 @@ class MessageSearchPresenter(
                 }
                 MessageSearchEvents.LoadMore -> {
                     // Lift the automatic cap for another budget's worth of pages.
+                    hasError = false
                     autoPaginationCount = 0
                     loadMoreCount++
                 }
@@ -136,8 +149,10 @@ class MessageSearchPresenter(
             isPaginating = paginationState is MessageSearchPaginationState.Loading,
             endReached = (paginationState as? MessageSearchPaginationState.Idle)?.endReached == true,
             isRoomScoped = roomId != null,
+            hasError = hasError,
             hasReachedAutoPaginationCap = roomId != null &&
                 results.isEmpty() &&
+                !hasError &&
                 autoPaginationCount >= MAX_AUTO_PAGINATIONS,
             eventSink = ::handleEvent,
         )
