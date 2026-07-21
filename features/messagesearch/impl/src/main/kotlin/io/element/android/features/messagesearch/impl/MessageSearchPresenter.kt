@@ -17,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import dev.zacsweers.metro.Assisted
 import dev.zacsweers.metro.AssistedFactory
 import dev.zacsweers.metro.AssistedInject
@@ -75,6 +76,7 @@ class MessageSearchPresenter(
         var autoPaginationCount by remember { mutableIntStateOf(0) }
         var loadMoreCount by remember { mutableIntStateOf(0) }
         var handledLoadMoreCount by remember { mutableIntStateOf(0) }
+        var isListEndVisible by remember { mutableStateOf(false) }
 
         val results by messageSearch.results.collectAsState()
         val paginationState by messageSearch.paginationState.collectAsState()
@@ -99,9 +101,10 @@ class MessageSearchPresenter(
             isSearching = false
         }
 
-        // Explicit load-more performs one page. Room-scoped searches then keep pulling pages while
-        // this room has nothing to show, up to a cap. The loop owns each page until it completes,
-        // so updating the completed-page budget cannot cancel the in-flight SDK call.
+        // Every page this screen ever fetches is pulled by this one loop, one at a time, each call
+        // awaited. That serialisation is the point: the View cannot see when a page has landed, so
+        // anything that let it ask for pages directly could queue several at once, and — worse —
+        // could stop asking after a page that happened to add no rows for this room.
         LaunchedEffect(roomId, query, isSearching, loadMoreCount) {
             if (query.isBlank() || isSearching || hasError) return@LaunchedEffect
 
@@ -116,11 +119,27 @@ class MessageSearchPresenter(
                 if (!paginate()) return@LaunchedEffect
             }
 
-            if (roomId == null) return@LaunchedEffect
-            while (messageSearch.results.value.isEmpty() && autoPaginationCount < MAX_AUTO_PAGINATIONS) {
-                val idle = messageSearch.paginationState.value as? MessageSearchPaginationState.Idle ?: break
-                if (idle.endReached || !paginate()) break
-                autoPaginationCount++
+            // Scroll position is collected rather than used as an effect key: as a key, scrolling
+            // away would cancel the request already in flight, and a half-issued page leaves the
+            // Rust service believing it is still loading. `collect` suspends its own source instead,
+            // so a page always finishes and the loop notices the change on its next pass.
+            snapshotFlow { isListEndVisible }.collect {
+                while (true) {
+                    val idle = messageSearch.paginationState.value as? MessageSearchPaginationState.Idle ?: break
+                    if (idle.endReached) break
+                    // Two reasons to pull a page, covering two different screens. A room-scoped
+                    // search showing nothing yet is filtering a globally-ranked set and may simply
+                    // not have reached this room's hits, so it pulls a bounded number of pages on
+                    // its own. A list that already has rows pulls only while the user is looking at
+                    // the end of it, and then keeps going until there is genuinely nothing left.
+                    val roomScopedAndEmpty = roomId != null && messageSearch.results.value.isEmpty()
+                    when {
+                        roomScopedAndEmpty && autoPaginationCount >= MAX_AUTO_PAGINATIONS -> break
+                        roomScopedAndEmpty -> autoPaginationCount++
+                        !isListEndVisible -> break
+                    }
+                    if (!paginate()) break
+                }
             }
         }
 
@@ -138,6 +157,9 @@ class MessageSearchPresenter(
                     hasError = false
                     autoPaginationCount = 0
                     loadMoreCount++
+                }
+                is MessageSearchEvents.ListEndVisible -> {
+                    isListEndVisible = event.isVisible
                 }
             }
         }
