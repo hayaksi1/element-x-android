@@ -25,8 +25,16 @@ import kotlin.time.Duration.Companion.seconds
  * requests. They should be re-tuned against a real device measurement of index growth per page.
  */
 internal data class SearchBackfillBudget(
-    /** Pages for a single room before moving on, so one huge room cannot starve the rest. */
-    val maxPagesPerRoom: Int = 20,
+    /**
+     * Pages for a single room before moving on, so one huge room cannot starve the rest.
+     *
+     * Deliberately looser than [maxRoomDuration], which is the effective per-room bound
+     * (~180 pages at [delayBetweenPages]). Every generation walks a room from its live end, and
+     * pages served from the already-cached history are charged here while indexing nothing — a
+     * tight page cap therefore walls each room at `cap × cached-chunk-size` events forever, which
+     * at the previous value of 20 meant nothing older than ~2560 events could ever be indexed.
+     */
+    val maxPagesPerRoom: Int = 200,
     /** Pages across the whole execution. The dominant cost control. */
     val maxPagesPerExecution: Int = 300,
     /** Wall-clock ceiling, kept well inside WorkManager's ~10 minute kill. */
