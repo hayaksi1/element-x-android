@@ -15,4 +15,11 @@ sealed interface MessageSearchEvents {
      * another [MAX_AUTO_PAGINATIONS] pages.
      */
     data object LoadMore : MessageSearchEvents
+
+    /**
+     * The end of the result list is on screen, so the next page is worth fetching. Reported as a
+     * state rather than as a "load one more" command: pages must be requested one at a time and
+     * awaited, and only the presenter can see when one has finished.
+     */
+    data class ListEndVisible(val isVisible: Boolean) : MessageSearchEvents
 }
