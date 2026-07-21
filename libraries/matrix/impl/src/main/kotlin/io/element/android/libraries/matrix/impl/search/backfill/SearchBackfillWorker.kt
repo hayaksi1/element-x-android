@@ -87,8 +87,9 @@ class SearchBackfillWorker(
                         cursor.queue.size,
                         cursor.pagesIssued,
                     )
-                    // More rooms left means another execution is wanted, not that this one failed.
-                    if (cursor.isDrained) Result.success() else Result.retry()
+                    // More rooms left — or a queue that came up empty because the room list had
+                    // not synced yet — means another execution is wanted, not that this one failed.
+                    if (cursor.needsAnotherExecution) Result.retry() else Result.success()
                 },
                 onFailure = { error ->
                     Timber.tag("SearchBackfill").w(error, "Sweep execution failed")
