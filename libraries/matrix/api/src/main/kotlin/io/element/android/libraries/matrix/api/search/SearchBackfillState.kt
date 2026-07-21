@@ -65,6 +65,13 @@ data class SearchBackfillCursor(
 ) {
     val isDrained: Boolean get() = index >= queue.size
 
+    /**
+     * True when another execution is needed to make progress: rooms remain unvisited, or the
+     * queue was empty when the generation started — typically because the room list had not
+     * synced yet in a headless start — and nothing was swept at all.
+     */
+    val needsAnotherExecution: Boolean get() = !isDrained || queue.isEmpty()
+
     fun roomAt(position: Int): RoomId? = queue.getOrNull(position)?.let(::RoomId)
 }
 

@@ -101,6 +101,29 @@ class SearchBackfillRunnerTest {
     }
 
     @Test
+    fun `an empty queue asks for another execution instead of reporting completion`() = runTest {
+        // A headless start right after the caches were cleared can see an empty room list. Reading
+        // that as "all done" would park the sweep until the next app start with nothing indexed.
+        val runner = runner(rooms = emptyList(), timelines = emptyMap())
+
+        val cursor = runner.runOnce()
+
+        assertThat(cursor.needsAnotherExecution).isTrue()
+    }
+
+    @Test
+    fun `a drained queue with visited rooms does not ask for another execution`() = runTest {
+        val runner = runner(
+            rooms = listOf(A_ROOM),
+            timelines = mapOf(A_ROOM to fakeTimeline(reachStartAfter = 1)),
+        )
+
+        val cursor = runner.runOnce()
+
+        assertThat(cursor.needsAnotherExecution).isFalse()
+    }
+
+    @Test
     fun `the room is always released, including when pagination fails`() = runTest {
         // 200 rooms of un-closed Rust handles would be a slow leak with no symptom until it hurts.
         val baseRoom = FakeBaseRoom()
