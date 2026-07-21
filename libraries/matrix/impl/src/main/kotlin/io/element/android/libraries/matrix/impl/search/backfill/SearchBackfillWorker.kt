@@ -16,6 +16,7 @@ import dev.zacsweers.metro.AssistedFactory
 import dev.zacsweers.metro.AssistedInject
 import dev.zacsweers.metro.ContributesIntoMap
 import dev.zacsweers.metro.binding
+import io.element.android.libraries.core.extensions.runCatchingExceptions
 import io.element.android.libraries.di.annotations.ApplicationContext
 import io.element.android.libraries.featureflag.api.FeatureFlagService
 import io.element.android.libraries.featureflag.api.FeatureFlags
@@ -78,7 +79,7 @@ class SearchBackfillWorker(
             roomsProvider = { client.roomQueue() },
         )
 
-        return runCatching { runner.runOnce() }
+        return runCatchingExceptions { runner.runOnce() }
             .fold(
                 onSuccess = { cursor ->
                     Timber.tag("SearchBackfill").d(

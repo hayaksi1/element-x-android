@@ -77,7 +77,7 @@ private fun String.escapeToken(): String = buildString(length + ESCAPE_HEADROOM)
     if (this@escapeToken in OPERATOR_WORDS) append('\\')
     this@escapeToken.forEachIndexed { index, char ->
         // One forward pass: chained replace() calls would re-escape the backslashes they just added.
-        if (char in ESCAPED_ANYWHERE || (index == 0 && char in ESCAPED_WHEN_LEADING)) {
+        if (char in ESCAPED_ANYWHERE || index == 0 && char in ESCAPED_WHEN_LEADING) {
             append('\\')
         }
         append(char)
