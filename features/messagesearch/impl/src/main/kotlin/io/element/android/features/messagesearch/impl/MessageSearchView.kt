@@ -20,17 +20,18 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.TextFieldColors
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -59,6 +60,12 @@ import io.element.android.libraries.designsystem.theme.components.TopAppBar
 import io.element.android.libraries.testtags.TestTags
 import io.element.android.libraries.ui.strings.CommonStrings
 import kotlinx.collections.immutable.ImmutableList
+
+/**
+ * How close to the last row the viewport has to get before the next page is requested. One row of
+ * lookahead is enough to hide the round trip without pulling pages the user never scrolls to.
+ */
+private const val LOAD_MORE_LOOKAHEAD = 2
 
 @Composable
 fun MessageSearchView(
@@ -105,12 +112,20 @@ private fun MessageSearchContent(
     onResultClick: (MessageSearchResultItem) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var lastLoadMoreResultCount by remember(state.query) { mutableIntStateOf(-1) }
-    LaunchedEffect(state.results.size, state.isPaginating, state.displayLoadMoreIndicator) {
-        if (state.displayLoadMoreIndicator && !state.isPaginating && lastLoadMoreResultCount != state.results.size) {
-            lastLoadMoreResultCount = state.results.size
-            state.eventSink(MessageSearchEvents.LoadMore)
+    val listState = rememberLazyListState()
+    // Gated on the viewport rather than on the result count. Counting rows cannot work here: room
+    // scoping is applied above this layer, so a page that lands ten global hits and none for this
+    // room leaves the count identical to the previous one — indistinguishable from "that page
+    // brought nothing back", which used to stop pagination permanently and left the spinner up.
+    val isAtListEnd by remember(listState) {
+        derivedStateOf {
+            val layoutInfo = listState.layoutInfo
+            val lastVisibleIndex = layoutInfo.visibleItemsInfo.lastOrNull()?.index
+            lastVisibleIndex != null && lastVisibleIndex >= layoutInfo.totalItemsCount - LOAD_MORE_LOOKAHEAD
         }
+    }
+    LaunchedEffect(isAtListEnd) {
+        state.eventSink(MessageSearchEvents.ListEndVisible(isAtListEnd))
     }
 
     Column(modifier = modifier) {
@@ -141,6 +156,7 @@ private fun MessageSearchContent(
                     results = state.results,
                     displayLoadMoreIndicator = state.displayLoadMoreIndicator,
                     onResultClick = onResultClick,
+                    listState = listState,
                 )
             }
         }
@@ -152,9 +168,10 @@ private fun MessageSearchResultList(
     results: ImmutableList<MessageSearchResultItem>,
     displayLoadMoreIndicator: Boolean,
     onResultClick: (MessageSearchResultItem) -> Unit,
+    listState: LazyListState,
     modifier: Modifier = Modifier,
 ) {
-    LazyColumn(modifier = modifier) {
+    LazyColumn(modifier = modifier, state = listState) {
         items(results) { result ->
             MessageSearchResultRow(
                 result = result,
