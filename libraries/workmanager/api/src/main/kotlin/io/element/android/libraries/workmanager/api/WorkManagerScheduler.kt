@@ -51,5 +51,13 @@ fun workManagerTag(sessionId: SessionId, requestType: WorkManagerRequestType): S
 enum class WorkManagerRequestType {
     NOTIFICATION_SYNC,
     DB_VACUUM,
+
+    /**
+     * Back-paginates rooms so their history reaches the local message search index.
+     *
+     * Work of this type keeps fetching history in the background, so it MUST be cancelled when the
+     * session goes away — see the cancel-by-tag test. Any request builder for this type has to call
+     * `addTag(workManagerTag(sessionId, SEARCH_BACKFILL))`; nothing enforces that at compile time.
+     */
     SEARCH_BACKFILL,
 }
