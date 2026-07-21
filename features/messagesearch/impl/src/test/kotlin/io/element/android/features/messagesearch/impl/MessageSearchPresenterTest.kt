@@ -300,6 +300,67 @@ class MessageSearchPresenterTest {
     }
 
     @Test
+    fun `present - a populated list keeps paginating while its end is on screen`() = runTest {
+        // The bug this pins: pagination used to be driven by the row count growing. Room scoping is
+        // applied below this presenter, so a page of globally-ranked hits with none for this room
+        // leaves the count identical — which was read as "there is nothing more" and stopped the
+        // search for good, under a spinner that never went away.
+        val messageSearch = FakeMessageSearch(controllablePagination = true)
+        val presenter = createMessageSearchPresenter(roomId = A_ROOM_ID, messageSearch = messageSearch)
+        presenter.test {
+            awaitItem().eventSink(MessageSearchEvents.QueryChanged("hello"))
+            messageSearch.emitResults(persistentListOf(aMessageSearchResult()))
+            advanceTimeBy(251)
+            runCurrent()
+            // The end of the list has not been reported yet, so nothing is fetched.
+            assertThat(messageSearch.paginateCallCount).isEqualTo(0)
+
+            expectMostRecentItem().eventSink(MessageSearchEvents.ListEndVisible(true))
+            runCurrent()
+            assertThat(messageSearch.paginateCallCount).isEqualTo(1)
+
+            // The page lands and brings this room nothing. Pagination must continue anyway.
+            messageSearch.completePagination()
+            runCurrent()
+            assertThat(messageSearch.paginateCallCount).isEqualTo(2)
+
+            messageSearch.completePagination(endReached = true)
+            runCurrent()
+            assertThat(messageSearch.paginateCallCount).isEqualTo(2)
+            assertThat(messageSearch.cancelledPaginateCallCount).isEqualTo(0)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `present - scrolling away from the end stops after the page in flight`() = runTest {
+        // Scroll position must not cancel a request that is already out: the SDK would be left
+        // believing it is still loading, and its own paginate() no-ops in that state.
+        val messageSearch = FakeMessageSearch(controllablePagination = true)
+        val presenter = createMessageSearchPresenter(roomId = A_ROOM_ID, messageSearch = messageSearch)
+        presenter.test {
+            awaitItem().eventSink(MessageSearchEvents.QueryChanged("hello"))
+            messageSearch.emitResults(persistentListOf(aMessageSearchResult()))
+            advanceTimeBy(251)
+            runCurrent()
+
+            expectMostRecentItem().eventSink(MessageSearchEvents.ListEndVisible(true))
+            runCurrent()
+            assertThat(messageSearch.paginateCallCount).isEqualTo(1)
+
+            expectMostRecentItem().eventSink(MessageSearchEvents.ListEndVisible(false))
+            runCurrent()
+            messageSearch.completePagination()
+            advanceUntilIdle()
+
+            assertThat(messageSearch.completedPaginateCallCount).isEqualTo(1)
+            assertThat(messageSearch.cancelledPaginateCallCount).isEqualTo(0)
+            assertThat(messageSearch.paginateCallCount).isEqualTo(1)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `present - an explicit load more lifts the cap for another budget of pages`() = runTest {
         val messageSearch = FakeMessageSearch()
         val presenter = createMessageSearchPresenter(roomId = A_ROOM_ID, messageSearch = messageSearch)
