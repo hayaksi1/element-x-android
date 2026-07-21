@@ -45,13 +45,6 @@ import kotlinx.coroutines.flow.first
  */
 private const val DEBOUNCE_MILLIS = 250L
 
-/**
- * Room-scoped searches filter a globally-ranked result set client-side, so a room with few matches
- * can need several pages before anything surfaces. We paginate automatically up to this many pages,
- * then hand the decision back to the user rather than spinning forever.
- */
-internal const val MAX_AUTO_PAGINATIONS = 5
-
 @AssistedInject
 class MessageSearchPresenter(
     @Assisted private val roomId: RoomId?,
@@ -75,7 +68,6 @@ class MessageSearchPresenter(
         var query by rememberSaveable { mutableStateOf("") }
         var isSearching by remember { mutableStateOf(false) }
         var hasError by remember { mutableStateOf(false) }
-        var autoPaginationCount by remember { mutableIntStateOf(0) }
         var loadMoreCount by remember { mutableIntStateOf(0) }
         var handledLoadMoreCount by remember { mutableIntStateOf(0) }
         var isListEndVisible by remember { mutableStateOf(false) }
@@ -84,8 +76,7 @@ class MessageSearchPresenter(
         val paginationState by messageSearch.paginationState.collectAsState()
 
         LaunchedEffect(query) {
-            // A new query invalidates the previous pagination budget.
-            autoPaginationCount = 0
+            // A new query invalidates the previous pagination state.
             loadMoreCount = 0
             handledLoadMoreCount = 0
             hasError = false
@@ -136,16 +127,12 @@ class MessageSearchPresenter(
                         .first()
                     if (idle.endReached) break
                     // Two reasons to pull a page, covering two different screens. A room-scoped
-                    // search showing nothing yet is filtering a globally-ranked set and may simply
-                    // not have reached this room's hits, so it pulls a bounded number of pages on
-                    // its own. A list that already has rows pulls only while the user is looking at
-                    // the end of it, and then keeps going until there is genuinely nothing left.
+                    // search with nothing to show yet is filtering a globally-ranked set, so it
+                    // walks the whole set on its own — the pages come from the local index, and
+                    // any one of them could be the one holding this room's hits. A list that
+                    // already has rows pulls only while the user is looking at the end of it.
                     val roomScopedAndEmpty = roomId != null && messageSearch.results.value.isEmpty()
-                    when {
-                        roomScopedAndEmpty && autoPaginationCount >= MAX_AUTO_PAGINATIONS -> break
-                        roomScopedAndEmpty -> autoPaginationCount++
-                        !isListEndVisible -> break
-                    }
+                    if (!roomScopedAndEmpty && !isListEndVisible) break
                     if (!paginate()) break
                 }
             }
@@ -161,9 +148,7 @@ class MessageSearchPresenter(
                     query = event.query
                 }
                 MessageSearchEvents.LoadMore -> {
-                    // Lift the automatic cap for another budget's worth of pages.
                     hasError = false
-                    autoPaginationCount = 0
                     loadMoreCount++
                 }
                 is MessageSearchEvents.ListEndVisible -> {
@@ -180,10 +165,6 @@ class MessageSearchPresenter(
             endReached = (paginationState as? MessageSearchPaginationState.Idle)?.endReached == true,
             isRoomScoped = roomId != null,
             hasError = hasError,
-            hasReachedAutoPaginationCap = roomId != null &&
-                results.isEmpty() &&
-                !hasError &&
-                autoPaginationCount >= MAX_AUTO_PAGINATIONS,
             eventSink = ::handleEvent,
         )
     }
