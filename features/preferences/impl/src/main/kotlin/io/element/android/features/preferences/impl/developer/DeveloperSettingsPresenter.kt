@@ -11,15 +11,14 @@ package io.element.android.features.preferences.impl.developer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.toArgb
-import dev.zacsweers.metro.Assisted
-import dev.zacsweers.metro.AssistedFactory
-import dev.zacsweers.metro.AssistedInject
+import dev.zacsweers.metro.Inject
 import io.element.android.features.enterprise.api.EnterpriseService
 import io.element.android.features.preferences.impl.developer.appsettings.AppDeveloperSettingsState
 import io.element.android.features.preferences.impl.tasks.ClearCacheUseCase
@@ -32,26 +31,23 @@ import io.element.android.libraries.architecture.AsyncData
 import io.element.android.libraries.architecture.Presenter
 import io.element.android.libraries.architecture.runCatchingUpdatingState
 import io.element.android.libraries.core.data.ByteUnit
-import io.element.android.libraries.core.extensions.runCatchingExceptions
-import io.element.android.libraries.core.meta.BuildMeta
+import io.element.android.libraries.featureflag.api.FeatureFlagService
+import io.element.android.libraries.featureflag.api.FeatureFlags
+import io.element.android.libraries.matrix.api.MatrixClient
 import io.element.android.libraries.matrix.api.analytics.GetDatabaseSizesUseCase
-import io.element.android.libraries.matrix.api.core.DeviceId
 import io.element.android.libraries.matrix.api.core.SessionId
-import io.element.android.libraries.matrix.api.notificationsettings.NotificationSettingsService
+import io.element.android.libraries.matrix.api.search.MessageSearchIndexer
+import io.element.android.libraries.matrix.api.search.MessageSearchSweepActivity
+import io.element.android.libraries.matrix.api.search.SearchBackfillCursor
 import kotlinx.collections.immutable.ImmutableMap
 import kotlinx.collections.immutable.toImmutableMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
-import kotlinx.serialization.ExperimentalSerializationApi
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonElement
 
-@AssistedInject
+@Inject
 class DeveloperSettingsPresenter(
-    @Assisted private val navigator: DeveloperSettingsNavigator,
     private val appDeveloperSettingsPresenter: Presenter<AppDeveloperSettingsState>,
     private val sessionId: SessionId,
-    private val deviceId: DeviceId,
     private val computeCacheSizeUseCase: ComputeCacheSizeUseCase,
     private val clearCacheUseCase: ClearCacheUseCase,
     private val enterpriseService: EnterpriseService,
@@ -59,14 +55,10 @@ class DeveloperSettingsPresenter(
     private val databaseSizesUseCase: GetDatabaseSizesUseCase,
     private val fileSizeFormatter: FileSizeFormatter,
     private val markAllRoomsAsRead: MarkAllRoomsAsRead,
-    private val buildMeta: BuildMeta,
-    private val notificationSettingsService: NotificationSettingsService,
+    private val featureFlagService: FeatureFlagService,
+    private val matrixClient: MatrixClient,
+    private val messageSearchIndexer: MessageSearchIndexer,
 ) : Presenter<DeveloperSettingsState> {
-    @AssistedFactory
-    fun interface Factory {
-        fun create(navigator: DeveloperSettingsNavigator): DeveloperSettingsPresenter
-    }
-
     @Composable
     override fun present(): DeveloperSettingsState {
         val cacheSize = remember {
@@ -81,9 +73,6 @@ class DeveloperSettingsPresenter(
         val markAllRoomsAsReadAction = remember {
             mutableStateOf<AsyncAction<Unit>>(AsyncAction.Uninitialized)
         }
-        val pushRulesAction = remember {
-            mutableStateOf<AsyncAction<Unit>>(AsyncAction.Uninitialized)
-        }
         var showColorPicker by remember {
             mutableStateOf(false)
         }
@@ -96,10 +85,26 @@ class DeveloperSettingsPresenter(
             computeCacheSize(cacheSize)
         }
 
-        fun handleEvent(event: DeveloperSettingsEvent) {
+        val isMessageSearchFlagEnabled by remember {
+            featureFlagService.isFeatureEnabledFlow(FeatureFlags.MessageSearch)
+        }.collectAsState(initial = false)
+        val sweepActivity by remember {
+            messageSearchIndexer.userSweepActivityFlow(sessionId)
+        }.collectAsState(initial = MessageSearchSweepActivity.NONE)
+        val sweepCursor by remember {
+            messageSearchIndexer.cursorFlow(sessionId)
+        }.collectAsState(initial = null)
+        val messageSearchIndexStatus = messageSearchIndexStatus(
+            flagEnabled = isMessageSearchFlagEnabled,
+            indexAvailable = matrixClient.isMessageSearchAvailable,
+            sweepActivity = sweepActivity,
+            cursor = sweepCursor,
+        )
+
+        fun handleEvent(event: DeveloperSettingsEvents) {
             when (event) {
-                DeveloperSettingsEvent.ClearCache -> coroutineScope.clearCache(clearCacheAction)
-                is DeveloperSettingsEvent.ChangeBrandColor -> coroutineScope.launch {
+                DeveloperSettingsEvents.ClearCache -> coroutineScope.clearCache(clearCacheAction)
+                is DeveloperSettingsEvents.ChangeBrandColor -> coroutineScope.launch {
                     showColorPicker = false
                     val color = event.color
                         ?.toArgb()
@@ -108,13 +113,13 @@ class DeveloperSettingsPresenter(
                         ?.padStart(7, '#')
                     enterpriseService.overrideBrandColor(sessionId, color)
                 }
-                is DeveloperSettingsEvent.SetShowColorPicker -> {
+                is DeveloperSettingsEvents.SetShowColorPicker -> {
                     showColorPicker = event.show
                 }
-                DeveloperSettingsEvent.VacuumStores -> coroutineScope.launch {
+                DeveloperSettingsEvents.VacuumStores -> coroutineScope.launch {
                     vacuumStoresUseCase()
                 }
-                is DeveloperSettingsEvent.MarkAllRoomsAsRead -> {
+                is DeveloperSettingsEvents.MarkAllRoomsAsRead -> {
                     if (event.needsConfirmation) {
                         markAllRoomsAsReadAction.value = AsyncAction.ConfirmingNoParams
                     } else {
@@ -123,12 +128,14 @@ class DeveloperSettingsPresenter(
                         )
                     }
                 }
-                DeveloperSettingsEvent.DismissMarkAllRoomsAsReadConfirmation -> {
+                DeveloperSettingsEvents.DismissMarkAllRoomsAsReadConfirmation -> {
                     markAllRoomsAsReadAction.value = AsyncAction.Uninitialized
                 }
-                DeveloperSettingsEvent.OpenPushRules -> coroutineScope.openPushRules(pushRulesAction)
-                DeveloperSettingsEvent.DismissPushRulesError -> {
-                    pushRulesAction.value = AsyncAction.Uninitialized
+                DeveloperSettingsEvents.StartSearchIndexing -> coroutineScope.launch {
+                    messageSearchIndexer.startUserInitiatedSweep(sessionId)
+                }
+                DeveloperSettingsEvents.CancelSearchIndexing -> {
+                    messageSearchIndexer.cancelSweep(sessionId)
                 }
             }
         }
@@ -140,12 +147,44 @@ class DeveloperSettingsPresenter(
             databaseSizes = databaseSizes.value,
             clearCacheAction = clearCacheAction.value,
             markAllRoomsAsReadAction = markAllRoomsAsReadAction.value,
-            pushRulesAction = pushRulesAction.value,
-            isEnterpriseBuild = buildMeta.isEnterpriseBuild,
+            isEnterpriseBuild = enterpriseService.isEnterpriseBuild,
             showColorPicker = showColorPicker,
-            deviceId = deviceId,
+            messageSearchIndexStatus = messageSearchIndexStatus,
             eventSink = ::handleEvent,
         )
+    }
+
+    /**
+     * The order of the checks is the trust order of the signals: the flag gates everything, an
+     * unattached index makes any action pointless, live WorkManager activity beats whatever the
+     * stored cursor says (it may be a stale mid-flight snapshot of the sweep that is about to
+     * resume), and only then does the cursor get to describe the past.
+     */
+    private fun messageSearchIndexStatus(
+        flagEnabled: Boolean,
+        indexAvailable: Boolean,
+        sweepActivity: MessageSearchSweepActivity,
+        cursor: SearchBackfillCursor?,
+    ): MessageSearchIndexStatus {
+        return when {
+            !flagEnabled -> MessageSearchIndexStatus.Hidden
+            !indexAvailable -> MessageSearchIndexStatus.RestartNeeded
+            sweepActivity == MessageSearchSweepActivity.RUNNING -> MessageSearchIndexStatus.Running(
+                roomsDone = cursor?.index ?: 0,
+                roomsTotal = cursor?.queue?.size ?: 0,
+            )
+            sweepActivity == MessageSearchSweepActivity.WAITING -> MessageSearchIndexStatus.WaitingForRun
+            cursor == null -> MessageSearchIndexStatus.Idle
+            !cursor.isDrained -> MessageSearchIndexStatus.Paused(
+                roomsDone = cursor.index,
+                roomsTotal = cursor.queue.size,
+            )
+            cursor.queue.isNotEmpty() -> MessageSearchIndexStatus.Finished(
+                roomsSwept = cursor.queue.size,
+                pagesFetched = cursor.pagesIssued,
+            )
+            else -> MessageSearchIndexStatus.Idle
+        }
     }
 
     private fun CoroutineScope.computeCacheSize(cacheSize: MutableState<AsyncData<String>>) = launch {
@@ -186,40 +225,4 @@ class DeveloperSettingsPresenter(
             markAllRoomsAsRead().getOrThrow()
         }.runCatchingUpdatingState(state = markAllRoomsAsReadAction)
     }
-
-    private fun CoroutineScope.openPushRules(pushRulesAction: MutableState<AsyncAction<Unit>>) = launch {
-        pushRulesAction.value = AsyncAction.Loading
-        notificationSettingsService.getRawPushRules()
-            .onSuccess { content ->
-                pushRulesAction.value = AsyncAction.Uninitialized
-                navigator.openPushRules(
-                    filename = pushRulesFilename(),
-                    content = content.orEmpty().prettyPrintJson(),
-                )
-            }
-            .onFailure {
-                pushRulesAction.value = AsyncAction.Failure(it)
-            }
-    }
-
-    /**
-     * The user id contains a colon, which is not a valid character for a file name on all the file systems,
-     * so replace it by an underscore.
-     */
-    private fun pushRulesFilename() = "push_rules${sessionId.value.replace(':', '_')}.json"
 }
-
-@OptIn(ExperimentalSerializationApi::class)
-private val prettyPrintJson = Json {
-    prettyPrint = true
-    // Keep the indentation small, for a better rendering on mobile.
-    prettyPrintIndent = "  "
-}
-
-/**
- * Pretty print this json content, so that it is readable when rendered.
- * Return the content as is if it is not valid json.
- */
-private fun String.prettyPrintJson(): String = runCatchingExceptions {
-    prettyPrintJson.encodeToString(JsonElement.serializer(), prettyPrintJson.parseToJsonElement(this))
-}.getOrDefault(this)
