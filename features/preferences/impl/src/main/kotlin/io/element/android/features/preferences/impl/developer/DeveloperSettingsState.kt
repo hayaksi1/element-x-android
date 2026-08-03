@@ -21,6 +21,7 @@ data class DeveloperSettingsState(
     val markAllRoomsAsReadAction: AsyncAction<Unit>,
     val isEnterpriseBuild: Boolean,
     val showColorPicker: Boolean,
+    val messageSearchIndexStatus: MessageSearchIndexStatus,
     val eventSink: (DeveloperSettingsEvents) -> Unit
 ) {
     val showLoader = clearCacheAction is AsyncAction.Loading || markAllRoomsAsReadAction is AsyncAction.Loading

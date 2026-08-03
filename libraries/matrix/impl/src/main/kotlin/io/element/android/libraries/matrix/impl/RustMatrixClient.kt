@@ -17,6 +17,7 @@ import io.element.android.libraries.core.data.tryOrNull
 import io.element.android.libraries.core.extensions.mapFailure
 import io.element.android.libraries.core.extensions.runCatchingExceptions
 import io.element.android.libraries.featureflag.api.FeatureFlagService
+import io.element.android.libraries.featureflag.api.FeatureFlags
 import io.element.android.libraries.matrix.api.HomeserverCapabilitiesProvider
 import io.element.android.libraries.matrix.api.MatrixClient
 import io.element.android.libraries.matrix.api.analytics.SdkStoreSizes
@@ -322,9 +323,16 @@ class RustMatrixClient(
         // Schedule regular database vacuuming to ensure DB performance remains optimal
         scheduleDatabaseVacuum()
 
-        // Bring older history into the search index in the background, so search covers more than
-        // what happens to have been synced since the index was created.
-        scheduleSearchBackfill()
+        // Bring older history into the search index whenever message search is (or becomes)
+        // enabled. The index itself is always attached at client build, so a mid-session enable
+        // needs no restart — only this backfill kick-off.
+        sessionCoroutineScope.launch {
+            featureFlagService.isFeatureEnabledFlow(FeatureFlags.MessageSearch)
+                .distinctUntilChanged()
+                .collect { enabled ->
+                    if (enabled) scheduleSearchBackfill()
+                }
+        }
     }
 
     override fun userIdServerName(): String {
@@ -914,9 +922,9 @@ class RustMatrixClient(
      * Starts the background backfill so old history reaches the search index without the user having
      * to ask for it or wait on it.
      *
-     * Gated on [isMessageSearchAvailable], not on the feature flag: the index is attached at
-     * client-build time, so a flag toggled mid-session has no index to write into and sweeping would
-     * be pure cost. The worker re-checks the live flag itself before doing any work.
+     * Called whenever the Message search flag is (or becomes) enabled: the index store is always
+     * attached at client build, so enabling the flag mid-session only needs this kick-off — no
+     * restart. The worker re-checks the live flag itself before doing any work.
      */
     private fun scheduleSearchBackfill() {
         if (!isMessageSearchAvailable) return

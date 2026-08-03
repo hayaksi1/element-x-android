@@ -61,8 +61,8 @@ class RustMatrixClientFactoryTest {
             workManagerScheduler = FakeWorkManagerScheduler(submitLambda = {}),
         )
 
-        // Availability is the feature flag alone. A session without a secret still gets an index,
-        // left unencrypted exactly like the SDK's own SQLite stores in that case.
+        // A session without a secret still gets an index, left unencrypted exactly like the
+        // SDK's own SQLite stores in that case.
         val result = sut.create(
             aSessionData(
                 sessionPath = temporaryFolder.newFolder("session-no-secret").absolutePath,
@@ -75,9 +75,9 @@ class RustMatrixClientFactoryTest {
     }
 
     @Test
-    fun `create - message search availability is a snapshot taken when the client was built`() = runTest {
+    fun `create - message search is available regardless of the feature flag`() = runTest {
         val featureFlagService = FakeFeatureFlagService(
-            initialState = mapOf(FeatureFlags.MessageSearch.key to true),
+            initialState = mapOf(FeatureFlags.MessageSearch.key to false),
         )
         val sut = createRustMatrixClientFactory(
             featureFlagService = featureFlagService,
@@ -91,8 +91,8 @@ class RustMatrixClientFactoryTest {
             ).copy(passphrase = "aSecret")
         )
 
-        assertThat(result.isMessageSearchAvailable).isTrue()
-        featureFlagService.setFeatureEnabled(FeatureFlags.MessageSearch, false)
+        // The index store is attached unconditionally so a mid-session flag enable needs no
+        // restart — the flag only gates the search UI and the backfill.
         assertThat(result.isMessageSearchAvailable).isTrue()
         result.destroy()
     }
@@ -202,10 +202,10 @@ class RustMatrixClientFactoryTest {
     }
 
     @Test
-    fun `create - deletes a stale index when message search is unavailable`() = runTest {
+    fun `create - keeps the index and its coverage when message search is off`() = runTest {
         val sessionFolder = temporaryFolder.newFolder("session")
         val cacheFolder = temporaryFolder.newFolder("cache")
-        File(cacheFolder, EVENT_CACHE_STORE_NAME).createNewFile()
+        val storeFile = File(cacheFolder, EVENT_CACHE_STORE_NAME).apply { createNewFile() }
         val indexDirectory = File(sessionFolder, SEARCH_INDEX_DIRECTORY).apply { mkdirs() }
         val coverageMarker = File(sessionFolder, SEARCH_INDEX_COVERAGE_MARKER).apply { createNewFile() }
         val sut = createRustMatrixClientFactory(
@@ -222,10 +222,12 @@ class RustMatrixClientFactoryTest {
             ).copy(passphrase = "aSecret")
         )
 
-        // With search off, events reach the cache unindexed, so the index is silently stale.
-        // It must be rebuilt from scratch on the next enable.
-        assertThat(indexDirectory.exists()).isFalse()
-        assertThat(coverageMarker.exists()).isFalse()
+        // The index is always attached, so it keeps up with the event cache even while the flag
+        // is off — it never goes stale and must never be deleted, or a later enable would have
+        // to rebuild coverage from scratch.
+        assertThat(indexDirectory.exists()).isTrue()
+        assertThat(coverageMarker.exists()).isTrue()
+        assertThat(storeFile.exists()).isTrue()
         result.destroy()
     }
 
@@ -272,7 +274,6 @@ class RustMatrixClientFactoryTest {
                 sessionPath = sessionFolder.absolutePath,
                 cachePath = cacheFolder.absolutePath,
             ).copy(passphrase = "aSecret"),
-            isMessageSearchAvailable = true,
         )
 
         // A fresh login has no event cache, so the index covers everything by construction —

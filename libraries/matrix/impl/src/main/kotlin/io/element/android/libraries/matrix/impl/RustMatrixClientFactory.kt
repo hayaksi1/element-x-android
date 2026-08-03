@@ -83,30 +83,15 @@ class RustMatrixClientFactory(
         // This secret is called 'passphrase' for historical reasons, but it can be a raw key or an actual passphrase
         val clientSecret = sessionData.passphrase?.let(ClientSecret::fromString)
         val sessionPaths = sessionData.getSessionPaths()
-        val isMessageSearchAvailable = featureFlagService.isFeatureEnabled(FeatureFlags.MessageSearch)
         val indexDirectory = File(sessionPaths.fileDirectory, SEARCH_INDEX_DIRECTORY)
         val coverageMarker = File(sessionPaths.fileDirectory, SEARCH_INDEX_COVERAGE_MARKER)
-
-        if (!isMessageSearchAvailable && indexDirectory.exists()) {
-            // With search off, events reach the event cache unindexed and the index can never
-            // catch up on them. Delete it so the next enable rebuilds it from a state where
-            // coverage can actually be guaranteed, instead of resuming a silently stale index.
-            // The marker goes first: if this is interrupted after a partial directory deletion,
-            // a surviving marker would let a later restore trust the broken index.
-            Timber.tag("RustMatrixClient").i("Message search is disabled, deleting the stale search index")
-            if (!coverageMarker.exists() || coverageMarker.delete()) {
-                indexDirectory.deleteRecursively()
-            } else {
-                Timber.tag("RustMatrixClient").w("Could not invalidate the search index coverage marker, keeping the index for now")
-            }
-        }
 
         // Events already in the event cache store when the index is created are re-hydrated from
         // disk on pagination, and the SDK drops those updates before the indexer — they would stay
         // unsearchable forever. Deleting the store once forces that history back through the
-        // network, where indexing genuinely happens.
-        val needsCoverageBootstrap = isMessageSearchAvailable &&
-            !(indexDirectory.exists() && coverageMarker.exists()) &&
+        // network, where indexing genuinely happens. Runs once per session ever: the index is
+        // always attached from here on, so once the marker exists coverage can no longer be lost.
+        val needsCoverageBootstrap = !(indexDirectory.exists() && coverageMarker.exists()) &&
             File(sessionPaths.cacheDirectory, EVENT_CACHE_STORE_NAME).exists()
 
         var coverageEstablished = !needsCoverageBootstrap
@@ -129,7 +114,6 @@ class RustMatrixClientFactory(
             sessionPaths = sessionPaths,
             clientSecret = clientSecret,
             slidingSyncType = ClientBuilderSlidingSync.Restored,
-            isMessageSearchAvailable = isMessageSearchAvailable,
         )
             .homeserverUrl(sessionData.homeserverUrl)
             .username(sessionData.userId)
@@ -150,14 +134,14 @@ class RustMatrixClientFactory(
 
         client.restoreSession(sessionData.toSession())
 
-        if (isMessageSearchAvailable && coverageEstablished && !coverageMarker.exists()) {
+        if (coverageEstablished && !coverageMarker.exists()) {
             // Failing to record coverage must never fail the session restore; without the marker
             // the bootstrap simply runs again on the next start.
             runCatchingExceptions { coverageMarker.createNewFile() }
                 .onFailure { Timber.tag("RustMatrixClient").w(it, "Failed to write the search index coverage marker") }
         }
 
-        create(client, sessionData, isMessageSearchAvailable)
+        create(client, sessionData)
     }
 
     /**
@@ -173,9 +157,8 @@ class RustMatrixClientFactory(
     suspend fun create(
         client: Client,
         sessionData: SessionData,
-        isMessageSearchAvailable: Boolean,
     ): RustMatrixClient {
-        if (isMessageSearchAvailable) {
+        run {
             val sessionPaths = sessionData.getSessionPaths()
             val coverageMarker = File(sessionPaths.fileDirectory, SEARCH_INDEX_COVERAGE_MARKER)
             if (!coverageMarker.exists() && !File(sessionPaths.cacheDirectory, EVENT_CACHE_STORE_NAME).exists()) {
@@ -232,7 +215,9 @@ class RustMatrixClientFactory(
             analyticsService = analyticsService,
             workManagerScheduler = workManagerScheduler,
             contentScanner = contentScanner,
-            isMessageSearchAvailable = isMessageSearchAvailable,
+            // Always true since the index store is attached unconditionally; the property stays
+            // in the API so tests can exercise the index-less path.
+            isMessageSearchAvailable = true,
         ).also {
             Timber.tag("RustMatrixClient").i("Creating Client with access token '$anonymizedAccessToken' and refresh token '$anonymizedRefreshToken'")
         }
@@ -242,7 +227,6 @@ class RustMatrixClientFactory(
         sessionPaths: SessionPaths,
         clientSecret: ClientSecret?,
         slidingSyncType: ClientBuilderSlidingSync,
-        isMessageSearchAvailable: Boolean,
     ): ClientBuilder {
         return clientBuilderProvider.provide()
             .run {
@@ -272,18 +256,14 @@ class RustMatrixClientFactory(
             )
             .enableShareHistoryOnInvite(true)
             .threadsEnabled(featureFlagService.isFeatureEnabled(FeatureFlags.Threads), threadSubscriptions = false)
-            .run {
-                if (isMessageSearchAvailable) {
-                    // The index is encrypted at rest with the same secret the SDK's SQLite stores
-                    // use, or left unencrypted for sessions without one, matching those stores.
-                    withSearchIndexStore(
-                        path = File(sessionPaths.fileDirectory, SEARCH_INDEX_DIRECTORY).absolutePath,
-                        password = clientSecret?.formattedAsString(),
-                    )
-                } else {
-                    this
-                }
-            }
+            // Always attached, mirroring Element X iOS: the Message search flag only gates the
+            // search UI and the backfill, so flipping it mid-session needs no restart and the
+            // index never goes stale. The index is encrypted at rest with the same secret the
+            // SDK's SQLite stores use, or left unencrypted for sessions without one.
+            .withSearchIndexStore(
+                path = File(sessionPaths.fileDirectory, SEARCH_INDEX_DIRECTORY).absolutePath,
+                password = clientSecret?.formattedAsString(),
+            )
             .dmRoomDefinition(DmRoomDefinition.TWO_MEMBERS)
             .requestConfig(
                 RequestConfig(

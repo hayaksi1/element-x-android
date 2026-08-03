@@ -11,12 +11,15 @@
 package io.element.android.libraries.matrix.impl
 
 import com.google.common.truth.Truth.assertThat
+import io.element.android.libraries.core.coroutine.CoroutineDispatchers
 import io.element.android.libraries.core.data.bytes
+import io.element.android.libraries.featureflag.api.FeatureFlags
 import io.element.android.libraries.featureflag.test.FakeFeatureFlagService
 import io.element.android.libraries.matrix.api.paths.SessionPaths
 import io.element.android.libraries.matrix.impl.fixtures.fakes.FakeFfiClient
 import io.element.android.libraries.matrix.impl.fixtures.fakes.FakeFfiSyncService
 import io.element.android.libraries.matrix.impl.room.FakeTimelineEventFilterFactory
+import io.element.android.libraries.matrix.impl.search.backfill.SearchBackfillRequestBuilder
 import io.element.android.libraries.matrix.test.AN_AVATAR_URL
 import io.element.android.libraries.matrix.test.A_DEVICE_ID
 import io.element.android.libraries.matrix.test.A_ROOM_ID
@@ -26,6 +29,7 @@ import io.element.android.libraries.matrix.test.scanner.FakeContentScanner
 import io.element.android.libraries.sessionstorage.api.SessionStore
 import io.element.android.libraries.sessionstorage.test.InMemorySessionStore
 import io.element.android.libraries.sessionstorage.test.aSessionData
+import io.element.android.libraries.workmanager.api.WorkManagerRequestBuilder
 import io.element.android.libraries.workmanager.test.FakeWorkManagerScheduler
 import io.element.android.services.analytics.test.FakeAnalyticsService
 import io.element.android.services.toolbox.test.systemclock.FakeSystemClock
@@ -33,7 +37,9 @@ import io.element.android.tests.testutils.lambda.lambdaRecorder
 import io.element.android.tests.testutils.lambda.value
 import io.element.android.tests.testutils.testCoroutineDispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
@@ -138,11 +144,43 @@ class RustMatrixClientTest {
         assertThat(createParameters?.historyVisibilityOverride).isEqualTo(RoomHistoryVisibility.Invited)
     }
 
+    @Test
+    fun `enabling message search mid-session schedules the backfill`() = runTest {
+        val submissions = mutableListOf<WorkManagerRequestBuilder>()
+        val featureFlagService = FakeFeatureFlagService()
+        // Unconfined main: the flag collector lives in sessionCoroutineScope (a child of
+        // backgroundScope on the main dispatcher), and the standard dispatcher's scheduler does
+        // not reliably resume background tasks from advanceUntilIdle. io stays standard because
+        // the client wraps it in limitedParallelism, which unconfined does not support.
+        val client = createRustMatrixClient(
+            featureFlagService = featureFlagService,
+            workManagerScheduler = FakeWorkManagerScheduler(submitLambda = { submissions += it }),
+            isMessageSearchAvailable = true,
+            dispatchers = CoroutineDispatchers(
+                io = StandardTestDispatcher(testScheduler),
+                computation = StandardTestDispatcher(testScheduler),
+                main = UnconfinedTestDispatcher(testScheduler),
+            ),
+        )
+        assertThat(submissions.filterIsInstance<SearchBackfillRequestBuilder>()).isEmpty()
+
+        featureFlagService.setFeatureEnabled(FeatureFlags.MessageSearch, true)
+
+        // The index is always attached, so a mid-session enable only needs the backfill kicked
+        // off — no restart involved.
+        assertThat(submissions.filterIsInstance<SearchBackfillRequestBuilder>()).hasSize(1)
+        client.destroy()
+    }
+
     private fun TestScope.createRustMatrixClient(
         client: Client = FakeFfiClient(),
         sessionStore: SessionStore = InMemorySessionStore(
             updateUserProfileResult = { _, _, _ -> },
         ),
+        featureFlagService: FakeFeatureFlagService = FakeFeatureFlagService(),
+        workManagerScheduler: FakeWorkManagerScheduler = FakeWorkManagerScheduler(submitLambda = {}),
+        isMessageSearchAvailable: Boolean = false,
+        dispatchers: CoroutineDispatchers = testCoroutineDispatchers(),
     ) = RustMatrixClient(
         innerClient = client,
         sessionPaths = SessionPaths(fileDirectory = File("files"), cacheDirectory = File("cache")),
@@ -152,14 +190,14 @@ class RustMatrixClientTest {
             sessionStore = sessionStore,
         ),
         innerSyncService = FakeFfiSyncService(),
-        dispatchers = testCoroutineDispatchers(),
+        dispatchers = dispatchers,
         baseCacheDirectory = File(""),
         clock = FakeSystemClock(),
         timelineEventFilterFactory = FakeTimelineEventFilterFactory(),
-        featureFlagService = FakeFeatureFlagService(),
+        featureFlagService = featureFlagService,
         analyticsService = FakeAnalyticsService(),
-        workManagerScheduler = FakeWorkManagerScheduler(submitLambda = {}),
+        workManagerScheduler = workManagerScheduler,
         contentScanner = FakeContentScanner(),
-        isMessageSearchAvailable = false,
+        isMessageSearchAvailable = isMessageSearchAvailable,
     )
 }
