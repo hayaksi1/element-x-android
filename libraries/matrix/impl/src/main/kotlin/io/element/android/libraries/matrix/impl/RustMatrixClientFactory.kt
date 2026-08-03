@@ -83,7 +83,7 @@ class RustMatrixClientFactory(
         // This secret is called 'passphrase' for historical reasons, but it can be a raw key or an actual passphrase
         val clientSecret = sessionData.passphrase?.let(ClientSecret::fromString)
         val sessionPaths = sessionData.getSessionPaths()
-        val isMessageSearchAvailable = isMessageSearchAvailable(clientSecret)
+        val isMessageSearchAvailable = featureFlagService.isFeatureEnabled(FeatureFlags.MessageSearch)
         val indexDirectory = File(sessionPaths.fileDirectory, SEARCH_INDEX_DIRECTORY)
         val coverageMarker = File(sessionPaths.fileDirectory, SEARCH_INDEX_COVERAGE_MARKER)
 
@@ -93,7 +93,7 @@ class RustMatrixClientFactory(
             // coverage can actually be guaranteed, instead of resuming a silently stale index.
             // The marker goes first: if this is interrupted after a partial directory deletion,
             // a surviving marker would let a later restore trust the broken index.
-            Timber.tag("RustMatrixClient").i("Message search is unavailable, deleting the stale search index")
+            Timber.tag("RustMatrixClient").i("Message search is disabled, deleting the stale search index")
             if (!coverageMarker.exists() || coverageMarker.delete()) {
                 indexDirectory.deleteRecursively()
             } else {
@@ -125,7 +125,31 @@ class RustMatrixClientFactory(
             }
         }
 
-        val client = buildAndRestoreClient(sessionData, clientSecret, isMessageSearchAvailable)
+        val client = getBaseClientBuilder(
+            sessionPaths = sessionPaths,
+            clientSecret = clientSecret,
+            slidingSyncType = ClientBuilderSlidingSync.Restored,
+            isMessageSearchAvailable = isMessageSearchAvailable,
+        )
+            .homeserverUrl(sessionData.homeserverUrl)
+            .username(sessionData.userId)
+            .use { it.build() }
+
+        client.setMediaRetentionPolicy(
+            MediaRetentionPolicy(
+                // Make this 500MB instead of 400MB
+                maxCacheSize = 500.megaBytes.into(ByteUnit.BYTES).toULong(),
+                // This is the default value, but let's make it explicit
+                maxFileSize = 20.megaBytes.into(ByteUnit.BYTES).toULong(),
+                // Use 30 days instead of 60
+                lastAccessExpiry = 30.days.toJavaDuration(),
+                // This is the default value, but let's make it explicit
+                cleanupFrequency = 1.days.toJavaDuration(),
+            )
+        )
+
+        client.restoreSession(sessionData.toSession())
+
         if (isMessageSearchAvailable && coverageEstablished && !coverageMarker.exists()) {
             // Failing to record coverage must never fail the session restore; without the marker
             // the bootstrap simply runs again on the next start.
@@ -145,39 +169,6 @@ class RustMatrixClientFactory(
         listOf("$EVENT_CACHE_STORE_NAME-wal", "$EVENT_CACHE_STORE_NAME-shm", EVENT_CACHE_STORE_NAME)
             .map { File(sessionPaths.cacheDirectory, it) }
             .all { !it.exists() || it.delete() }
-
-    private suspend fun buildAndRestoreClient(
-        sessionData: SessionData,
-        clientSecret: ClientSecret?,
-        isMessageSearchAvailable: Boolean,
-    ): Client {
-        val baseClientBuilder = getBaseClientBuilder(
-            sessionPaths = sessionData.getSessionPaths(),
-            clientSecret = clientSecret,
-            slidingSyncType = ClientBuilderSlidingSync.Restored,
-            isMessageSearchAvailable = isMessageSearchAvailable,
-        )
-        val client = baseClientBuilder.clientBuilder
-            .homeserverUrl(sessionData.homeserverUrl)
-            .username(sessionData.userId)
-            .use { it.build() }
-
-        client.setMediaRetentionPolicy(
-            MediaRetentionPolicy(
-                // Make this 500MB instead of 400MB
-                maxCacheSize = 500.megaBytes.into(ByteUnit.BYTES).toULong(),
-                // This is the default value, but let's make it explicit
-                maxFileSize = 20.megaBytes.into(ByteUnit.BYTES).toULong(),
-                // Use 30 days instead of 60
-                lastAccessExpiry = 30.days.toJavaDuration(),
-                // This is the default value, but let's make it explicit
-                cleanupFrequency = 1.days.toJavaDuration(),
-            )
-        )
-
-        client.restoreSession(sessionData.toSession())
-        return client
-    }
 
     suspend fun create(
         client: Client,
@@ -247,20 +238,13 @@ class RustMatrixClientFactory(
         }
     }
 
-    private suspend fun isMessageSearchAvailable(clientSecret: ClientSecret?): Boolean =
-        featureFlagService.isFeatureEnabled(FeatureFlags.MessageSearch) && clientSecret != null
-
     internal suspend fun getBaseClientBuilder(
         sessionPaths: SessionPaths,
         clientSecret: ClientSecret?,
         slidingSyncType: ClientBuilderSlidingSync,
-        // Null reads the live flag; the restore path passes its own snapshot instead, so a flag
-        // flipped mid-restore cannot make the coverage bookkeeping and the built client disagree
-        // about whether an index exists.
-        isMessageSearchAvailable: Boolean? = null,
-    ): BaseClientBuilder {
-        val messageSearchAvailable = isMessageSearchAvailable ?: isMessageSearchAvailable(clientSecret)
-        val clientBuilder = clientBuilderProvider.provide()
+        isMessageSearchAvailable: Boolean,
+    ): ClientBuilder {
+        return clientBuilderProvider.provide()
             .run {
                 sqliteStoreBuilderProvider.provide(sessionPaths)
                     .secret(clientSecret)
@@ -289,16 +273,12 @@ class RustMatrixClientFactory(
             .enableShareHistoryOnInvite(true)
             .threadsEnabled(featureFlagService.isFeatureEnabled(FeatureFlags.Threads), threadSubscriptions = false)
             .run {
-                // Note: every ClientBuilder call returns a NEW reference, so this must stay in
-                // expression position — using `if (flag) withSearchIndexStore(...)` as a statement
-                // would silently drop the result and leave the index disabled.
-                if (messageSearchAvailable) {
-                    // The index is encrypted at rest with the session secret, reusing the exact
-                    // string the SDK's SQLite stores already use. When there is no secret we skip
-                    // indexing entirely rather than writing message bodies to disk in plaintext.
+                if (isMessageSearchAvailable) {
+                    // The index is encrypted at rest with the same secret the SDK's SQLite stores
+                    // use, or left unencrypted for sessions without one, matching those stores.
                     withSearchIndexStore(
                         path = File(sessionPaths.fileDirectory, SEARCH_INDEX_DIRECTORY).absolutePath,
-                        password = checkNotNull(clientSecret).formattedAsString(),
+                        password = clientSecret?.formattedAsString(),
                     )
                 } else {
                     this
@@ -329,17 +309,8 @@ class RustMatrixClientFactory(
                 // Workaround for non-nullable proxy parameter in the SDK, since each call to the ClientBuilder returns a new reference we need to keep
                 proxyProvider.provides()?.let { proxy(it) } ?: this
             }
-        return BaseClientBuilder(
-            clientBuilder = clientBuilder,
-            isMessageSearchAvailable = messageSearchAvailable,
-        )
     }
 }
-
-internal data class BaseClientBuilder(
-    val clientBuilder: ClientBuilder,
-    val isMessageSearchAvailable: Boolean,
-)
 
 /**
  * Directory holding the local message search index, under the session's file directory.

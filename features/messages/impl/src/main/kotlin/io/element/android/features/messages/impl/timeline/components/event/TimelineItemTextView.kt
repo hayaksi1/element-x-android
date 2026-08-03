@@ -11,7 +11,6 @@ package io.element.android.features.messages.impl.timeline.components.event
 import android.text.SpannedString
 import androidx.annotation.VisibleForTesting
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.runtime.Composable
@@ -24,7 +23,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewParameter
 import io.element.android.compound.theme.ElementTheme
@@ -42,6 +40,8 @@ import io.element.android.libraries.textcomposer.ElementRichTextEditorStyle
 import io.element.android.libraries.textcomposer.mentions.LocalMentionSpanUpdater
 import io.element.android.wysiwyg.compose.EditorStyledText
 import io.element.android.wysiwyg.link.Link
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.persistentListOf
 
 @Composable
 fun TimelineItemTextView(
@@ -65,7 +65,7 @@ fun TimelineItemTextView(
         LocalTextStyle provides textStyle
     ) {
         val text = getTextWithResolvedMentions(content)
-        var codeBlockOverlays by remember(text) { mutableStateOf(emptyList<CodeBlockOverlay>()) }
+        var codeBlockOverlays by remember(text) { mutableStateOf<ImmutableList<CodeBlockOverlay>>(persistentListOf()) }
         val measureLastTextLine = ContentAvoidingLayout.measureLegacyLastTextLine(onContentLayoutChange = onContentLayoutChange)
         val density = LocalDensity.current
         val headerPx = with(density) { CodeBlockHeaderHeight.roundToPx() }

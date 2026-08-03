@@ -52,7 +52,7 @@ class RustMatrixClientFactoryTest {
     }
 
     @Test
-    fun `create - message search is unavailable when the client secret is missing`() = runTest {
+    fun `create - message search stays available when the client secret is missing`() = runTest {
         val featureFlagService = FakeFeatureFlagService(
             initialState = mapOf(FeatureFlags.MessageSearch.key to true),
         )
@@ -61,14 +61,21 @@ class RustMatrixClientFactoryTest {
             workManagerScheduler = FakeWorkManagerScheduler(submitLambda = {}),
         )
 
-        val result = sut.create(aSessionData().copy(passphrase = null))
+        // Availability is the feature flag alone. A session without a secret still gets an index,
+        // left unencrypted exactly like the SDK's own SQLite stores in that case.
+        val result = sut.create(
+            aSessionData(
+                sessionPath = temporaryFolder.newFolder("session-no-secret").absolutePath,
+                cachePath = temporaryFolder.newFolder("cache-no-secret").absolutePath,
+            ).copy(passphrase = null)
+        )
 
-        assertThat(result.isMessageSearchAvailable).isFalse()
+        assertThat(result.isMessageSearchAvailable).isTrue()
         result.destroy()
     }
 
     @Test
-    fun `create - message search availability uses the client builder decision`() = runTest {
+    fun `create - message search availability is a snapshot taken when the client was built`() = runTest {
         val featureFlagService = FakeFeatureFlagService(
             initialState = mapOf(FeatureFlags.MessageSearch.key to true),
         )

@@ -47,6 +47,9 @@ import io.element.android.libraries.designsystem.utils.snackbar.LocalSnackbarDis
 import io.element.android.libraries.designsystem.utils.snackbar.SnackbarMessage
 import io.element.android.libraries.ui.strings.CommonStrings
 import io.element.android.wysiwyg.view.spans.CodeBlockSpan
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
 import org.jsoup.nodes.Document
 
 internal val CodeBlockHeaderHeight = 30.dp
@@ -143,8 +146,8 @@ internal fun computeCodeBlockOverlays(
     text: CharSequence,
     layout: Layout,
     languages: List<String?> = emptyList(),
-): List<CodeBlockOverlay> {
-    val spanned = text as? Spanned ?: return emptyList()
+): ImmutableList<CodeBlockOverlay> {
+    val spanned = text as? Spanned ?: return persistentListOf()
     return spanned.getSpans(0, spanned.length, CodeBlockSpan::class.java)
         .map { span -> spanned.getSpanStart(span) to spanned.getSpanEnd(span) }
         .sortedBy { (start, _) -> start }
@@ -161,6 +164,7 @@ internal fun computeCodeBlockOverlays(
                 blockRightPx = (firstLine..lastLine).maxOf { layout.getLineRight(it) }.toInt(),
             )
         }
+        .toImmutableList()
 }
 
 /**
@@ -169,7 +173,7 @@ internal fun computeCodeBlockOverlays(
  */
 @Composable
 internal fun BoxScope.CodeBlockCopyButtons(
-    overlays: List<CodeBlockOverlay>,
+    overlays: ImmutableList<CodeBlockOverlay>,
 ) {
     if (overlays.isEmpty()) return
     val context = LocalContext.current
