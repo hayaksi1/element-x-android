@@ -71,7 +71,7 @@ internal data class CodeBlockOverlay(
     val language: String?,
     val blockTopPx: Int,
     val blockBottomPx: Int,
-    val blockRightPx: Int,
+    val blockWidthPx: Int,
 )
 
 /**
@@ -113,17 +113,13 @@ internal fun withCodeBlockChrome(
     for ((index, span) in spans.withIndex()) {
         val start = builder.getSpanStart(span)
         val end = builder.getSpanEnd(span)
-        if (languages.getOrNull(index) != null) {
-            builder.setSpan(
-                CodeBlockChromeSpan(extraAscentPx = headerPx, extraDescentPx = 0),
-                start,
-                (start + 1).coerceAtMost(end),
-                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
-            )
-        }
+        if (start >= end) continue
         builder.setSpan(
-            CodeBlockChromeSpan(extraAscentPx = 0, extraDescentPx = footerPx),
-            (end - 1).coerceAtLeast(start),
+            CodeBlockChromeSpan(
+                extraAscentPx = if (languages.getOrNull(index) != null) headerPx else 0,
+                extraDescentPx = footerPx,
+            ),
+            start,
             end,
             Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
         )
@@ -160,8 +156,8 @@ internal fun computeCodeBlockOverlays(
                 language = languages.getOrNull(index),
                 blockTopPx = layout.getLineTop(firstLine),
                 blockBottomPx = layout.getLineBottom(lastLine),
-                // A block's box is only as wide as its widest line, not as wide as the message.
-                blockRightPx = (firstLine..lastLine).maxOf { layout.getLineRight(it) }.toInt(),
+                // The block's background spans the text layout's full width, whatever its lines hold.
+                blockWidthPx = layout.width,
             )
         }
         .toImmutableList()
@@ -181,7 +177,7 @@ internal fun BoxScope.CodeBlockCopyButtons(
     val copyLabel = stringResource(CommonStrings.action_copy)
     val density = LocalDensity.current
     for (overlay in overlays) {
-        val blockWidth = with(density) { overlay.blockRightPx.toDp() }
+        val blockWidth = with(density) { overlay.blockWidthPx.toDp() }
         val separatorColor = ElementTheme.colors.borderInteractiveSecondary
 
         if (overlay.language != null) {
@@ -246,11 +242,33 @@ internal fun BoxScope.CodeBlockCopyButtons(
     }
 }
 
-/** Makes a code block's first or last line taller so its chrome has somewhere to live. */
+/**
+ * Makes a code block's first line taller upward and its last line taller downward so its chrome has
+ * somewhere to live.
+ *
+ * [LineHeightSpan] is a paragraph-affecting span: [Layout] asks every span in a paragraph about
+ * every line of that paragraph, no matter how narrow the span's attachment range is, so which lines
+ * to grow cannot be encoded in the attachment range — the span covers the whole block and picks its
+ * lines here instead, by the character they hold.
+ *
+ * Growing a line is also not enough on its own. When a span run wraps, `StaticLayout` seeds the
+ * next line with the previous line's chosen metrics ("preserve metrics for current span"), so the
+ * header growth would silently repeat on the line after the one it was meant for. The span
+ * remembers the exact metrics it produced by growing, and takes the growth back off any later line
+ * that turns up with them.
+ *
+ * Known limit: the seeding min-folds away a wrapped line's own metrics, so a continuation line
+ * whose glyphs need a taller ascent than the code font (an emoji, CJK) can be restored to the code
+ * font's height instead of its own — a few px too tight. The line's real requirement is destroyed
+ * before any span runs, so this cannot be told apart from a plain leak here.
+ */
 private class CodeBlockChromeSpan(
     private val extraAscentPx: Int,
     private val extraDescentPx: Int,
 ) : LineHeightSpan {
+    private var grownAscent = Int.MIN_VALUE
+    private var grownDescent = Int.MIN_VALUE
+
     override fun chooseHeight(
         text: CharSequence?,
         start: Int,
@@ -260,9 +278,27 @@ private class CodeBlockChromeSpan(
         fm: Paint.FontMetricsInt?,
     ) {
         fm ?: return
-        fm.ascent -= extraAscentPx
-        fm.top -= extraAscentPx
-        fm.descent += extraDescentPx
-        fm.bottom += extraDescentPx
+        val spanned = text as? Spanned ?: return
+        val blockStart = spanned.getSpanStart(this)
+        val blockEnd = spanned.getSpanEnd(this)
+        if (blockStart < 0 || blockEnd <= blockStart) return
+
+        if (blockStart in start until end) {
+            fm.ascent -= extraAscentPx
+            fm.top -= extraAscentPx
+            grownAscent = fm.ascent
+        } else if (extraAscentPx > 0 && fm.ascent == grownAscent) {
+            fm.ascent += extraAscentPx
+            fm.top += extraAscentPx
+        }
+
+        if (blockEnd - 1 in start until end) {
+            fm.descent += extraDescentPx
+            fm.bottom += extraDescentPx
+            grownDescent = fm.descent
+        } else if (extraDescentPx > 0 && fm.descent == grownDescent) {
+            fm.descent -= extraDescentPx
+            fm.bottom -= extraDescentPx
+        }
     }
 }
