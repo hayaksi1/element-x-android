@@ -17,7 +17,10 @@ import io.element.android.tests.testutils.robolectric.RobolectricTest
 import io.element.android.wysiwyg.view.spans.CodeBlockSpan
 import org.jsoup.Jsoup
 import org.junit.Test
+import org.robolectric.annotation.GraphicsMode
 
+// Native graphics so that StaticLayout really measures and wraps text.
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
 class CodeBlockOverlayTest : RobolectricTest() {
     @Test
     fun `a plain CharSequence yields no code blocks`() {
@@ -93,6 +96,110 @@ class CodeBlockOverlayTest : RobolectricTest() {
     }
 
     @Test
+    fun `chrome grows only the block's first and last lines, not every wrapped line`() {
+        // A single long source line that wraps across several layout lines: one paragraph, many lines.
+        // The width is narrow enough that the block is guaranteed to wrap however text is measured.
+        val code = "echo disabling swap and creating the new logical volume right now"
+        val text = SpannableStringBuilder("intro\n$code\noutro")
+        val start = 6
+        val end = start + code.length
+        text.markCodeBlock(start = start, end = end)
+
+        val display = withCodeBlockChrome(text, headerPx = 96, footerPx = 120, languages = listOf("bash"))
+        val plain = layoutOf(text, widthPx = NARROW_WIDTH_PX)
+        val chromed = layoutOf(display, widthPx = NARROW_WIDTH_PX)
+
+        assertThat(chromed.lineCount).isEqualTo(plain.lineCount)
+        val firstBlockLine = chromed.getLineForOffset(start)
+        val lastBlockLine = chromed.getLineForOffset(end - 1)
+        // The premise of the test: the block really does wrap inside one paragraph.
+        assertThat(lastBlockLine - firstBlockLine).isAtLeast(2)
+
+        val heights = (0 until chromed.lineCount).map { line ->
+            "line $line [${chromed.getLineStart(line)}..${chromed.getLineEnd(line)}) " +
+                "height=${chromed.getLineBottom(line) - chromed.getLineTop(line)}"
+        }
+        val expectedHeights = (0 until plain.lineCount).map { line ->
+            val plainHeight = plain.getLineBottom(line) - plain.getLineTop(line)
+            val expectedHeight = when (line) {
+                firstBlockLine -> plainHeight + 96
+                lastBlockLine -> plainHeight + 120
+                else -> plainHeight
+            }
+            "line $line [${plain.getLineStart(line)}..${plain.getLineEnd(line)}) height=$expectedHeight"
+        }
+        assertThat(heights).isEqualTo(expectedHeights)
+    }
+
+    @Test
+    fun `a multi-line block grows only its first and last lines, not the lines in between`() {
+        val text = SpannableStringBuilder("intro\none\ntwo\nthree\noutro")
+        val start = 6
+        val end = 19
+        text.markCodeBlock(start = start, end = end)
+
+        val display = withCodeBlockChrome(text, headerPx = 96, footerPx = 120, languages = listOf("bash"))
+        val plain = layoutOf(text)
+        val chromed = layoutOf(display)
+
+        assertThat(chromed.lineCount).isEqualTo(plain.lineCount)
+        val firstBlockLine = chromed.getLineForOffset(start)
+        val lastBlockLine = chromed.getLineForOffset(end - 1)
+        assertThat(lastBlockLine - firstBlockLine).isEqualTo(2)
+
+        for (line in 0 until chromed.lineCount) {
+            val plainHeight = plain.getLineBottom(line) - plain.getLineTop(line)
+            val chromedHeight = chromed.getLineBottom(line) - chromed.getLineTop(line)
+            val expectedHeight = when (line) {
+                firstBlockLine -> plainHeight + 96
+                lastBlockLine -> plainHeight + 120
+                else -> plainHeight
+            }
+            assertThat(chromedHeight).isEqualTo(expectedHeight)
+        }
+    }
+
+    @Test
+    fun `a block without a language reserves no header, only the footer`() {
+        val text = SpannableStringBuilder("intro\none\ntwo\noutro")
+        val start = 6
+        val end = 13
+        text.markCodeBlock(start = start, end = end)
+
+        val display = withCodeBlockChrome(text, headerPx = 96, footerPx = 120, languages = listOf(null))
+        val plain = layoutOf(text)
+        val chromed = layoutOf(display)
+
+        val lastBlockLine = chromed.getLineForOffset(end - 1)
+        for (line in 0 until chromed.lineCount) {
+            val plainHeight = plain.getLineBottom(line) - plain.getLineTop(line)
+            val chromedHeight = chromed.getLineBottom(line) - chromed.getLineTop(line)
+            val expectedHeight = if (line == lastBlockLine) plainHeight + 120 else plainHeight
+            assertThat(chromedHeight).isEqualTo(expectedHeight)
+        }
+    }
+
+    @Test
+    fun `a block whose first and last characters share a line grows it by header and footer at once`() {
+        val text = SpannableStringBuilder("intro\ncode\noutro")
+        val start = 6
+        val end = 10
+        text.markCodeBlock(start = start, end = end)
+
+        val display = withCodeBlockChrome(text, headerPx = 96, footerPx = 120, languages = listOf("bash"))
+        val plain = layoutOf(text)
+        val chromed = layoutOf(display)
+
+        val blockLine = chromed.getLineForOffset(start)
+        for (line in 0 until chromed.lineCount) {
+            val plainHeight = plain.getLineBottom(line) - plain.getLineTop(line)
+            val chromedHeight = chromed.getLineBottom(line) - chromed.getLineTop(line)
+            val expectedHeight = if (line == blockLine) plainHeight + 96 + 120 else plainHeight
+            assertThat(chromedHeight).isEqualTo(expectedHeight)
+        }
+    }
+
+    @Test
     fun `the language is read off the code element's class, in document order`() {
         val document = Jsoup.parse(
             """
@@ -115,13 +222,16 @@ class CodeBlockOverlayTest : RobolectricTest() {
         setSpan(CodeBlockSpan(0, 0), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
     }
 
-    private fun layoutOf(text: CharSequence): Layout {
+    private fun layoutOf(text: CharSequence, widthPx: Int = WIDTH_PX): Layout {
         return StaticLayout.Builder
-            .obtain(text, 0, text.length, TextPaint(), WIDTH_PX)
+            .obtain(text, 0, text.length, TextPaint(), widthPx)
             .build()
     }
 
     private companion object {
         const val WIDTH_PX = 400
+
+        /** Narrow enough that a long code line has to wrap, whatever the test font measures. */
+        const val NARROW_WIDTH_PX = 24
     }
 }
