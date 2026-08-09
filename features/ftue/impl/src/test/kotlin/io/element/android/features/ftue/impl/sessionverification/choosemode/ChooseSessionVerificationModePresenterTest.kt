@@ -19,6 +19,7 @@ import io.element.android.libraries.matrix.api.encryption.RecoveryState
 import io.element.android.libraries.matrix.api.user.MatrixUser
 import io.element.android.libraries.matrix.test.AN_AVATAR_URL
 import io.element.android.libraries.matrix.test.A_SESSION_ID
+import io.element.android.libraries.matrix.test.A_USER_ID
 import io.element.android.libraries.matrix.test.A_USER_NAME
 import io.element.android.libraries.matrix.test.FakeMatrixClient
 import io.element.android.libraries.matrix.test.encryption.FakeEncryptionService
@@ -133,6 +134,19 @@ class ChooseSessionVerificationModePresenterTest {
                     canUseRecoveryKey = true,
                 )
             )
+        }
+    }
+
+    @Test
+    fun `present - exposes the current user profile`() = runTest {
+        val matrixClient = FakeMatrixClient()
+        val presenter = createPresenter(matrixClient = matrixClient)
+        presenter.test {
+            assertThat(awaitItem().currentUser).isEqualTo(MatrixUser(A_USER_ID, A_USER_NAME, AN_AVATAR_URL))
+            val updatedUser = MatrixUser(A_USER_ID, "A new display name", AN_AVATAR_URL)
+            matrixClient.givenGetProfileResult(A_USER_ID, Result.success(updatedUser))
+            matrixClient.getUserProfile()
+            assertThat(awaitItem().currentUser).isEqualTo(updatedUser)
         }
     }
 
