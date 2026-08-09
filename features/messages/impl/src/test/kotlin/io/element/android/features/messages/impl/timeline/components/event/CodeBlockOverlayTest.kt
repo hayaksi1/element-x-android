@@ -19,7 +19,6 @@ import org.jsoup.Jsoup
 import org.junit.Test
 import org.robolectric.annotation.GraphicsMode
 
-// Native graphics so that StaticLayout really measures and wraps text.
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class CodeBlockOverlayTest : RobolectricTest() {
     @Test
@@ -97,8 +96,6 @@ class CodeBlockOverlayTest : RobolectricTest() {
 
     @Test
     fun `chrome grows only the block's first and last lines, not every wrapped line`() {
-        // A single long source line that wraps across several layout lines: one paragraph, many lines.
-        // The width is narrow enough that the block is guaranteed to wrap however text is measured.
         val code = "echo disabling swap and creating the new logical volume right now"
         val text = SpannableStringBuilder("intro\n$code\noutro")
         val start = 6
@@ -112,7 +109,6 @@ class CodeBlockOverlayTest : RobolectricTest() {
         assertThat(chromed.lineCount).isEqualTo(plain.lineCount)
         val firstBlockLine = chromed.getLineForOffset(start)
         val lastBlockLine = chromed.getLineForOffset(end - 1)
-        // The premise of the test: the block really does wrap inside one paragraph.
         assertThat(lastBlockLine - firstBlockLine).isAtLeast(2)
 
         val heights = (0 until chromed.lineCount).map { line ->

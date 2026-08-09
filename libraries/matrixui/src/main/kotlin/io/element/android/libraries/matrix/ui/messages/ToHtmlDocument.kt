@@ -93,6 +93,5 @@ private object CustomHtmlToDomParser {
         )
         .addAttributes("a", "href", "data-mention-type", "contenteditable")
         .addAttributes("ol", "start")
-        // The spec allows `class` on `code` to carry the block's language (`language-*`).
         .addAttributes("code", "class")
 }
