@@ -156,7 +156,6 @@ internal fun computeCodeBlockOverlays(
                 language = languages.getOrNull(index),
                 blockTopPx = layout.getLineTop(firstLine),
                 blockBottomPx = layout.getLineBottom(lastLine),
-                // The block's background spans the text layout's full width, whatever its lines hold.
                 blockWidthPx = layout.width,
             )
         }
@@ -217,7 +216,6 @@ internal fun BoxScope.CodeBlockCopyButtons(
                     .clickable(role = Role.Button, onClickLabel = copyLabel) {
                         context.getSystemService<ClipboardManager>()
                             ?.setPrimaryClip(ClipData.newPlainText("", overlay.code))
-                        // Android 13+ shows its own clipboard confirmation.
                         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
                             snackbarDispatcher.post(SnackbarMessage(CommonStrings.common_copied_to_clipboard))
                         }
