@@ -1,5 +1,5 @@
 /*
- * Copyright 2026 hayaksi1
+ * Copyright (c) 2026 Element Creations Ltd.
  *
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
  * Please see LICENSE files in the repository root for full details.
@@ -12,6 +12,7 @@ import android.text.SpannableStringBuilder
 import android.text.Spanned
 import android.text.StaticLayout
 import android.text.TextPaint
+import android.text.style.LeadingMarginSpan
 import com.google.common.truth.Truth.assertThat
 import io.element.android.tests.testutils.robolectric.RobolectricTest
 import io.element.android.wysiwyg.view.spans.CodeBlockSpan
@@ -34,7 +35,7 @@ class CodeBlockOverlayTest : RobolectricTest() {
     }
 
     @Test
-    fun `a single code block yields its code and its top edge`() {
+    fun `a single code block yields its code and the box it is drawn in`() {
         val text = SpannableStringBuilder("before\ncode line\nafter")
         text.markCodeBlock(start = 7, end = 16)
         val layout = layoutOf(text)
@@ -44,6 +45,60 @@ class CodeBlockOverlayTest : RobolectricTest() {
         assertThat(overlays).hasSize(1)
         assertThat(overlays.first().code).isEqualTo("code line")
         assertThat(overlays.first().blockTopPx).isEqualTo(layout.getLineTop(layout.getLineForOffset(7)))
+        assertThat(overlays.first().blockBottomPx).isEqualTo(layout.getLineBottom(layout.getLineForOffset(15)))
+        assertThat(overlays.first().blockLeftPx).isEqualTo(0)
+        assertThat(overlays.first().blockWidthPx).isEqualTo(layout.width)
+    }
+
+    @Test
+    fun `a block inside a leading margin is inset and narrowed to the box it is drawn in`() {
+        val text = SpannableStringBuilder("intro\ncode\noutro")
+        text.markCodeBlock(start = 6, end = 10)
+        text.setSpan(LeadingMarginSpan.Standard(30), 6, 10, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        val layout = layoutOf(text)
+
+        val overlay = computeCodeBlockOverlays(text, layout).single()
+
+        assertThat(overlay.blockLeftPx).isEqualTo(30)
+        assertThat(overlay.blockWidthPx).isEqualTo(layout.width - 30)
+    }
+
+    @Test
+    fun `an rtl block inside a leading margin keeps the chrome off the margin side`() {
+        val text = SpannableStringBuilder("שלום\nקוד\nסוף")
+        text.markCodeBlock(start = 5, end = 8)
+        text.setSpan(LeadingMarginSpan.Standard(30), 5, 8, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        val layout = layoutOf(text)
+
+        val overlay = computeCodeBlockOverlays(text, layout).single()
+
+        assertThat(overlay.blockLeftPx).isEqualTo(0)
+        assertThat(overlay.blockWidthPx).isEqualTo(layout.width - 30)
+    }
+
+    @Test
+    fun `a block that spans the whole message still yields an overlay`() {
+        val text = SpannableStringBuilder("just code")
+        text.markCodeBlock(start = 0, end = text.length)
+        val layout = layoutOf(text)
+
+        val overlay = computeCodeBlockOverlays(text, layout).single()
+
+        assertThat(overlay.code).isEqualTo("just code")
+        assertThat(overlay.blockTopPx).isEqualTo(layout.getLineTop(0))
+        assertThat(overlay.blockBottomPx).isEqualTo(layout.getLineBottom(layout.lineCount - 1))
+    }
+
+    @Test
+    fun `a block ending in a newline keeps the footer on its last visible line`() {
+        val text = SpannableStringBuilder("intro\none\ntwo\noutro")
+        text.markCodeBlock(start = 6, end = 14)
+        val layout = layoutOf(text)
+
+        val overlay = computeCodeBlockOverlays(text, layout).single()
+
+        assertThat(overlay.code).isEqualTo("one\ntwo\n")
+        assertThat(overlay.blockBottomPx).isEqualTo(layout.getLineBottom(layout.getLineForOffset(12)))
     }
 
     @Test
@@ -125,6 +180,8 @@ class CodeBlockOverlayTest : RobolectricTest() {
             "line $line [${plain.getLineStart(line)}..${plain.getLineEnd(line)}) height=$expectedHeight"
         }
         assertThat(heights).isEqualTo(expectedHeights)
+        assertThat(chromed.ascentAbove(firstBlockLine)).isEqualTo(plain.ascentAbove(firstBlockLine) + 96)
+        assertThat(chromed.descentBelow(lastBlockLine)).isEqualTo(plain.descentBelow(lastBlockLine) + 120)
     }
 
     @Test
@@ -153,6 +210,8 @@ class CodeBlockOverlayTest : RobolectricTest() {
             }
             assertThat(chromedHeight).isEqualTo(expectedHeight)
         }
+        assertThat(chromed.ascentAbove(firstBlockLine)).isEqualTo(plain.ascentAbove(firstBlockLine) + 96)
+        assertThat(chromed.descentBelow(lastBlockLine)).isEqualTo(plain.descentBelow(lastBlockLine) + 120)
     }
 
     @Test
@@ -193,6 +252,47 @@ class CodeBlockOverlayTest : RobolectricTest() {
             val expectedHeight = if (line == blockLine) plainHeight + 96 + 120 else plainHeight
             assertThat(chromedHeight).isEqualTo(expectedHeight)
         }
+        assertThat(chromed.ascentAbove(blockLine)).isEqualTo(plain.ascentAbove(blockLine) + 96)
+        assertThat(chromed.descentBelow(blockLine)).isEqualTo(plain.descentBelow(blockLine) + 120)
+    }
+
+    @Test
+    fun `languages are matched to blocks by position and gate each block's header`() {
+        val text = SpannableStringBuilder("aaa\nfirst\nbbb\nsecond\nccc")
+        text.markCodeBlock(start = 4, end = 9)
+        text.markCodeBlock(start = 14, end = 20)
+        val languages = listOf(null, "kotlin")
+
+        val display = withCodeBlockChrome(text, headerPx = 96, footerPx = 120, languages = languages)
+        val plain = layoutOf(text)
+        val chromed = layoutOf(display)
+
+        val overlays = computeCodeBlockOverlays(display, chromed, languages)
+        assertThat(overlays.map { it.language }).containsExactly(null, "kotlin").inOrder()
+
+        val firstBlockLine = chromed.getLineForOffset(4)
+        val secondBlockLine = chromed.getLineForOffset(14)
+        for (line in 0 until chromed.lineCount) {
+            val plainHeight = plain.getLineBottom(line) - plain.getLineTop(line)
+            val chromedHeight = chromed.getLineBottom(line) - chromed.getLineTop(line)
+            val expectedHeight = when (line) {
+                firstBlockLine -> plainHeight + 120
+                secondBlockLine -> plainHeight + 96 + 120
+                else -> plainHeight
+            }
+            assertThat(chromedHeight).isEqualTo(expectedHeight)
+        }
+    }
+
+    @Test
+    fun `a languages list shorter than the block list leaves the tail unlabelled`() {
+        val text = SpannableStringBuilder("aaa\nfirst\nbbb\nsecond\nccc")
+        text.markCodeBlock(start = 4, end = 9)
+        text.markCodeBlock(start = 14, end = 20)
+
+        val overlays = computeCodeBlockOverlays(text, layoutOf(text), languages = listOf("kotlin"))
+
+        assertThat(overlays.map { it.language }).containsExactly("kotlin", null).inOrder()
     }
 
     @Test
@@ -214,9 +314,27 @@ class CodeBlockOverlayTest : RobolectricTest() {
         assertThat(codeBlockLanguages(null)).isEmpty()
     }
 
+    @Test
+    fun `a code block quoted in a reply fallback does not shift the language matching`() {
+        val document = Jsoup.parse(
+            """
+            <mx-reply><blockquote><pre><code class="language-python">quoted()</code></pre></blockquote></mx-reply>
+            <pre><code class="language-kotlin">val x = 1</code></pre>
+            """.trimIndent()
+        )
+
+        assertThat(codeBlockLanguages(document)).containsExactly("kotlin")
+    }
+
     private fun SpannableStringBuilder.markCodeBlock(start: Int, end: Int) {
         setSpan(CodeBlockSpan(0, 0), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
     }
+
+    /** How far the line's ink can rise above its baseline — where the header space is reserved. */
+    private fun Layout.ascentAbove(line: Int): Int = getLineBaseline(line) - getLineTop(line)
+
+    /** How far the line's box extends below its baseline — where the footer space is reserved. */
+    private fun Layout.descentBelow(line: Int): Int = getLineBottom(line) - getLineBaseline(line)
 
     private fun layoutOf(text: CharSequence, widthPx: Int = WIDTH_PX): Layout {
         return StaticLayout.Builder
