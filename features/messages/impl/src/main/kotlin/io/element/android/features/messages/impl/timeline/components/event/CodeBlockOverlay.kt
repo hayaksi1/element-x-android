@@ -55,8 +55,8 @@ import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
 import org.jsoup.nodes.Document
 
-internal val CodeBlockHeaderHeight = 30.dp
-internal val CodeBlockFooterHeight = 49.dp
+internal val CodeBlockHeaderHeight = 26.dp
+internal val CodeBlockFooterHeight = 26.dp
 
 private val COPY_ICON_SIZE = 16.dp
 private val COPY_LABEL_SPACING = 8.dp
