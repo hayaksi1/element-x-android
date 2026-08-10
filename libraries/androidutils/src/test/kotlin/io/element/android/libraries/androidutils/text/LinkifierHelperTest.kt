@@ -142,7 +142,6 @@ class LinkifierHelperTest : RobolectricTest() {
     }
 
     @Test
-<<<<<<< HEAD
     @Config(sdk = [30])
     fun `linkification ignores digits preceded by letters`() {
         val telephonyManager = shadowOf(newInstanceOf(TelephonyManager::class.java))
@@ -186,7 +185,9 @@ class LinkifierHelperTest : RobolectricTest() {
         val urlSpans = result.toSpannable().getSpans<URLSpan>()
         assertThat(urlSpans.size).isEqualTo(1)
         assertThat(urlSpans.first().url).isEqualTo("tel:+34950123456")
-=======
+    }
+
+    @Test
     fun `linkification ignores fediverse handle`() {
         val text = "Follow me at @name@server.tld"
         val result = LinkifyHelper.linkify(text)
@@ -223,7 +224,6 @@ class LinkifierHelperTest : RobolectricTest() {
         val urlSpans = result.toSpannable().getSpans<URLSpan>()
         assertThat(urlSpans.size).isEqualTo(1)
         assertThat(urlSpans.first().url).isEqualTo("mailto:john@doe.com")
->>>>>>> fix/4008-fediverse-handle-not-email
     }
 
     @Test
