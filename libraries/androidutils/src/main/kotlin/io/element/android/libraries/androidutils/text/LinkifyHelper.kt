@@ -50,7 +50,8 @@ object LinkifyHelper {
                 val start = spannable.getSpanStart(urlSpan)
                 val end = spannable.getSpanEnd(urlSpan)
 
-                if (urlSpan !in oldURLSpans && spannable.isPhoneNumberMixedWithLetters(urlSpan, start, end)) {
+                val isNewSpan = urlSpan !in oldURLSpans
+                if (isNewSpan && (spannable.isPhoneNumberMixedWithLetters(urlSpan, start, end) || spannable.isEmailInsideFediverseHandle(urlSpan, start))) {
                     spannable.removeSpan(urlSpan)
                     continue
                 }
@@ -118,6 +119,10 @@ object LinkifyHelper {
         val precededByLetter = start > 0 && this[start - 1].isLetter()
         val followedByLetter = end < length && this[end].isLetter()
         return precededByLetter || followedByLetter || subSequence(start, end).any { it.isLetter() }
+    }
+
+    private fun Spannable.isEmailInsideFediverseHandle(urlSpan: URLSpan, start: Int): Boolean {
+        return urlSpan.url.startsWith("mailto:") && start > 0 && this[start - 1] == '@'
     }
 
     private fun adjustLinkifiedUrlSpanEndIndex(spannable: Spannable, start: Int, end: Int): Int {

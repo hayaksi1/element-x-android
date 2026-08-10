@@ -142,6 +142,7 @@ class LinkifierHelperTest : RobolectricTest() {
     }
 
     @Test
+<<<<<<< HEAD
     @Config(sdk = [30])
     fun `linkification ignores digits preceded by letters`() {
         val telephonyManager = shadowOf(newInstanceOf(TelephonyManager::class.java))
@@ -185,6 +186,44 @@ class LinkifierHelperTest : RobolectricTest() {
         val urlSpans = result.toSpannable().getSpans<URLSpan>()
         assertThat(urlSpans.size).isEqualTo(1)
         assertThat(urlSpans.first().url).isEqualTo("tel:+34950123456")
+=======
+    fun `linkification ignores fediverse handle`() {
+        val text = "Follow me at @name@server.tld"
+        val result = LinkifyHelper.linkify(text)
+        val urlSpans = result.toSpannable().getSpans<URLSpan>()
+        assertThat(urlSpans).isEmpty()
+    }
+
+    @Test
+    fun `linkification ignores fediverse handle at the start of the text`() {
+        val text = "@name@server.tld posted this"
+        val result = LinkifyHelper.linkify(text)
+        val urlSpans = result.toSpannable().getSpans<URLSpan>()
+        assertThat(urlSpans).isEmpty()
+    }
+
+    @Test
+    fun `linkification finds email next to a fediverse handle`() {
+        val text = "@name@server.tld and john@doe.com"
+        val result = LinkifyHelper.linkify(text)
+        val urlSpans = result.toSpannable().getSpans<URLSpan>()
+        assertThat(urlSpans.size).isEqualTo(1)
+        assertThat(urlSpans.first().url).isEqualTo("mailto:john@doe.com")
+    }
+
+    @Test
+    fun `linkification keeps an existing mailto span preceded by an at sign`() {
+        val text = buildSpannedString {
+            append("Mail me @")
+            inSpans(URLSpan("mailto:john@doe.com")) {
+                append("john@doe.com")
+            }
+        }
+        val result = LinkifyHelper.linkify(text)
+        val urlSpans = result.toSpannable().getSpans<URLSpan>()
+        assertThat(urlSpans.size).isEqualTo(1)
+        assertThat(urlSpans.first().url).isEqualTo("mailto:john@doe.com")
+>>>>>>> fix/4008-fediverse-handle-not-email
     }
 
     @Test
