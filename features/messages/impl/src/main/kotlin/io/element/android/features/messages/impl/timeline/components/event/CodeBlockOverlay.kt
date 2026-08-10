@@ -173,7 +173,7 @@ internal fun BoxScope.CodeBlockCopyButtons(
     if (overlays.isEmpty()) return
     val context = LocalContext.current
     val snackbarDispatcher = LocalSnackbarDispatcher.current
-    val copyLabel = stringResource(CommonStrings.action_copy_code)
+    val copyLabel = stringResource(CommonStrings.action_copy)
     val density = LocalDensity.current
     for (overlay in overlays) {
         val blockWidth = with(density) { overlay.blockWidthPx.toDp() }
