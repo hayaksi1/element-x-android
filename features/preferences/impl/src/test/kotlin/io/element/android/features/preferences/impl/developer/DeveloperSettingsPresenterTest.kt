@@ -27,9 +27,11 @@ import io.element.android.libraries.featureflag.api.FeatureFlags
 import io.element.android.libraries.featureflag.test.FakeFeatureFlagService
 import io.element.android.libraries.matrix.api.analytics.GetDatabaseSizesUseCase
 import io.element.android.libraries.matrix.api.analytics.SdkStoreSizes
+import io.element.android.libraries.matrix.api.core.DeviceId
 import io.element.android.libraries.matrix.api.core.SessionId
 import io.element.android.libraries.matrix.api.search.MessageSearchSweepActivity
 import io.element.android.libraries.matrix.api.search.SearchBackfillCursor
+import io.element.android.libraries.matrix.test.A_DEVICE_ID
 import io.element.android.libraries.matrix.test.A_SESSION_ID
 import io.element.android.libraries.matrix.test.FakeMatrixClient
 import io.element.android.libraries.matrix.test.search.FakeMessageSearchIndexer
@@ -64,6 +66,7 @@ class DeveloperSettingsPresenterTest {
                 assertThat(state.cacheSize).isEqualTo(AsyncData.Uninitialized)
                 assertThat(state.isEnterpriseBuild).isFalse()
                 assertThat(state.showColorPicker).isFalse()
+                assertThat(state.deviceId).isEqualTo(A_DEVICE_ID)
             }
             awaitItem().also { state ->
                 assertThat(state.cacheSize.isLoading()).isTrue()
@@ -263,6 +266,7 @@ class DeveloperSettingsPresenterTest {
 
     private fun createDeveloperSettingsPresenter(
         sessionId: SessionId = A_SESSION_ID,
+        deviceId: DeviceId = A_DEVICE_ID,
         cacheSizeUseCase: FakeComputeCacheSizeUseCase = FakeComputeCacheSizeUseCase(),
         clearCacheUseCase: FakeClearCacheUseCase = FakeClearCacheUseCase(),
         enterpriseService: EnterpriseService = FakeEnterpriseService(),
@@ -276,6 +280,7 @@ class DeveloperSettingsPresenterTest {
         return DeveloperSettingsPresenter(
             appDeveloperSettingsPresenter = { anAppDeveloperSettingsState() },
             sessionId = sessionId,
+            deviceId = deviceId,
             computeCacheSizeUseCase = cacheSizeUseCase,
             clearCacheUseCase = clearCacheUseCase,
             enterpriseService = enterpriseService,

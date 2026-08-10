@@ -35,6 +35,7 @@ import io.element.android.libraries.featureflag.api.FeatureFlagService
 import io.element.android.libraries.featureflag.api.FeatureFlags
 import io.element.android.libraries.matrix.api.MatrixClient
 import io.element.android.libraries.matrix.api.analytics.GetDatabaseSizesUseCase
+import io.element.android.libraries.matrix.api.core.DeviceId
 import io.element.android.libraries.matrix.api.core.SessionId
 import io.element.android.libraries.matrix.api.search.MessageSearchIndexer
 import io.element.android.libraries.matrix.api.search.MessageSearchSweepActivity
@@ -48,6 +49,7 @@ import kotlinx.coroutines.launch
 class DeveloperSettingsPresenter(
     private val appDeveloperSettingsPresenter: Presenter<AppDeveloperSettingsState>,
     private val sessionId: SessionId,
+    private val deviceId: DeviceId,
     private val computeCacheSizeUseCase: ComputeCacheSizeUseCase,
     private val clearCacheUseCase: ClearCacheUseCase,
     private val enterpriseService: EnterpriseService,
@@ -150,6 +152,7 @@ class DeveloperSettingsPresenter(
             isEnterpriseBuild = enterpriseService.isEnterpriseBuild,
             showColorPicker = showColorPicker,
             messageSearchIndexStatus = messageSearchIndexStatus,
+            deviceId = deviceId,
             eventSink = ::handleEvent,
         )
     }

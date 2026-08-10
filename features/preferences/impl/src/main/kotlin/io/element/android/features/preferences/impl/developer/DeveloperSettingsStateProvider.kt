@@ -13,6 +13,7 @@ import io.element.android.features.preferences.impl.developer.appsettings.AppDev
 import io.element.android.features.preferences.impl.developer.appsettings.anAppDeveloperSettingsState
 import io.element.android.libraries.architecture.AsyncAction
 import io.element.android.libraries.architecture.AsyncData
+import io.element.android.libraries.matrix.api.core.DeviceId
 import kotlinx.collections.immutable.persistentMapOf
 
 open class DeveloperSettingsStateProvider : PreviewParameterProvider<DeveloperSettingsState> {
@@ -62,6 +63,7 @@ fun aDeveloperSettingsState(
     isEnterpriseBuild: Boolean = false,
     showColorPicker: Boolean = false,
     messageSearchIndexStatus: MessageSearchIndexStatus = MessageSearchIndexStatus.Hidden,
+    deviceId: DeviceId = DeviceId("ILAKNDNASDLK"),
     eventSink: (DeveloperSettingsEvents) -> Unit = {},
 ) = DeveloperSettingsState(
     appDeveloperSettingsState = appDeveloperSettingsState,
@@ -72,5 +74,6 @@ fun aDeveloperSettingsState(
     isEnterpriseBuild = isEnterpriseBuild,
     showColorPicker = showColorPicker,
     messageSearchIndexStatus = messageSearchIndexStatus,
+    deviceId = deviceId,
     eventSink = eventSink,
 )
