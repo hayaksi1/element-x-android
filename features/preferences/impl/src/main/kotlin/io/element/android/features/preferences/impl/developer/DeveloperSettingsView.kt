@@ -188,21 +188,21 @@ private fun MessageSearchIndexCategory(state: DeveloperSettingsState) {
         when (status) {
             MessageSearchIndexStatus.Hidden -> Unit
             MessageSearchIndexStatus.RestartNeeded -> ListItem(
-                headlineContent = { Text("Start indexing") },
+                content = { Text("Start indexing") },
                 supportingContent = {
                     Text("Restart the app first: the search index is created at startup while the Message search flag is on.")
                 },
                 enabled = false,
             )
             MessageSearchIndexStatus.Idle -> ListItem(
-                headlineContent = { Text("Start indexing") },
+                content = { Text("Start indexing") },
                 supportingContent = {
                     Text("Fetches older history room by room so it becomes searchable. Uses network data and shows progress in a notification.")
                 },
                 onClick = { state.eventSink(DeveloperSettingsEvents.StartSearchIndexing) },
             )
             is MessageSearchIndexStatus.Paused -> ListItem(
-                headlineContent = { Text("Resume indexing") },
+                content = { Text("Resume indexing") },
                 supportingContent = {
                     Text("Paused at room ${status.roomsDone} of ${status.roomsTotal}.")
                 },
@@ -240,7 +240,7 @@ private fun MessageSearchIndexCategory(state: DeveloperSettingsState) {
             }
             is MessageSearchIndexStatus.Finished -> {
                 ListItem(
-                    headlineContent = { Text("Indexing finished") },
+                    content = { Text("Indexing finished") },
                     supportingContent = {
                         Text(
                             "${status.roomsSwept} rooms swept, ${status.pagesFetched} pages of history fetched. " +
@@ -249,7 +249,7 @@ private fun MessageSearchIndexCategory(state: DeveloperSettingsState) {
                     },
                 )
                 ListItem(
-                    headlineContent = { Text("Start indexing again") },
+                    content = { Text("Start indexing again") },
                     onClick = { state.eventSink(DeveloperSettingsEvents.StartSearchIndexing) },
                 )
             }
@@ -270,7 +270,7 @@ private fun SearchIndexSupportingText(text: String) {
 @Composable
 private fun CancelSearchIndexingItem(state: DeveloperSettingsState) {
     ListItem(
-        headlineContent = { Text("Cancel indexing") },
+        content = { Text("Cancel indexing") },
         onClick = { state.eventSink(DeveloperSettingsEvents.CancelSearchIndexing) },
     )
 }
