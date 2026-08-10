@@ -50,6 +50,11 @@ object LinkifyHelper {
                 val start = spannable.getSpanStart(urlSpan)
                 val end = spannable.getSpanEnd(urlSpan)
 
+                if (urlSpan !in oldURLSpans && spannable.isPhoneNumberMixedWithLetters(urlSpan, start, end)) {
+                    spannable.removeSpan(urlSpan)
+                    continue
+                }
+
                 // Try to avoid including trailing punctuation in the link.
                 // Since this might fail in some edge cases, we catch the exception and just use the original end index.
                 val newEnd = runCatchingExceptions {
@@ -106,6 +111,13 @@ object LinkifyHelper {
     private fun String.hasBracketedHost(): Boolean {
         val host = runCatchingExceptions { URI(this) }.getOrNull()?.host ?: return false
         return host.startsWith('[') && host.endsWith(']')
+    }
+
+    private fun Spannable.isPhoneNumberMixedWithLetters(urlSpan: URLSpan, start: Int, end: Int): Boolean {
+        if (!urlSpan.url.startsWith("tel:")) return false
+        val precededByLetter = start > 0 && this[start - 1].isLetter()
+        val followedByLetter = end < length && this[end].isLetter()
+        return precededByLetter || followedByLetter || subSequence(start, end).any { it.isLetter() }
     }
 
     private fun adjustLinkifiedUrlSpanEndIndex(spannable: Spannable, start: Int, end: Int): Int {
