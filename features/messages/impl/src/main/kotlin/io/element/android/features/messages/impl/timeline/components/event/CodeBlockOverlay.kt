@@ -55,10 +55,10 @@ import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
 import org.jsoup.nodes.Document
 
-internal val CodeBlockHeaderHeight = 26.dp
-internal val CodeBlockFooterHeight = 26.dp
+internal val CodeBlockHeaderHeight = 30.dp
+internal val CodeBlockFooterHeight = 33.dp
 
-private val COPY_ICON_SIZE = 16.dp
+private val COPY_ICON_SIZE = 20.dp
 private val COPY_LABEL_SPACING = 8.dp
 private val CODE_BLOCK_HORIZONTAL_INSET = 12.dp
 private const val LANGUAGE_CLASS_PREFIX = "language-"
@@ -262,7 +262,7 @@ internal fun BoxScope.CodeBlockCopyButtons(
                 Spacer(modifier = Modifier.width(COPY_LABEL_SPACING))
                 Text(
                     text = copyLabel,
-                    style = ElementTheme.typography.fontBodySmMedium,
+                    style = ElementTheme.typography.fontBodyMdRegular,
                     color = ElementTheme.colors.textSecondary,
                 )
             }
