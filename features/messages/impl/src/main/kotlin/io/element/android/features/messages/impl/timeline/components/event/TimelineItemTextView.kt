@@ -42,6 +42,7 @@ fun TimelineItemTextView(
     onLinkClick: (Link) -> Unit,
     onLinkLongClick: (Link) -> Unit,
     modifier: Modifier = Modifier,
+    onLongClick: (() -> Unit)? = null,
     onContentLayoutChange: (ContentAvoidingLayoutData) -> Unit = {},
 ) {
     // The View <-> Compose interop is not working well with Compose UI tests (it loops indefinitely), so we skip it in the UI test mode.
@@ -58,6 +59,15 @@ fun TimelineItemTextView(
         LocalTextStyle provides textStyle
     ) {
         val text = getTextWithResolvedMentions(content)
+        var codeBlockOverlays by remember { mutableStateOf<ImmutableList<CodeBlockOverlay>>(persistentListOf()) }
+        val measureLastTextLine = ContentAvoidingLayout.measureLegacyLastTextLine(onContentLayoutChange = onContentLayoutChange)
+        val density = LocalDensity.current
+        val headerPx = with(density) { (CodeBlockHeaderHeight * fontScale).roundToPx() }
+        val footerPx = with(density) { (CodeBlockFooterHeight * fontScale).roundToPx() }
+        val languages = remember(content.htmlDocument) { codeBlockLanguages(content.htmlDocument) }
+        // Not remembered: a stable identity would stop EditorStyledText from calling setText again,
+        // and in-place MentionSpan updates would never reach the TextView.
+        val displayText = withCodeBlockChrome(text, headerPx, footerPx, languages)
         Box(modifier.semantics { contentDescription = content.plainText }) {
             EditorStyledText(
                 text = text,
@@ -66,6 +76,11 @@ fun TimelineItemTextView(
                 style = ElementRichTextEditorStyle.textStyle(),
                 onTextLayout = ContentAvoidingLayout.measureLegacyLastTextLine(onContentLayoutChange = onContentLayoutChange),
                 releaseOnDetach = false,
+            )
+            CodeBlockCopyButtons(
+                overlays = codeBlockOverlays,
+                latestOverlays = { codeBlockOverlays },
+                onLongClick = onLongClick,
             )
         }
     }
