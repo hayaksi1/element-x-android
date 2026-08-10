@@ -15,8 +15,9 @@ import android.os.Build
 import android.text.Layout
 import android.text.SpannableStringBuilder
 import android.text.Spanned
+import android.text.style.LeadingMarginSpan
 import android.text.style.LineHeightSpan
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
@@ -31,10 +32,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.core.content.getSystemService
@@ -53,12 +56,13 @@ import kotlinx.collections.immutable.toImmutableList
 import org.jsoup.nodes.Document
 
 internal val CodeBlockHeaderHeight = 30.dp
-internal val CodeBlockFooterHeight = 40.dp
+internal val CodeBlockFooterHeight = 49.dp
 
 private val COPY_ICON_SIZE = 16.dp
 private val COPY_LABEL_SPACING = 8.dp
 private val CODE_BLOCK_HORIZONTAL_INSET = 12.dp
 private const val LANGUAGE_CLASS_PREFIX = "language-"
+private const val FALLBACK_REPLY_NODE_TAG = "mx-reply"
 
 /**
  * A code block found in a rendered message, together with the bounds of the box it is drawn in.
@@ -69,6 +73,7 @@ private const val LANGUAGE_CLASS_PREFIX = "language-"
 internal data class CodeBlockOverlay(
     val code: String,
     val language: String?,
+    val blockLeftPx: Int,
     val blockTopPx: Int,
     val blockBottomPx: Int,
     val blockWidthPx: Int,
@@ -78,17 +83,20 @@ internal data class CodeBlockOverlay(
  * The language of each code block in [document], in document order, or null where none is declared.
  *
  * The language only exists in the HTML (`<pre><code class="language-kotlin">`) and is dropped by the
- * time the DOM becomes spans, so it is read from the DOM and matched back up by position.
+ * time the DOM becomes spans, so it is read from the DOM and matched back up by position. A `pre`
+ * inside the rich-reply fallback produces no span, so those are skipped to keep the match aligned.
  */
 internal fun codeBlockLanguages(document: Document?): List<String?> {
     document ?: return emptyList()
-    return document.select("pre").map { pre ->
-        pre.selectFirst("code")
-            ?.classNames()
-            ?.firstOrNull { it.startsWith(LANGUAGE_CLASS_PREFIX) }
-            ?.removePrefix(LANGUAGE_CLASS_PREFIX)
-            ?.takeIf { it.isNotBlank() }
-    }
+    return document.select("pre")
+        .filterNot { pre -> pre.parents().any { it.tagName() == FALLBACK_REPLY_NODE_TAG } }
+        .map { pre ->
+            pre.selectFirst("code")
+                ?.classNames()
+                ?.firstOrNull { it.startsWith(LANGUAGE_CLASS_PREFIX) }
+                ?.removePrefix(LANGUAGE_CLASS_PREFIX)
+                ?.takeIf { it.isNotBlank() }
+        }
 }
 
 /**
@@ -151,12 +159,17 @@ internal fun computeCodeBlockOverlays(
             if (start < 0 || end > spanned.length || start >= end) return@mapIndexedNotNull null
             val firstLine = layout.getLineForOffset(start)
             val lastLine = layout.getLineForOffset(end - 1)
+            val marginPx = spanned.getSpans(start, end, LeadingMarginSpan::class.java)
+                .filter { it !is CodeBlockSpan && spanned.getSpanStart(it) <= start && start < spanned.getSpanEnd(it) }
+                .sumOf { it.getLeadingMargin(true) }
+            val isRtl = layout.getParagraphDirection(firstLine) == Layout.DIR_RIGHT_TO_LEFT
             CodeBlockOverlay(
                 code = spanned.subSequence(start, end).toString(),
                 language = languages.getOrNull(index),
+                blockLeftPx = if (isRtl) 0 else marginPx,
                 blockTopPx = layout.getLineTop(firstLine),
                 blockBottomPx = layout.getLineBottom(lastLine),
-                blockWidthPx = layout.width,
+                blockWidthPx = layout.width - marginPx,
             )
         }
         .toImmutableList()
@@ -165,27 +178,35 @@ internal fun computeCodeBlockOverlays(
 /**
  * Draws the chrome of a code block: a language label and separator at the top, and a copy row at the
  * bottom, both inside the block's own box and within the space [withCodeBlockChrome] reserved.
+ *
+ * The chrome's geometry is read from [latestOverlays] inside the placement and measure lambdas, not
+ * from the composed [overlays]. The overlays are produced during the TextView's measure pass, one
+ * phase after composition, so a compositional read would always draw the chrome one frame behind the
+ * text while the bubble is animating. A layout-phase read of the same state sees the value the
+ * TextView sibling has just written, keeping the chrome glued to the block in the same frame.
  */
 @Composable
 internal fun BoxScope.CodeBlockCopyButtons(
     overlays: ImmutableList<CodeBlockOverlay>,
+    latestOverlays: () -> ImmutableList<CodeBlockOverlay>,
+    onLongClick: (() -> Unit)?,
 ) {
     if (overlays.isEmpty()) return
     val context = LocalContext.current
     val snackbarDispatcher = LocalSnackbarDispatcher.current
     val copyLabel = stringResource(CommonStrings.action_copy)
-    val density = LocalDensity.current
-    for (overlay in overlays) {
-        val blockWidth = with(density) { overlay.blockWidthPx.toDp() }
+    val fontScale = LocalDensity.current.fontScale
+    for ((index, overlay) in overlays.withIndex()) {
         val separatorColor = ElementTheme.colors.borderInteractiveSecondary
+        fun latest() = latestOverlays().getOrNull(index) ?: overlay
 
         if (overlay.language != null) {
             Column(
                 modifier = Modifier
                     .align(Alignment.TopStart)
-                    .offset { IntOffset(x = 0, y = overlay.blockTopPx) }
-                    .width(blockWidth)
-                    .height(CodeBlockHeaderHeight),
+                    .offset { latest().let { IntOffset(x = it.blockLeftPx, y = it.blockTopPx) } }
+                    .blockWidth { latest().blockWidthPx }
+                    .height(CodeBlockHeaderHeight * fontScale),
             ) {
                 Text(
                     modifier = Modifier
@@ -194,6 +215,8 @@ internal fun BoxScope.CodeBlockCopyButtons(
                     text = overlay.language,
                     style = ElementTheme.typography.fontBodySmMedium,
                     color = ElementTheme.colors.textSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
                 HorizontalDivider(color = separatorColor)
             }
@@ -203,23 +226,30 @@ internal fun BoxScope.CodeBlockCopyButtons(
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .offset {
-                    IntOffset(x = 0, y = overlay.blockBottomPx - CodeBlockFooterHeight.roundToPx())
+                    latest().let {
+                        IntOffset(x = it.blockLeftPx, y = it.blockBottomPx - (CodeBlockFooterHeight * fontScale).roundToPx())
+                    }
                 }
-                .width(blockWidth)
-                .height(CodeBlockFooterHeight),
+                .blockWidth { latest().blockWidthPx }
+                .height(CodeBlockFooterHeight * fontScale),
         ) {
             HorizontalDivider(color = separatorColor)
             Row(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .clickable(role = Role.Button, onClickLabel = copyLabel) {
-                        context.getSystemService<ClipboardManager>()
-                            ?.setPrimaryClip(ClipData.newPlainText("", overlay.code))
-                        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-                            snackbarDispatcher.post(SnackbarMessage(CommonStrings.common_copied_to_clipboard))
-                        }
-                    },
+                    .combinedClickable(
+                        role = Role.Button,
+                        onClickLabel = copyLabel,
+                        onLongClick = onLongClick,
+                        onClick = {
+                            context.getSystemService<ClipboardManager>()
+                                ?.setPrimaryClip(ClipData.newPlainText("", overlay.code))
+                            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+                                snackbarDispatcher.post(SnackbarMessage(CommonStrings.common_copied_to_clipboard))
+                            }
+                        },
+                    ),
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -227,7 +257,7 @@ internal fun BoxScope.CodeBlockCopyButtons(
                     modifier = Modifier.size(COPY_ICON_SIZE),
                     imageVector = CompoundIcons.Copy(),
                     contentDescription = null,
-                    tint = ElementTheme.colors.textSecondary,
+                    tint = ElementTheme.colors.iconSecondary,
                 )
                 Spacer(modifier = Modifier.width(COPY_LABEL_SPACING))
                 Text(
@@ -237,6 +267,15 @@ internal fun BoxScope.CodeBlockCopyButtons(
                 )
             }
         }
+    }
+}
+
+/** Measures to a width only known at layout time, so the chrome can track the block within a frame. */
+private fun Modifier.blockWidth(widthPx: () -> Int): Modifier = layout { measurable, constraints ->
+    val width = widthPx().coerceAtLeast(0)
+    val placeable = measurable.measure(constraints.copy(minWidth = width, maxWidth = width))
+    layout(placeable.width, placeable.height) {
+        placeable.place(0, 0)
     }
 }
 
