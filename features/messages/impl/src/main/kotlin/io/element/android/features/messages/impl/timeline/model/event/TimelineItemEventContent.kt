@@ -61,6 +61,8 @@ fun TimelineItemEventContent.canBeForwarded(): Boolean =
         is TimelineItemVoiceContent,
         is TimelineItemGalleryContent,
         is TimelineItemAttachmentsContent -> true
+        // Live location shares can't be forwarded, the SDK rejects them, so we only show the option for static locations
+        // See https://github.com/element-hq/element-x-android/issues/7190
         is TimelineItemLocationContent -> mode is TimelineItemLocationContent.Mode.Static
         // Stickers can't be forwarded (yet) so we don't show the option
         // See https://github.com/element-hq/element-x-android/issues/2161
