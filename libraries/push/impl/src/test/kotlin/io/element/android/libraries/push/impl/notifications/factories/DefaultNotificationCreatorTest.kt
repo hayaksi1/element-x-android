@@ -19,6 +19,7 @@ import io.element.android.features.enterprise.api.EnterpriseService
 import io.element.android.features.enterprise.test.FakeEnterpriseService
 import io.element.android.libraries.core.meta.BuildMeta
 import io.element.android.libraries.matrix.api.core.SessionId
+import io.element.android.libraries.matrix.api.core.ThreadId
 import io.element.android.libraries.matrix.test.AN_EVENT_ID
 import io.element.android.libraries.matrix.test.AN_EVENT_ID_2
 import io.element.android.libraries.matrix.test.A_COLOR_INT
@@ -45,6 +46,7 @@ import io.element.android.libraries.push.impl.notifications.fixtures.aNotifiable
 import io.element.android.libraries.push.impl.notifications.model.InviteNotifiableEvent
 import io.element.android.libraries.push.impl.notifications.model.NotifiableMessageEvent
 import io.element.android.libraries.push.impl.notifications.model.SimpleNotifiableEvent
+import io.element.android.libraries.push.impl.notifications.shortcut.createShortcutId
 import io.element.android.services.toolbox.test.sdk.FakeBuildVersionSdkIntProvider
 import io.element.android.services.toolbox.test.strings.FakeStringProvider
 import io.element.android.services.toolbox.test.systemclock.A_FAKE_TIMESTAMP
@@ -324,6 +326,7 @@ class DefaultNotificationCreatorTest : RobolectricTest() {
             events = listOf(aNotifiableMessageEvent()),
         )
         result.commonAssertions()
+        assertThat(result.shortcutId).isEqualTo(createShortcutId(A_SESSION_ID, A_ROOM_ID))
     }
 
     @Test
@@ -353,6 +356,20 @@ class DefaultNotificationCreatorTest : RobolectricTest() {
             events = listOf(aNotifiableMessageEvent()),
         )
         result.commonAssertions()
+        assertThat(result.shortcutId).isEqualTo(createShortcutId(A_SESSION_ID, A_ROOM_ID))
+    }
+
+    @Test
+    fun `test createMessagesListNotification sets the shortcut id when updating a notification without one`() = runTest {
+        val sut = createNotificationCreator()
+        val existingNotification = NotificationCompat.Builder(RuntimeEnvironment.getApplication(), "aChannelId").build()
+        assertThat(existingNotification.shortcutId).isNull()
+        val result = sut.createRoomNotification(
+            events = listOf(aNotifiableMessageEvent()),
+            existingNotification = existingNotification,
+            threadId = A_THREAD_ID,
+        )
+        assertThat(result.shortcutId).isEqualTo(createShortcutId(A_SESSION_ID, A_ROOM_ID))
     }
 
     @Test
@@ -405,6 +422,7 @@ class DefaultNotificationCreatorTest : RobolectricTest() {
     private suspend fun NotificationCreator.createRoomNotification(
         events: List<NotifiableMessageEvent>,
         existingNotification: Notification? = null,
+        threadId: ThreadId? = null,
     ) = createMessagesListNotification(
         notificationAccountParams = aNotificationAccountParams(),
         roomInfo = RoomEventGroupInfo(
@@ -416,7 +434,7 @@ class DefaultNotificationCreatorTest : RobolectricTest() {
             customSound = null,
             isUpdated = false,
         ),
-        threadId = null,
+        threadId = threadId,
         largeIcon = null,
         lastMessageTimestamp = 123_456L,
         tickerText = "tickerText",
