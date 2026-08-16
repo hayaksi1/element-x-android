@@ -300,4 +300,7 @@ class DefaultShareIntentHandlerTest : RobolectricTest() {
         const val A_PACKAGE_NAME = "io.element.android.x"
         const val AN_ACTIVITY_NAME = "io.element.android.x.MainActivity"
     }
+    private fun createDefaultShareIntentHandler() = DefaultShareIntentHandler(
+        context = RuntimeEnvironment.getApplication(),
+    )
 }
