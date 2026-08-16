@@ -1042,7 +1042,8 @@ class MessageComposerPresenterTest : RobolectricTest() {
             baseRoom = FakeBaseRoom(
                 roomPermissions = FakeRoomPermissions(
                     canTriggerRoomNotification = true,
-                )
+                ),
+                updateMembersResult = {},
             ),
             typingNoticeResult = { Result.success(Unit) }
         ).apply {
@@ -1090,6 +1091,42 @@ class MessageComposerPresenterTest : RobolectricTest() {
     }
 
     @Test
+    fun `present - mention suggestions refresh the room members`() = runTest {
+        val currentUser = aRoomMember(userId = A_USER_ID, membership = RoomMembershipState.JOIN)
+        val bob = aRoomMember(userId = A_USER_ID_2, membership = RoomMembershipState.JOIN)
+        val updateMembersResult = lambdaRecorder<Unit> { }
+        val room = FakeJoinedRoom(
+            baseRoom = FakeBaseRoom(
+                roomPermissions = FakeRoomPermissions(
+                    canTriggerRoomNotification = true,
+                ),
+                updateMembersResult = updateMembersResult,
+            ),
+            typingNoticeResult = { Result.success(Unit) }
+        ).apply {
+            givenRoomMembersState(
+                RoomMembersState.Ready(
+                    persistentListOf(currentUser, bob),
+                )
+            )
+            givenRoomInfo(aRoomInfo(isDirect = false))
+        }
+        val presenter = createPresenter(
+            room = room,
+            slashCommandService = FakeSlashCommandService(
+                getSuggestionsResult = { _, _ -> emptyList() },
+            ),
+        )
+        presenter.test {
+            val initialState = awaitItem()
+            initialState.eventSink(MessageComposerEvent.SuggestionReceived(Suggestion(0, 0, SuggestionType.Mention, "")))
+            skipItems(1)
+            assertThat(awaitItem().suggestions).containsExactly(ResolvedSuggestion.AtRoom, ResolvedSuggestion.Member(bob))
+            updateMembersResult.assertions().isCalledOnce()
+        }
+    }
+
+    @Test
     fun `present - room mention suggestions no permission`() = runTest {
         val currentUser = aRoomMember(userId = A_USER_ID, membership = RoomMembershipState.JOIN)
         val invitedUser = aRoomMember(userId = A_USER_ID_3, membership = RoomMembershipState.INVITE)
@@ -1099,7 +1136,8 @@ class MessageComposerPresenterTest : RobolectricTest() {
             baseRoom = FakeBaseRoom(
                 roomPermissions = FakeRoomPermissions(
                     canTriggerRoomNotification = false,
-                )
+                ),
+                updateMembersResult = {},
             ),
             typingNoticeResult = { Result.success(Unit) }
         ).apply {
@@ -1130,6 +1168,7 @@ class MessageComposerPresenterTest : RobolectricTest() {
         val room = FakeJoinedRoom(
             baseRoom = FakeBaseRoom(
                 roomPermissions = FakeRoomPermissions(canTriggerRoomNotification = true),
+                updateMembersResult = {},
             ),
             typingNoticeResult = { Result.success(Unit) }
         ).apply {
