@@ -168,7 +168,7 @@ class AndroidMediaPreProcessor(
         tryOrNull {
             contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }
         }
-        return options.outMimeType ?: declaredMimeType
+        return options.outMimeType?.takeIf { it.isMimeTypeImage() } ?: declaredMimeType
     }
 
     private suspend fun processImage(uri: Uri, mimeType: String, shouldBeCompressed: Boolean): MediaUploadInfo {
