@@ -1073,7 +1073,8 @@ class TimelinePresenterTest {
             room = room,
             timeline = room.liveTimeline,
         val presenter = createTimelinePresenter(
-            room = aRoomWithDetachedTimeline(paginateLambda = paginateLambda),
+            room = room,
+            timeline = room.liveTimeline,
         )
         presenter.test {
             val initialState = awaitFirstItem()
@@ -1097,7 +1098,8 @@ class TimelinePresenterTest {
             room = room,
             timeline = room.liveTimeline,
         val presenter = createTimelinePresenter(
-            room = aRoomWithDetachedTimeline(paginateLambda = paginateLambda),
+            room = room,
+            timeline = room.liveTimeline,
         )
         presenter.test {
             val initialState = awaitFirstItem()
@@ -1123,7 +1125,8 @@ class TimelinePresenterTest {
             room = room,
             timeline = room.liveTimeline,
         val presenter = createTimelinePresenter(
-            room = aRoomWithDetachedTimeline(paginateLambda = paginateLambda),
+            room = room,
+            timeline = room.liveTimeline,
         )
         presenter.test {
             val initialState = awaitFirstItem()
@@ -1843,21 +1846,11 @@ class TimelinePresenterTest {
         }
 
     ): FakeJoinedRoom {
-        val detachedTimeline = FakeTimeline(
-            timelineItems = flowOf(
-                listOf(
-                    MatrixTimelineItem.Event(
-                        uniqueId = A_UNIQUE_ID,
-                        event = anEventTimelineItem(eventId = AN_EVENT_ID),
-                    )
-                )
-            )
-        ).apply {
-            this.paginateLambda = paginateLambda
-        }
         return FakeJoinedRoom(
-            liveTimeline = FakeTimeline(timelineItems = flowOf(emptyList())),
-            createTimelineResult = { Result.success(detachedTimeline) },
+            liveTimeline = FakeTimeline(timelineItems = flowOf(emptyList())).apply {
+                this.paginateLambda = paginateLambda
+            },
+            createTimelineResult = { createTimelineResult() },
             baseRoom = FakeBaseRoom(
                 roomPermissions = roomPermissions(),
                 threadRootIdForEventResult = { _ -> Result.success(null) },
