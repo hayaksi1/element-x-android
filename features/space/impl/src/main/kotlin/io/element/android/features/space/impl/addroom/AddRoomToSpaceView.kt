@@ -250,7 +250,7 @@ private fun RoomListItem(
 @PreviewsDayNight
 @Composable
 internal fun AddRoomToSpaceViewPreview(
-    @PreviewParameter(AddRoomToSpaceStateProvider::class) state: AddRoomToSpaceState
+    @PreviewParameter(AddRoomToSpaceStatePreviewParam::class) state: AddRoomToSpaceState
 ) = ElementPreview {
     AddRoomToSpaceView(
         state = state,

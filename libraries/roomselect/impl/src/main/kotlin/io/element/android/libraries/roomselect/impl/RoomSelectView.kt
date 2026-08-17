@@ -282,7 +282,7 @@ private fun RoomSummaryView(
 
 @PreviewsDayNight
 @Composable
-internal fun RoomSelectViewPreview(@PreviewParameter(RoomSelectStateProvider::class) state: RoomSelectState) = ElementPreview {
+internal fun RoomSelectViewPreview(@PreviewParameter(RoomSelectStatePreviewParam::class) state: RoomSelectState) = ElementPreview {
     RoomSelectView(
         state = state,
         onDismiss = {},

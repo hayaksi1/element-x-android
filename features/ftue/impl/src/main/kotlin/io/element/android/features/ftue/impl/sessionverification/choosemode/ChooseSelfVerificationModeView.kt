@@ -204,7 +204,7 @@ private fun ChooseSelfVerificationModeButtons(
 @PreviewsDayNight
 @Composable
 internal fun ChooseSelfVerificationModeViewPreview(
-    @PreviewParameter(ChooseSelfVerificationModeStateProvider::class) state: ChooseSelfVerificationModeState
+    @PreviewParameter(ChooseSelfVerificationModeStatePreviewParam::class) state: ChooseSelfVerificationModeState
 ) = ElementPreview {
     ChooseSelfVerificationModeView(
         state = state,
