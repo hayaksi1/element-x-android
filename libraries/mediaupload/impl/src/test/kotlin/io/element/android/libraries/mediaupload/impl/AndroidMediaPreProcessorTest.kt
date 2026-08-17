@@ -107,6 +107,21 @@ class AndroidMediaPreProcessorTest : RobolectricTest() {
     }
 
     @Test
+    fun `a png shared with a wildcard mime type is still encoded as a png`() = runTest {
+        val mediaUploadInfo = process(
+            asset = assetImagePng,
+            mimeType = MimeTypes.Images,
+            mediaOptimizationConfig = MediaOptimizationConfig(
+                compressImages = true,
+                videoCompressionPreset = VideoCompressionPreset.STANDARD,
+            ),
+            sdkIntVersion = Build.VERSION_CODES.Q,
+        )
+        val info = mediaUploadInfo as MediaUploadInfo.Image
+        assertThat(info.imageInfo.mimetype).isEqualTo(MimeTypes.Png)
+    }
+
+    @Test
     @Ignore("Ignore now that min API for enterprise is 33")
     fun `test processing png`() = runTest {
         val mediaUploadInfo = process(
