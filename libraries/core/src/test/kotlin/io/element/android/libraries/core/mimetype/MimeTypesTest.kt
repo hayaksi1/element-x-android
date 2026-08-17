@@ -41,16 +41,16 @@ class MimeTypesTest {
     }
 
     @Test
-    fun `withDefaultSubtype replaces a wildcard subtype with a concrete one`() {
-        assertThat(MimeTypes.Images.withDefaultSubtype()).isEqualTo(MimeTypes.Jpeg)
-        assertThat(MimeTypes.Videos.withDefaultSubtype()).isEqualTo(MimeTypes.Mp4)
-        assertThat(MimeTypes.Audio.withDefaultSubtype()).isEqualTo(MimeTypes.Mp3)
+    fun `ensureDefaultSubtype replaces a wildcard subtype with a concrete one`() {
+        assertThat(MimeTypes.Images.ensureDefaultSubtype()).isEqualTo(MimeTypes.Jpeg)
+        assertThat(MimeTypes.Videos.ensureDefaultSubtype()).isEqualTo(MimeTypes.Mp4)
+        assertThat(MimeTypes.Audio.ensureDefaultSubtype()).isEqualTo(MimeTypes.Mp3)
     }
 
     @Test
-    fun `withDefaultSubtype falls back to octet stream`() {
-        assertThat(MimeTypes.Any.withDefaultSubtype()).isEqualTo(MimeTypes.OctetStream)
-        assertThat("text/*".withDefaultSubtype()).isEqualTo(MimeTypes.OctetStream)
-        assertThat(null.withDefaultSubtype()).isEqualTo(MimeTypes.OctetStream)
+    fun `ensureDefaultSubtype falls back to octet stream`() {
+        assertThat(MimeTypes.Any.ensureDefaultSubtype()).isEqualTo(MimeTypes.OctetStream)
+        assertThat("text/*".ensureDefaultSubtype()).isEqualTo(MimeTypes.OctetStream)
+        assertThat(null.ensureDefaultSubtype()).isEqualTo(MimeTypes.OctetStream)
     }
 }
