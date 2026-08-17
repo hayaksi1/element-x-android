@@ -48,6 +48,7 @@ class FakeVoiceRecorder(
         for (i in 1..levels.size) {
             delay(levelInterval)
             if (activeRecordingId != recordingId) return
+            if (!isRecording) return
             timeSource += levelInterval
             _state.emit(VoiceRecorderState.Recording(startedAt.elapsedNow(), levels.take(i)))
         }
