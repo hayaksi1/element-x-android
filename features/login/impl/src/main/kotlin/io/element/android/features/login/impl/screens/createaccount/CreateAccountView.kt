@@ -167,7 +167,7 @@ private fun WebView.setup(state: CreateAccountState) {
 
 @PreviewsDayNight
 @Composable
-internal fun CreateAccountViewPreview(@PreviewParameter(CreateAccountStateProvider::class) state: CreateAccountState) = ElementPreview {
+internal fun CreateAccountViewPreview(@PreviewParameter(CreateAccountStatePreviewParam::class) state: CreateAccountState) = ElementPreview {
     CreateAccountView(
         state = state,
         onBackClick = {},

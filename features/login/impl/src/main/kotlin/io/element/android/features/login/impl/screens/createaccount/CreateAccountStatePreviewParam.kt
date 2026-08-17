@@ -12,7 +12,7 @@ import androidx.compose.ui.tooling.preview.PreviewParameterProvider
 import io.element.android.libraries.architecture.AsyncAction
 import io.element.android.libraries.matrix.api.core.SessionId
 
-open class CreateAccountStateProvider : PreviewParameterProvider<CreateAccountState> {
+open class CreateAccountStatePreviewParam : PreviewParameterProvider<CreateAccountState> {
     override val values: Sequence<CreateAccountState>
         get() = sequenceOf(
             aCreateAccountState(),
