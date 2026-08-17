@@ -9,6 +9,7 @@ package io.element.android.libraries.core.mimetype
 
 import com.google.common.truth.Truth.assertThat
 import io.element.android.libraries.core.mimetype.MimeTypes.ensureDefaultSubtype
+import io.element.android.libraries.core.mimetype.MimeTypes.withDefaultSubtype
 import org.junit.Test
 
 class MimeTypesTest {
@@ -31,5 +32,25 @@ class MimeTypesTest {
         assertThat(MimeTypes.Any.ensureDefaultSubtype()).isEqualTo(MimeTypes.OctetStream)
         assertThat("text/*".ensureDefaultSubtype()).isEqualTo(MimeTypes.OctetStream)
         assertThat(null.ensureDefaultSubtype()).isEqualTo(MimeTypes.OctetStream)
+    }
+
+    fun `withDefaultSubtype keeps a mime type that already has a subtype`() {
+        assertThat(MimeTypes.Png.withDefaultSubtype()).isEqualTo(MimeTypes.Png)
+        assertThat(MimeTypes.Mp4.withDefaultSubtype()).isEqualTo(MimeTypes.Mp4)
+        assertThat(MimeTypes.Pdf.withDefaultSubtype()).isEqualTo(MimeTypes.Pdf)
+    }
+
+    @Test
+    fun `withDefaultSubtype replaces a wildcard subtype with a concrete one`() {
+        assertThat(MimeTypes.Images.withDefaultSubtype()).isEqualTo(MimeTypes.Jpeg)
+        assertThat(MimeTypes.Videos.withDefaultSubtype()).isEqualTo(MimeTypes.Mp4)
+        assertThat(MimeTypes.Audio.withDefaultSubtype()).isEqualTo(MimeTypes.Mp3)
+    }
+
+    @Test
+    fun `withDefaultSubtype falls back to octet stream`() {
+        assertThat(MimeTypes.Any.withDefaultSubtype()).isEqualTo(MimeTypes.OctetStream)
+        assertThat("text/*".withDefaultSubtype()).isEqualTo(MimeTypes.OctetStream)
+        assertThat(null.withDefaultSubtype()).isEqualTo(MimeTypes.OctetStream)
     }
 }
