@@ -1072,6 +1072,8 @@ class TimelinePresenterTest {
         val presenter = createTimelinePresenter(
             room = room,
             timeline = room.liveTimeline,
+        val presenter = createTimelinePresenter(
+            room = aRoomWithDetachedTimeline(paginateLambda = paginateLambda),
         )
         presenter.test {
             val initialState = awaitFirstItem()
@@ -1094,6 +1096,8 @@ class TimelinePresenterTest {
         val presenter = createTimelinePresenter(
             room = room,
             timeline = room.liveTimeline,
+        val presenter = createTimelinePresenter(
+            room = aRoomWithDetachedTimeline(paginateLambda = paginateLambda),
         )
         presenter.test {
             val initialState = awaitFirstItem()
@@ -1118,6 +1122,8 @@ class TimelinePresenterTest {
         val presenter = createTimelinePresenter(
             room = room,
             timeline = room.liveTimeline,
+        val presenter = createTimelinePresenter(
+            room = aRoomWithDetachedTimeline(paginateLambda = paginateLambda),
         )
         presenter.test {
             val initialState = awaitFirstItem()
@@ -1834,6 +1840,24 @@ class TimelinePresenterTest {
                 this.paginateLambda = paginateLambda
             },
             createTimelineResult = { createTimelineResult() },
+        }
+
+    ): FakeJoinedRoom {
+        val detachedTimeline = FakeTimeline(
+            timelineItems = flowOf(
+                listOf(
+                    MatrixTimelineItem.Event(
+                        uniqueId = A_UNIQUE_ID,
+                        event = anEventTimelineItem(eventId = AN_EVENT_ID),
+                    )
+                )
+            )
+        ).apply {
+            this.paginateLambda = paginateLambda
+        }
+        return FakeJoinedRoom(
+            liveTimeline = FakeTimeline(timelineItems = flowOf(emptyList())),
+            createTimelineResult = { Result.success(detachedTimeline) },
             baseRoom = FakeBaseRoom(
                 roomPermissions = roomPermissions(),
                 threadRootIdForEventResult = { _ -> Result.success(null) },
