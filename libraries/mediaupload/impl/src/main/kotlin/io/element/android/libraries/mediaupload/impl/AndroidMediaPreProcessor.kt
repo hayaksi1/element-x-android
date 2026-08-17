@@ -30,6 +30,7 @@ import io.element.android.libraries.core.mimetype.MimeTypes.ensureDefaultSubtype
 import io.element.android.libraries.core.mimetype.MimeTypes.isMimeTypeAudio
 import io.element.android.libraries.core.mimetype.MimeTypes.isMimeTypeImage
 import io.element.android.libraries.core.mimetype.MimeTypes.isMimeTypeVideo
+import io.element.android.libraries.core.mimetype.MimeTypes.withDefaultSubtype
 import io.element.android.libraries.di.annotations.ApplicationContext
 import io.element.android.libraries.matrix.api.media.AudioInfo
 import io.element.android.libraries.matrix.api.media.FileInfo
@@ -90,6 +91,15 @@ class AndroidMediaPreProcessor(
                     val imageMimeType = resolveImageMimeType(uri, mimeType).ensureDefaultSubtype()
                     val shouldBeCompressed = mediaOptimizationConfig.compressImages && imageMimeType !in notCompressibleImageTypes
                     processImage(uri, imageMimeType, shouldBeCompressed)
+            }
+            }
+
+            val resolvedMimeType = mimeType.withDefaultSubtype()
+            val result = when {
+                resolvedMimeType == MimeTypes.Svg -> processSvgImage(uri, resolvedMimeType)
+                resolvedMimeType.isMimeTypeImage() -> {
+                    val shouldBeCompressed = mediaOptimizationConfig.compressImages && resolvedMimeType !in notCompressibleImageTypes
+                    processImage(uri, resolvedMimeType, shouldBeCompressed)
                 }
                 resolvedMimeType.isMimeTypeVideo() -> processVideo(uri, resolvedMimeType, mediaOptimizationConfig.videoCompressionPreset)
                 resolvedMimeType.isMimeTypeAudio() -> processAudio(uri, resolvedMimeType)
