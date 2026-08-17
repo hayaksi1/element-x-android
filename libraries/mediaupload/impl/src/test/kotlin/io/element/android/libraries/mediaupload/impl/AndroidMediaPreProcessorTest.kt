@@ -122,6 +122,37 @@ class AndroidMediaPreProcessorTest : RobolectricTest() {
     }
 
     @Test
+    fun `a gif shared with a wildcard mime type is recognised and left uncompressed`() = runTest {
+        val mediaUploadInfo = process(
+            asset = assetAnimatedGif,
+            mimeType = MimeTypes.Images,
+            mediaOptimizationConfig = MediaOptimizationConfig(
+                compressImages = true,
+                videoCompressionPreset = VideoCompressionPreset.STANDARD,
+            ),
+            sdkIntVersion = Build.VERSION_CODES.Q,
+        )
+        val info = mediaUploadInfo as MediaUploadInfo.Image
+        assertThat(info.imageInfo.mimetype).isEqualTo(MimeTypes.Gif)
+        assertThat(info.imageInfo.size).isEqualTo(assetAnimatedGif.size)
+    }
+
+    @Test
+    fun `a file that is not an image falls back to the default subtype of the wildcard`() = runTest {
+        val mediaUploadInfo = process(
+            asset = assetText,
+            mimeType = MimeTypes.Images,
+            mediaOptimizationConfig = MediaOptimizationConfig(
+                compressImages = false,
+                videoCompressionPreset = VideoCompressionPreset.STANDARD,
+            ),
+            sdkIntVersion = Build.VERSION_CODES.Q,
+        )
+        val info = mediaUploadInfo as MediaUploadInfo.Image
+        assertThat(info.imageInfo.mimetype).isEqualTo(MimeTypes.Jpeg)
+    }
+
+    @Test
     @Ignore("Ignore now that min API for enterprise is 33")
     fun `test processing png`() = runTest {
         val mediaUploadInfo = process(
