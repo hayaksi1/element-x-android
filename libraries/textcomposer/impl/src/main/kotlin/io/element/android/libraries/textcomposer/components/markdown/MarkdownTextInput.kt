@@ -51,10 +51,10 @@ fun MarkdownTextInput(
     placeholder: String,
     placeholderColor: androidx.compose.ui.graphics.Color,
     onTyping: (Boolean) -> Unit,
+    onSendMessage: () -> Unit,
     onReceiveSuggestion: (Suggestion?) -> Unit,
     richTextEditorStyle: RichTextEditorStyle,
     onSelectRichContent: ((Uri) -> Unit)?,
-    onSendMessage: (() -> Unit)? = null,
 ) {
     // Copied from io.element.android.wysiwyg.internal.utils.UriContentListener
     class ReceiveUriContentListener(
@@ -133,11 +133,9 @@ fun MarkdownTextInput(
         update = { editText ->
             editText.contentDescription = placeholder
             editText.applyStyleInCompose(richTextEditorStyle)
-            editText.onEnterKeyListener = onSendMessage?.let { send ->
-                {
-                    send()
-                    true
-                }
+            editText.onEnterKeyListener = {
+                onSendMessage()
+                true
             }
             val text = state.text.value()
             mentionSpanUpdater.updateMentionSpans(text)
@@ -217,6 +215,7 @@ internal fun MarkdownTextInputPreview() {
             placeholder = "Placeholder",
             placeholderColor = ElementTheme.colors.textSecondary,
             onTyping = {},
+            onSendMessage = {},
             onReceiveSuggestion = {},
             richTextEditorStyle = style,
             onSelectRichContent = {},

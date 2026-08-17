@@ -18,7 +18,7 @@ import io.element.android.libraries.di.CacheDirectory
 import io.element.android.libraries.di.annotations.AppCoroutineScope
 import io.element.android.libraries.featureflag.api.FeatureFlagService
 import io.element.android.libraries.featureflag.api.FeatureFlags
-import io.element.android.libraries.matrix.api.core.UserId
+import io.element.android.libraries.matrix.api.core.SessionId
 import io.element.android.libraries.matrix.api.paths.SessionPaths
 import io.element.android.libraries.matrix.api.scanner.ContentScannerUrlProvider
 import io.element.android.libraries.matrix.impl.analytics.UtdTracker
@@ -71,7 +71,7 @@ class RustMatrixClientFactory(
     private val clientBuilderProvider: ClientBuilderProvider,
     private val sqliteStoreBuilderProvider: SqliteStoreBuilderProvider,
     private val workManagerScheduler: WorkManagerScheduler,
-    private val contentScannerUrlProvider: ContentScannerUrlProvider,
+    private val contentScannerUrlProviderFactory: ContentScannerUrlProvider.Factory,
 ) {
     private val sessionDelegate = RustClientSessionDelegate(
         sessionStore = sessionStore,
@@ -114,6 +114,7 @@ class RustMatrixClientFactory(
             sessionPaths = sessionPaths,
             clientSecret = clientSecret,
             slidingSyncType = ClientBuilderSlidingSync.Restored,
+            isMessageSearchAvailable = true,
         )
             .homeserverUrl(sessionData.homeserverUrl)
             .username(sessionData.userId)
@@ -178,26 +179,25 @@ class RustMatrixClientFactory(
 
         client.setUtdDelegate(UtdTracker(analyticsService))
 
-        val domainName = UserId(client.userId()).domainName
         // If a content scanner URL is available for the homeserver, create a RustContentScanner and set it on the client.
         // This allows the SDK to use the content scanner for automatic media scanning.
         // If no content scanner URL is available, the contentScanner will be null.
-        val contentScanner = domainName?.let {
-            contentScannerUrlProvider.getContentScannerUrl(domainName)
-                .getOrNull()
-                ?.let { contentScannerUrl ->
-                    val contentScanner = ContentScanner(contentScannerUrl)
-                    client.setContentScanner(contentScanner)
-                    RustContentScanner(
-                        client = client,
-                        rustScanner = contentScanner,
-                    )
-                }
+        val contentScannerUrlProvider = contentScannerUrlProviderFactory.create(RustTemporaryMatrixClient(client, null))
+        val contentScanner = contentScannerUrlProvider.getContentScannerUrl(SessionId(client.userId()))
+            .getOrNull()
+            ?.let { contentScannerUrl ->
+                val contentScanner = ContentScanner(contentScannerUrl)
+                client.setContentScanner(contentScanner)
+                RustContentScanner(
+                    client = client,
+                    rustScanner = contentScanner,
+                )
         }
 
         val syncService = client.syncService()
             .withSharePos(true)
             .withOfflineMode()
+            .withProfilesExtension()
             .finish()
 
         return RustMatrixClient(
@@ -227,6 +227,7 @@ class RustMatrixClientFactory(
         sessionPaths: SessionPaths,
         clientSecret: ClientSecret?,
         slidingSyncType: ClientBuilderSlidingSync,
+        isMessageSearchAvailable: Boolean,
     ): ClientBuilder {
         return clientBuilderProvider.provide()
             .run {
@@ -256,14 +257,21 @@ class RustMatrixClientFactory(
             )
             .enableShareHistoryOnInvite(true)
             .threadsEnabled(featureFlagService.isFeatureEnabled(FeatureFlags.Threads), threadSubscriptions = false)
-            // Always attached, mirroring Element X iOS: the Message search flag only gates the
-            // search UI and the backfill, so flipping it mid-session needs no restart and the
-            // index never goes stale. The index is encrypted at rest with the same secret the
-            // SDK's SQLite stores use, or left unencrypted for sessions without one.
-            .withSearchIndexStore(
-                path = File(sessionPaths.fileDirectory, SEARCH_INDEX_DIRECTORY).absolutePath,
-                password = clientSecret?.formattedAsString(),
-            )
+            .run {
+                if (isMessageSearchAvailable) {
+                    // Attached for every session that becomes a real one, mirroring Element X iOS:
+                    // the Message search flag only gates the search UI and the backfill, so
+                    // flipping it mid-session needs no restart and the index never goes stale. The
+                    // index is encrypted at rest with the same secret the SDK's SQLite stores use,
+                    // or left unencrypted for sessions without one.
+                    withSearchIndexStore(
+                        path = File(sessionPaths.fileDirectory, SEARCH_INDEX_DIRECTORY).absolutePath,
+                        password = clientSecret?.formattedAsString(),
+                    )
+                } else {
+                    this
+                }
+            }
             .dmRoomDefinition(DmRoomDefinition.TWO_MEMBERS)
             .requestConfig(
                 RequestConfig(

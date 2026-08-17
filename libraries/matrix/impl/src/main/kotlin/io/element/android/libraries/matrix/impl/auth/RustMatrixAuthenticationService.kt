@@ -33,6 +33,7 @@ import io.element.android.libraries.matrix.api.paths.SessionPaths
 import io.element.android.libraries.matrix.api.verification.SessionVerifiedStatus
 import io.element.android.libraries.matrix.impl.ClientBuilderSlidingSync
 import io.element.android.libraries.matrix.impl.RustMatrixClientFactory
+import io.element.android.libraries.matrix.impl.RustTemporaryMatrixClient
 import io.element.android.libraries.matrix.impl.auth.qrlogin.QrErrorMapper
 import io.element.android.libraries.matrix.impl.auth.qrlogin.SdkQrCodeLoginData
 import io.element.android.libraries.matrix.impl.auth.qrlogin.toStep
@@ -130,9 +131,10 @@ class RustMatrixAuthenticationService(
                 }
 
                 currentClient = client
+
                 client.homeserverLoginDetails().map()
             }.onFailure {
-                clear()
+                clear(destroyClient = true)
             }.mapFailure { failure ->
                 Timber.e(failure, "Failed to set homeserver to $homeserver")
                 failure.mapAuthenticationException()
@@ -165,7 +167,7 @@ class RustMatrixAuthenticationService(
                 sessionStore.addSession(sessionData)
 
                 // Clean up the strong reference held here since it's no longer necessary
-                currentClient = null
+                clear(destroyClient = false)
 
                 SessionId(sessionData.userId)
             }.mapFailure { failure ->
@@ -245,7 +247,7 @@ class RustMatrixAuthenticationService(
                 sessionStore.addSession(sessionData)
 
                 // Clean up the strong reference held here since it's no longer necessary
-                currentClient = null
+                clear(destroyClient = false)
 
                 SessionId(sessionData.userId)
             }
@@ -268,11 +270,13 @@ class RustMatrixAuthenticationService(
                     deviceId = null,
                     additionalScopes = emptyList(),
                 )
+                val getUrlResolver = RustTemporaryMatrixClient(client, sessionPaths)
                 val url = oAuthAuthorizationData.loginUrl()
                     .let {
                         enterpriseService.tweakMasUrl(
                             url = it,
                             homeserver = client.server() ?: client.homeserver(),
+                            urlContentFetcher = getUrlResolver,
                         )
                     }
                 pendingOAuthAuthorizationData = oAuthAuthorizationData
@@ -332,7 +336,7 @@ class RustMatrixAuthenticationService(
                 sessionStore.addSession(sessionData)
 
                 // Clean up the strong reference held here since it's no longer necessary
-                currentClient = null
+                clear(destroyClient = false)
 
                 SessionId(sessionData.userId)
             }.mapFailure { failure ->
@@ -395,7 +399,7 @@ class RustMatrixAuthenticationService(
                 sessionStore.addSession(sessionData)
 
                 // Clean up the strong reference held here since it's no longer necessary
-                currentClient = null
+                clear(destroyClient = false)
 
                 SessionId(sessionData.userId)
             }.mapFailure {
@@ -422,6 +426,7 @@ class RustMatrixAuthenticationService(
                 sessionPaths = sessionPaths,
                 clientSecret = pendingKey,
                 slidingSyncType = ClientBuilderSlidingSync.Discovered,
+                isMessageSearchAvailable = true,
             )
             .config()
             .build()
@@ -454,13 +459,16 @@ class RustMatrixAuthenticationService(
                 sessionPaths = sessionPaths,
                 clientSecret = pendingKey,
                 slidingSyncType = ClientBuilderSlidingSync.Discovered,
+                isMessageSearchAvailable = true,
             )
             .serverNameOrHomeserverUrl(baseUrlOrServerName)
             .build()
     }
 
-    private fun clear() {
-        currentClient?.close()
+    private fun clear(destroyClient: Boolean) {
+        if (destroyClient) {
+            currentClient?.close()
+        }
         currentClient = null
     }
 

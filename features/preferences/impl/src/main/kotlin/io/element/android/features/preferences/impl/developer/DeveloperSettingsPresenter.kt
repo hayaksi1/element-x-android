@@ -34,6 +34,7 @@ import io.element.android.libraries.core.data.ByteUnit
 import io.element.android.libraries.featureflag.api.FeatureFlagService
 import io.element.android.libraries.featureflag.api.FeatureFlags
 import io.element.android.libraries.matrix.api.MatrixClient
+import io.element.android.libraries.core.meta.BuildMeta
 import io.element.android.libraries.matrix.api.analytics.GetDatabaseSizesUseCase
 import io.element.android.libraries.matrix.api.core.DeviceId
 import io.element.android.libraries.matrix.api.core.SessionId
@@ -60,6 +61,7 @@ class DeveloperSettingsPresenter(
     private val featureFlagService: FeatureFlagService,
     private val matrixClient: MatrixClient,
     private val messageSearchIndexer: MessageSearchIndexer,
+    private val buildMeta: BuildMeta,
 ) : Presenter<DeveloperSettingsState> {
     @Composable
     override fun present(): DeveloperSettingsState {
@@ -149,7 +151,7 @@ class DeveloperSettingsPresenter(
             databaseSizes = databaseSizes.value,
             clearCacheAction = clearCacheAction.value,
             markAllRoomsAsReadAction = markAllRoomsAsReadAction.value,
-            isEnterpriseBuild = enterpriseService.isEnterpriseBuild,
+            isEnterpriseBuild = buildMeta.isEnterpriseBuild,
             showColorPicker = showColorPicker,
             messageSearchIndexStatus = messageSearchIndexStatus,
             deviceId = deviceId,

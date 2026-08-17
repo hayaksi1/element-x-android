@@ -12,14 +12,12 @@ import com.google.common.truth.Truth.assertThat
 import io.element.android.appconfig.AuthenticationConfig
 import io.element.android.appconfig.OnBoardingConfig
 import io.element.android.features.enterprise.api.EnterpriseService
+import io.element.android.features.enterprise.api.IsEnterpriseBuild
 import io.element.android.features.enterprise.test.FakeEnterpriseService
 import io.element.android.features.login.impl.accesscontrol.DefaultAccountProviderAccessControl
 import io.element.android.features.login.impl.accountprovider.AccountProviderDataSource
 import io.element.android.features.login.impl.localnetwork.LocalNetworkPermissionGate
 import io.element.android.features.login.impl.login.LoginModePresenter
-import io.element.android.features.login.impl.web.FakeWebClientUrlForAuthenticationRetriever
-import io.element.android.features.login.impl.web.WebClientUrlForAuthenticationRetriever
-import io.element.android.features.wellknown.test.FakeWellknownRetriever
 import io.element.android.libraries.architecture.AsyncData
 import io.element.android.libraries.core.meta.BuildMeta
 import io.element.android.libraries.matrix.api.auth.MatrixAuthenticationService
@@ -34,11 +32,13 @@ import io.element.android.libraries.matrix.test.auth.FakeMatrixAuthenticationSer
 import io.element.android.libraries.matrix.test.core.aBuildMeta
 import io.element.android.libraries.oauth.api.OAuthActionFlow
 import io.element.android.libraries.oauth.test.customtab.FakeOAuthActionFlow
+import io.element.android.libraries.permissions.api.PermissionsPresenter
 import io.element.android.libraries.permissions.api.localnetwork.LocalNetworkPermissionAdvisor
+import io.element.android.libraries.permissions.test.FakeLocalNetworkPermissionAdvisor
+import io.element.android.libraries.permissions.test.FakePermissionsPresenterFactory
 import io.element.android.libraries.sessionstorage.api.SessionStore
 import io.element.android.libraries.sessionstorage.test.InMemorySessionStore
 import io.element.android.libraries.sessionstorage.test.aSessionData
-import io.element.android.libraries.wellknown.api.WellknownRetriever
 import io.element.android.tests.testutils.WarmUpRule
 import io.element.android.tests.testutils.test
 import kotlinx.coroutines.flow.Flow
@@ -183,6 +183,7 @@ class OnBoardingPresenterTest {
             enterpriseService = FakeEnterpriseService(
                 defaultHomeserverListResult = { listOf(ACCOUNT_PROVIDER_FROM_CONFIG, EnterpriseService.ANY_ACCOUNT_PROVIDER) },
                 isAllowedToConnectToHomeserverResult = { true },
+                isElementProEnforcedResult = { false },
             ),
         )
         presenter.test {
@@ -256,6 +257,7 @@ class OnBoardingPresenterTest {
             ),
             enterpriseService = FakeEnterpriseService(
                 isAllowedToConnectToHomeserverResult = { true },
+                isElementProEnforcedResult = { false },
             ),
             loginModePresenter = createLoginModePresenter(
                 authenticationService = authenticationService,
@@ -292,7 +294,7 @@ private fun createPresenter(
     ),
     buildMeta: BuildMeta = aBuildMeta(),
     enterpriseService: EnterpriseService = FakeEnterpriseService(),
-    wellknownRetriever: WellknownRetriever = FakeWellknownRetriever(),
+    isEnterpriseBuild: IsEnterpriseBuild = { false },
     rageshakeFeatureAvailability: () -> Flow<Boolean> = { flowOf(true) },
     loginModePresenter: LoginModePresenter = createLoginModePresenter(),
     onBoardingLogoResIdProvider: OnBoardingLogoResIdProvider = OnBoardingLogoResIdProvider { null },
@@ -304,7 +306,7 @@ private fun createPresenter(
     enterpriseService = enterpriseService,
     defaultAccountProviderAccessControl = DefaultAccountProviderAccessControl(
         enterpriseService = enterpriseService,
-        wellknownRetriever = wellknownRetriever,
+        isEnterpriseBuild = isEnterpriseBuild,
     ),
     rageshakeFeatureAvailability = rageshakeFeatureAvailability,
     loginModePresenter = loginModePresenter,
@@ -316,15 +318,13 @@ private fun createPresenter(
 fun createLoginModePresenter(
     oAuthActionFlow: OAuthActionFlow = FakeOAuthActionFlow(),
     authenticationService: MatrixAuthenticationService = FakeMatrixAuthenticationService(),
-    webClientUrlForAuthenticationRetriever: WebClientUrlForAuthenticationRetriever = FakeWebClientUrlForAuthenticationRetriever(),
     localNetworkPermissionAdvisor: LocalNetworkPermissionAdvisor =
-        io.element.android.libraries.permissions.test.FakeLocalNetworkPermissionAdvisor(),
-    permissionsPresenterFactory: io.element.android.libraries.permissions.api.PermissionsPresenter.Factory =
-        io.element.android.libraries.permissions.test.FakePermissionsPresenterFactory(),
+        FakeLocalNetworkPermissionAdvisor(),
+    permissionsPresenterFactory: PermissionsPresenter.Factory =
+        FakePermissionsPresenterFactory(),
 ): LoginModePresenter = LoginModePresenter(
     oAuthActionFlow = oAuthActionFlow,
     authenticationService = authenticationService,
-    webClientUrlForAuthenticationRetriever = webClientUrlForAuthenticationRetriever,
     localNetworkPermissionGate = LocalNetworkPermissionGate(
         advisor = localNetworkPermissionAdvisor,
         permissionsPresenterFactory = permissionsPresenterFactory,

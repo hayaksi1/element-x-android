@@ -25,6 +25,7 @@ import io.element.android.libraries.architecture.AsyncData
 import io.element.android.libraries.core.data.megaBytes
 import io.element.android.libraries.featureflag.api.FeatureFlags
 import io.element.android.libraries.featureflag.test.FakeFeatureFlagService
+import io.element.android.libraries.core.meta.BuildMeta
 import io.element.android.libraries.matrix.api.analytics.GetDatabaseSizesUseCase
 import io.element.android.libraries.matrix.api.analytics.SdkStoreSizes
 import io.element.android.libraries.matrix.api.core.DeviceId
@@ -35,6 +36,7 @@ import io.element.android.libraries.matrix.test.A_DEVICE_ID
 import io.element.android.libraries.matrix.test.A_SESSION_ID
 import io.element.android.libraries.matrix.test.FakeMatrixClient
 import io.element.android.libraries.matrix.test.search.FakeMessageSearchIndexer
+import io.element.android.libraries.matrix.test.core.aBuildMeta
 import io.element.android.tests.testutils.WarmUpRule
 import io.element.android.tests.testutils.consumeItemsUntilPredicate
 import io.element.android.tests.testutils.lambda.lambdaRecorder
@@ -115,10 +117,8 @@ class DeveloperSettingsPresenterTest {
     fun `present - enterprise build can change the brand color`() = runTest {
         val overrideBrandColorResult = lambdaRecorder<SessionId?, String?, Unit> { _, _ -> }
         val presenter = createDeveloperSettingsPresenter(
-            enterpriseService = FakeEnterpriseService(
-                isEnterpriseBuild = true,
-                overrideBrandColorResult = overrideBrandColorResult,
-            )
+            enterpriseService = FakeEnterpriseService(overrideBrandColorResult = overrideBrandColorResult),
+            buildMeta = aBuildMeta(isEnterpriseBuild = true),
         )
         presenter.test {
             skipItems(1)
@@ -276,6 +276,7 @@ class DeveloperSettingsPresenterTest {
         featureFlagService: FakeFeatureFlagService = FakeFeatureFlagService(),
         matrixClient: FakeMatrixClient = FakeMatrixClient(),
         messageSearchIndexer: FakeMessageSearchIndexer = FakeMessageSearchIndexer(),
+        buildMeta: BuildMeta = aBuildMeta(),
     ): DeveloperSettingsPresenter {
         return DeveloperSettingsPresenter(
             appDeveloperSettingsPresenter = { anAppDeveloperSettingsState() },
@@ -291,6 +292,7 @@ class DeveloperSettingsPresenterTest {
             featureFlagService = featureFlagService,
             matrixClient = matrixClient,
             messageSearchIndexer = messageSearchIndexer,
+            buildMeta = buildMeta,
         )
     }
 }

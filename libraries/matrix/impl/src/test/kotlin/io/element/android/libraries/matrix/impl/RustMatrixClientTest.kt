@@ -36,6 +36,7 @@ import io.element.android.services.toolbox.test.systemclock.FakeSystemClock
 import io.element.android.tests.testutils.lambda.lambdaRecorder
 import io.element.android.tests.testutils.lambda.value
 import io.element.android.tests.testutils.testCoroutineDispatchers
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -81,7 +82,8 @@ class RustMatrixClientTest {
 
     @Test
     fun `retrieving the UserProfile updates the database`() = runTest {
-        val updateUserProfileResult = lambdaRecorder<String, String?, String?, Unit> { _, _, _ -> }
+        val profilePersisted = CompletableDeferred<Unit>()
+        val updateUserProfileResult = lambdaRecorder<String, String?, String?, Unit> { _, _, _ -> profilePersisted.complete(Unit) }
         val sessionStore = InMemorySessionStore(
             initialList = listOf(
                 aSessionData(
@@ -106,7 +108,7 @@ class RustMatrixClientTest {
             ),
             sessionStore = sessionStore,
         )
-        advanceUntilIdle()
+        profilePersisted.await()
         updateUserProfileResult.assertions().isCalledOnce()
             .with(
                 value(A_USER_ID.value),
