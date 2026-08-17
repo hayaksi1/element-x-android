@@ -30,7 +30,6 @@ import io.element.android.libraries.core.mimetype.MimeTypes.ensureDefaultSubtype
 import io.element.android.libraries.core.mimetype.MimeTypes.isMimeTypeAudio
 import io.element.android.libraries.core.mimetype.MimeTypes.isMimeTypeImage
 import io.element.android.libraries.core.mimetype.MimeTypes.isMimeTypeVideo
-import io.element.android.libraries.core.mimetype.MimeTypes.withDefaultSubtype
 import io.element.android.libraries.di.annotations.ApplicationContext
 import io.element.android.libraries.matrix.api.media.AudioInfo
 import io.element.android.libraries.matrix.api.media.FileInfo
