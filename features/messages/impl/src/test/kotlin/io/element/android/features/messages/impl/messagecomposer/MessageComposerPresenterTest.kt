@@ -24,6 +24,7 @@ import io.element.android.features.location.test.FakeLocationService
 import io.element.android.features.messages.impl.FakeMessagesNavigator
 import io.element.android.features.messages.impl.MessagesNavigator
 import io.element.android.features.messages.impl.attachments.Attachment
+import io.element.android.features.messages.impl.attachments.AttachmentCaptionHandOver
 import io.element.android.features.messages.impl.draft.ComposerDraftService
 import io.element.android.features.messages.impl.draft.FakeComposerDraftService
 import io.element.android.features.messages.impl.messagecomposer.suggestions.SuggestionsProcessor
@@ -106,6 +107,7 @@ import io.element.android.libraries.textcomposer.model.SuggestionType
 import io.element.android.libraries.textcomposer.model.TextEditorState
 import io.element.android.services.analytics.test.FakeAnalyticsService
 import io.element.android.tests.testutils.WarmUpRule
+import io.element.android.tests.testutils.consumeItemsUntilTimeout
 import io.element.android.tests.testutils.lambda.any
 import io.element.android.tests.testutils.lambda.assert
 import io.element.android.tests.testutils.lambda.lambdaRecorder
@@ -688,7 +690,7 @@ class MessageComposerPresenterTest : RobolectricTest() {
         val room = FakeJoinedRoom(
             typingNoticeResult = { Result.success(Unit) }
         )
-        val onPreviewAttachmentLambda = lambdaRecorder { _: ImmutableList<Attachment>, _: EventId? -> }
+        val onPreviewAttachmentLambda = lambdaRecorder { _: ImmutableList<Attachment>, _: EventId?, _: String? -> }
         val navigator = FakeMessagesNavigator(
             onPreviewAttachmentLambda = onPreviewAttachmentLambda
         )
@@ -722,11 +724,99 @@ class MessageComposerPresenterTest : RobolectricTest() {
     }
 
     @Test
+    fun `present - Pick image from gallery hands the composer text over as the caption`() = runTest {
+        val onPreviewAttachmentLambda = lambdaRecorder { _: ImmutableList<Attachment>, _: EventId?, _: String? -> }
+        val presenter = createPresenter(
+            navigator = FakeMessagesNavigator(onPreviewAttachmentLambda = onPreviewAttachmentLambda),
+        )
+        pickerProvider.givenMimeType(MimeTypes.Images)
+        presenter.test {
+            val initialState = awaitFirstItem()
+            initialState.textEditorState.setHtml(A_MESSAGE)
+            initialState.eventSink(MessageComposerEvent.PickAttachmentSource.FromGallery)
+            onPreviewAttachmentLambda.assertions()
+                .isCalledOnce()
+                .with(any(), any(), value(A_MESSAGE))
+        }
+    }
+
+    @Test
+    fun `present - Pick image from gallery with an empty composer hands over no caption`() = runTest {
+        val onPreviewAttachmentLambda = lambdaRecorder { _: ImmutableList<Attachment>, _: EventId?, _: String? -> }
+        val presenter = createPresenter(
+            navigator = FakeMessagesNavigator(onPreviewAttachmentLambda = onPreviewAttachmentLambda),
+        )
+        pickerProvider.givenMimeType(MimeTypes.Images)
+        presenter.test {
+            val initialState = awaitFirstItem()
+            initialState.eventSink(MessageComposerEvent.PickAttachmentSource.FromGallery)
+            onPreviewAttachmentLambda.assertions()
+                .isCalledOnce()
+                .with(any(), any(), value(null))
+        }
+    }
+
+    @Test
+    fun `present - Pick image from gallery while editing hands over no caption`() = runTest {
+        val onPreviewAttachmentLambda = lambdaRecorder { _: ImmutableList<Attachment>, _: EventId?, _: String? -> }
+        val presenter = createPresenter(
+            navigator = FakeMessagesNavigator(onPreviewAttachmentLambda = onPreviewAttachmentLambda),
+        )
+        pickerProvider.givenMimeType(MimeTypes.Images)
+        presenter.test {
+            val initialState = awaitFirstItem()
+            initialState.eventSink(MessageComposerEvent.SetMode(anEditMode(message = ANOTHER_MESSAGE)))
+            val editingState = awaitItem()
+            editingState.eventSink(MessageComposerEvent.PickAttachmentSource.FromGallery)
+            onPreviewAttachmentLambda.assertions()
+                .isCalledOnce()
+                .with(any(), any(), value(null))
+        }
+    }
+
+    @Test
+    fun `present - the composer is cleared and its draft deleted when the handed over caption has been sent`() = runTest {
+        val updateDraftLambda = lambdaRecorder { _: RoomId, _: ThreadId?, _: ComposerDraft?, _: Boolean -> }
+        val draftService = FakeComposerDraftService().apply {
+            this.loadDraftLambda = { _, _, _ -> ComposerDraft(A_MESSAGE, A_MESSAGE, ComposerDraftType.NewMessage) }
+            this.saveDraftLambda = updateDraftLambda
+        }
+        val attachmentCaptionHandOver = AttachmentCaptionHandOver().apply { onSent(Timeline.Mode.Live) }
+        val presenter = createPresenter(
+            draftService = draftService,
+            attachmentCaptionHandOver = attachmentCaptionHandOver,
+        )
+        presenter.test {
+            val state = consumeItemsUntilTimeout().last()
+            assertThat(state.textEditorState.messageHtml()).isEmpty()
+            assert(updateDraftLambda)
+                .isCalledOnce()
+                .with(value(A_ROOM_ID), value(null), value(null), value(false))
+        }
+    }
+
+    @Test
+    fun `present - a handed over caption sent in a thread does not clear the live composer`() = runTest {
+        val draftService = FakeComposerDraftService().apply {
+            this.loadDraftLambda = { _, _, _ -> ComposerDraft(A_MESSAGE, A_MESSAGE, ComposerDraftType.NewMessage) }
+        }
+        val attachmentCaptionHandOver = AttachmentCaptionHandOver().apply { onSent(Timeline.Mode.Thread(A_THREAD_ID)) }
+        val presenter = createPresenter(
+            draftService = draftService,
+            attachmentCaptionHandOver = attachmentCaptionHandOver,
+        )
+        presenter.test {
+            val state = consumeItemsUntilTimeout().last()
+            assertThat(state.textEditorState.messageHtml()).isEqualTo(A_MESSAGE)
+        }
+    }
+
+    @Test
     fun `present - Pick video from gallery`() = runTest {
         val room = FakeJoinedRoom(
             typingNoticeResult = { Result.success(Unit) }
         )
-        val onPreviewAttachmentLambda = lambdaRecorder { _: ImmutableList<Attachment>, _: EventId? -> }
+        val onPreviewAttachmentLambda = lambdaRecorder { _: ImmutableList<Attachment>, _: EventId?, _: String? -> }
         val navigator = FakeMessagesNavigator(
             onPreviewAttachmentLambda = onPreviewAttachmentLambda
         )
@@ -762,7 +852,7 @@ class MessageComposerPresenterTest : RobolectricTest() {
 
     @Test
     fun `present - Pick media from gallery while editing keeps the edit pending`() = runTest {
-        val onPreviewAttachmentLambda = lambdaRecorder { _: ImmutableList<Attachment>, _: EventId? -> }
+        val onPreviewAttachmentLambda = lambdaRecorder { _: ImmutableList<Attachment>, _: EventId?, _: String? -> }
         val navigator = FakeMessagesNavigator(
             onPreviewAttachmentLambda = onPreviewAttachmentLambda
         )
@@ -785,7 +875,7 @@ class MessageComposerPresenterTest : RobolectricTest() {
 
     @Test
     fun `present - Pick media from gallery while replying clears the reply mode`() = runTest {
-        val onPreviewAttachmentLambda = lambdaRecorder { _: ImmutableList<Attachment>, _: EventId? -> }
+        val onPreviewAttachmentLambda = lambdaRecorder { _: ImmutableList<Attachment>, _: EventId?, _: String? -> }
         val navigator = FakeMessagesNavigator(
             onPreviewAttachmentLambda = onPreviewAttachmentLambda
         )
@@ -806,7 +896,7 @@ class MessageComposerPresenterTest : RobolectricTest() {
 
     @Test
     fun `present - Pick multiple media from gallery while editing keeps the edit pending`() = runTest {
-        val onPreviewAttachmentLambda = lambdaRecorder { _: ImmutableList<Attachment>, _: EventId? -> }
+        val onPreviewAttachmentLambda = lambdaRecorder { _: ImmutableList<Attachment>, _: EventId?, _: String? -> }
         val navigator = FakeMessagesNavigator(
             onPreviewAttachmentLambda = onPreviewAttachmentLambda
         )
@@ -852,7 +942,7 @@ class MessageComposerPresenterTest : RobolectricTest() {
         val room = FakeJoinedRoom(
             typingNoticeResult = { Result.success(Unit) }
         )
-        val onPreviewAttachmentLambda = lambdaRecorder { _: ImmutableList<Attachment>, _: EventId? -> }
+        val onPreviewAttachmentLambda = lambdaRecorder { _: ImmutableList<Attachment>, _: EventId?, _: String? -> }
         val navigator = FakeMessagesNavigator(
             onPreviewAttachmentLambda = onPreviewAttachmentLambda
         )
@@ -907,7 +997,7 @@ class MessageComposerPresenterTest : RobolectricTest() {
             typingNoticeResult = { Result.success(Unit) }
         )
         val permissionPresenter = FakePermissionsPresenter().apply { setPermissionGranted() }
-        val onPreviewAttachmentLambda = lambdaRecorder { _: ImmutableList<Attachment>, _: EventId? -> }
+        val onPreviewAttachmentLambda = lambdaRecorder { _: ImmutableList<Attachment>, _: EventId?, _: String? -> }
         val navigator = FakeMessagesNavigator(
             onPreviewAttachmentLambda = onPreviewAttachmentLambda
         )
@@ -929,7 +1019,7 @@ class MessageComposerPresenterTest : RobolectricTest() {
             typingNoticeResult = { Result.success(Unit) }
         )
         val permissionPresenter = FakePermissionsPresenter()
-        val onPreviewAttachmentLambda = lambdaRecorder { _: ImmutableList<Attachment>, _: EventId? -> }
+        val onPreviewAttachmentLambda = lambdaRecorder { _: ImmutableList<Attachment>, _: EventId?, _: String? -> }
         val navigator = FakeMessagesNavigator(
             onPreviewAttachmentLambda = onPreviewAttachmentLambda
         )
@@ -953,7 +1043,7 @@ class MessageComposerPresenterTest : RobolectricTest() {
             typingNoticeResult = { Result.success(Unit) }
         )
         val permissionPresenter = FakePermissionsPresenter().apply { setPermissionGranted() }
-        val onPreviewAttachmentLambda = lambdaRecorder { _: ImmutableList<Attachment>, _: EventId? -> }
+        val onPreviewAttachmentLambda = lambdaRecorder { _: ImmutableList<Attachment>, _: EventId?, _: String? -> }
         val navigator = FakeMessagesNavigator(
             onPreviewAttachmentLambda = onPreviewAttachmentLambda
         )
@@ -975,7 +1065,7 @@ class MessageComposerPresenterTest : RobolectricTest() {
             typingNoticeResult = { Result.success(Unit) }
         )
         val permissionPresenter = FakePermissionsPresenter()
-        val onPreviewAttachmentLambda = lambdaRecorder { _: ImmutableList<Attachment>, _: EventId? -> }
+        val onPreviewAttachmentLambda = lambdaRecorder { _: ImmutableList<Attachment>, _: EventId?, _: String? -> }
         val navigator = FakeMessagesNavigator(
             onPreviewAttachmentLambda = onPreviewAttachmentLambda
         )
@@ -1663,6 +1753,7 @@ class MessageComposerPresenterTest : RobolectricTest() {
         threadRoot: ThreadId? = null,
         slashCommandService: SlashCommandService = FakeSlashCommandService(),
         featureFlagService: FakeFeatureFlagService = FakeFeatureFlagService(),
+        attachmentCaptionHandOver: AttachmentCaptionHandOver = AttachmentCaptionHandOver(),
     ) = MessageComposerPresenter(
         navigator = navigator,
         sessionCoroutineScope = this,
@@ -1688,6 +1779,7 @@ class MessageComposerPresenterTest : RobolectricTest() {
         analyticsService = analyticsService,
         locationService = locationService,
         messageComposerContext = DefaultMessageComposerContext(),
+        attachmentCaptionHandOver = attachmentCaptionHandOver,
         richTextEditorStateFactory = TestRichTextEditorStateFactory(),
         roomAliasSuggestionsDataSource = FakeRoomAliasSuggestionsDataSource(),
         permissionsPresenterFactory = FakePermissionsPresenterFactory(permissionPresenter),
