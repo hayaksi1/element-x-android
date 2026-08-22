@@ -51,6 +51,7 @@ import io.element.android.libraries.designsystem.atomic.molecules.IconTitleSubti
 import io.element.android.libraries.designsystem.atomic.pages.HeaderFooterPage
 import io.element.android.libraries.designsystem.components.BigIcon
 import io.element.android.libraries.designsystem.components.form.textFieldState
+import io.element.android.libraries.designsystem.modifiers.bringIntoViewOnImeVisible
 import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
 import io.element.android.libraries.designsystem.theme.components.Button
@@ -159,6 +160,7 @@ fun ConfirmAccountProviderView(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 40.dp)
+                .bringIntoViewOnImeVisible()
                 .focusRequester(focusRequester)
                 .testTag(TestTags.changeServerServer),
             label = stringResource(id = R.string.screen_change_server_textfield_header),
