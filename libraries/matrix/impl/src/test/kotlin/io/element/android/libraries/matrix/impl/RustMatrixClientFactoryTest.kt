@@ -12,7 +12,6 @@ import com.google.common.truth.Truth.assertThat
 import io.element.android.libraries.featureflag.api.FeatureFlags
 import io.element.android.libraries.featureflag.test.FakeFeatureFlagService
 import io.element.android.libraries.matrix.api.core.SessionId
-import io.element.android.libraries.matrix.api.scanner.ContentScannerUrlProvider
 import io.element.android.libraries.matrix.impl.auth.FakeProxyProvider
 import io.element.android.libraries.matrix.impl.fixtures.fakes.FakeFfiClient
 import io.element.android.libraries.matrix.impl.fixtures.fakes.FakeFfiClientBuilder
@@ -38,6 +37,7 @@ import java.io.File
 class RustMatrixClientFactoryTest {
     @get:Rule
     val temporaryFolder = TemporaryFolder()
+
     @Test
     fun test() = runTest {
         val scheduleVacuumLambda = lambdaRecorder<WorkManagerRequestBuilder, Unit> {}
@@ -53,11 +53,10 @@ class RustMatrixClientFactoryTest {
 
     @Test
     fun `create - message search stays available when the client secret is missing`() = runTest {
-        val featureFlagService = FakeFeatureFlagService(
-            initialState = mapOf(FeatureFlags.MessageSearch.key to true),
-        )
         val sut = createRustMatrixClientFactory(
-            featureFlagService = featureFlagService,
+            featureFlagService = FakeFeatureFlagService(
+                initialState = mapOf(FeatureFlags.MessageSearch.key to true),
+            ),
             workManagerScheduler = FakeWorkManagerScheduler(submitLambda = {}),
         )
 
@@ -75,12 +74,11 @@ class RustMatrixClientFactoryTest {
     }
 
     @Test
-    fun `create - message search is available regardless of the feature flag`() = runTest {
-        val featureFlagService = FakeFeatureFlagService(
-            initialState = mapOf(FeatureFlags.MessageSearch.key to false),
-        )
+    fun `create - message search is unavailable when the feature flag is off`() = runTest {
         val sut = createRustMatrixClientFactory(
-            featureFlagService = featureFlagService,
+            featureFlagService = FakeFeatureFlagService(
+                initialState = mapOf(FeatureFlags.MessageSearch.key to false),
+            ),
             workManagerScheduler = FakeWorkManagerScheduler(submitLambda = {}),
         )
 
@@ -91,9 +89,7 @@ class RustMatrixClientFactoryTest {
             ).copy(passphrase = "aSecret")
         )
 
-        // The index store is attached unconditionally so a mid-session flag enable needs no
-        // restart — the flag only gates the search UI and the backfill.
-        assertThat(result.isMessageSearchAvailable).isTrue()
+        assertThat(result.isMessageSearchAvailable).isFalse()
         result.destroy()
     }
 
@@ -202,12 +198,11 @@ class RustMatrixClientFactoryTest {
     }
 
     @Test
-    fun `create - keeps the index and its coverage when message search is off`() = runTest {
+    fun `create - deletes the index and leaves the event cache alone when message search is off`() = runTest {
         val sessionFolder = temporaryFolder.newFolder("session")
         val cacheFolder = temporaryFolder.newFolder("cache")
         val storeFile = File(cacheFolder, EVENT_CACHE_STORE_NAME).apply { createNewFile() }
         val indexDirectory = File(sessionFolder, SEARCH_INDEX_DIRECTORY).apply { mkdirs() }
-        val coverageMarker = File(sessionFolder, SEARCH_INDEX_COVERAGE_MARKER).apply { createNewFile() }
         val sut = createRustMatrixClientFactory(
             featureFlagService = FakeFeatureFlagService(
                 initialState = mapOf(FeatureFlags.MessageSearch.key to false),
@@ -222,11 +217,9 @@ class RustMatrixClientFactoryTest {
             ).copy(passphrase = "aSecret")
         )
 
-        // The index is always attached, so it keeps up with the event cache even while the flag
-        // is off — it never goes stale and must never be deleted, or a later enable would have
-        // to rebuild coverage from scratch.
-        assertThat(indexDirectory.exists()).isTrue()
-        assertThat(coverageMarker.exists()).isTrue()
+        // With search off the index can no longer keep up with the event cache, so it goes and a
+        // later enable rebuilds coverage from the bootstrap. The event cache itself is untouched.
+        assertThat(indexDirectory.exists()).isFalse()
         assertThat(storeFile.exists()).isTrue()
         result.destroy()
     }
@@ -274,11 +267,35 @@ class RustMatrixClientFactoryTest {
                 sessionPath = sessionFolder.absolutePath,
                 cachePath = cacheFolder.absolutePath,
             ).copy(passphrase = "aSecret"),
+            isMessageSearchAvailable = true,
         )
 
         // A fresh login has no event cache, so the index covers everything by construction —
         // recording that spares the session a pointless cache clear on its first restore.
         assertThat(File(sessionFolder, SEARCH_INDEX_COVERAGE_MARKER).exists()).isTrue()
+        result.destroy()
+    }
+
+    @Test
+    fun `create with a client - records no coverage when message search is off`() = runTest {
+        val sessionFolder = temporaryFolder.newFolder("session")
+        val cacheFolder = temporaryFolder.newFolder("cache")
+        val sut = createRustMatrixClientFactory(
+            workManagerScheduler = FakeWorkManagerScheduler(submitLambda = {}),
+        )
+
+        val result = sut.create(
+            client = FakeFfiClient(withUtdHook = {}),
+            sessionData = aSessionData(
+                sessionPath = sessionFolder.absolutePath,
+                cachePath = cacheFolder.absolutePath,
+            ).copy(passphrase = "aSecret"),
+            isMessageSearchAvailable = false,
+        )
+
+        // Without an index there is no coverage to record, and claiming it would let a later
+        // enable resume from a marker no index ever earned.
+        assertThat(File(sessionFolder, SEARCH_INDEX_COVERAGE_MARKER).exists()).isFalse()
         result.destroy()
     }
 
@@ -319,7 +336,6 @@ fun TestScope.createRustMatrixClientFactory(
     clientBuilderProvider: ClientBuilderProvider = FakeClientBuilderProvider(),
     workManagerScheduler: FakeWorkManagerScheduler = FakeWorkManagerScheduler(),
     featureFlagService: FakeFeatureFlagService = FakeFeatureFlagService(),
-    contentScannerUrlProviderFactory: ContentScannerUrlProvider.Factory = { ContentScannerUrlProvider { Result.success(null) } },
 ) = RustMatrixClientFactory(
     cacheDirectory = cacheDirectory,
     appCoroutineScope = backgroundScope,
@@ -334,5 +350,5 @@ fun TestScope.createRustMatrixClientFactory(
     clientBuilderProvider = clientBuilderProvider,
     sqliteStoreBuilderProvider = FakeSqliteStoreBuilderProvider(),
     workManagerScheduler = workManagerScheduler,
-    contentScannerUrlProviderFactory = contentScannerUrlProviderFactory,
+    clientBuilderEnterpriseHook = { builder, _ -> builder },
 )

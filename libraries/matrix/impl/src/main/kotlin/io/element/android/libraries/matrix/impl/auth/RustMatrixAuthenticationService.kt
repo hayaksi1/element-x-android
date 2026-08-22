@@ -11,11 +11,14 @@ package io.element.android.libraries.matrix.impl.auth
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.ContributesBinding
 import dev.zacsweers.metro.SingleIn
+import io.element.android.features.enterprise.api.ClientEnterpriseHook
 import io.element.android.features.enterprise.api.EnterpriseService
 import io.element.android.libraries.androidutils.crypto.ClientSecret
 import io.element.android.libraries.core.coroutine.CoroutineDispatchers
 import io.element.android.libraries.core.extensions.mapFailure
 import io.element.android.libraries.core.extensions.runCatchingExceptions
+import io.element.android.libraries.featureflag.api.FeatureFlagService
+import io.element.android.libraries.featureflag.api.FeatureFlags
 import io.element.android.libraries.matrix.api.MatrixClient
 import io.element.android.libraries.matrix.api.auth.AuthenticationException
 import io.element.android.libraries.matrix.api.auth.ElementClassicSession
@@ -70,6 +73,8 @@ class RustMatrixAuthenticationService(
     private val secretGenerator: SecretGenerator,
     private val oAuthConfigurationProvider: OAuthConfigurationProvider,
     private val enterpriseService: EnterpriseService,
+    private val featureFlagService: FeatureFlagService,
+    private val clientEnterpriseHook: ClientEnterpriseHook,
 ) : MatrixAuthenticationService {
     // Any existing Element Classic session that we want to try to import secrets from during login.
     private var elementClassicSession: ElementClassicSession? = null
@@ -162,7 +167,11 @@ class RustMatrixAuthenticationService(
                         passphrase = pendingKey.formattedAsString(),
                         sessionPaths = currentSessionPaths,
                     )
-                val matrixClient = rustMatrixClientFactory.create(client, sessionData)
+                val matrixClient = rustMatrixClientFactory.create(client, sessionData, isMessageSearchAvailable())
+
+                // Apply enterprise hooks to the newly created client as soon as possible
+                clientEnterpriseHook(matrixClient)
+
                 newMatrixClientObservers.forEach { it.invoke(matrixClient) }
                 sessionStore.addSession(sessionData)
 
@@ -237,7 +246,10 @@ class RustMatrixAuthenticationService(
 
                 // We restore the client using the just retrieved session data
                 client.restoreSession(sessionData.toSession())
-                val matrixClient = rustMatrixClientFactory.create(client, sessionData)
+                val matrixClient = rustMatrixClientFactory.create(client, sessionData, isMessageSearchAvailable())
+
+                // Apply enterprise hooks to the newly created client as soon as possible
+                clientEnterpriseHook(matrixClient)
 
                 // We wait for the verification state to be known
                 matrixClient.waitForKnownVerificationState()
@@ -275,7 +287,6 @@ class RustMatrixAuthenticationService(
                     .let {
                         enterpriseService.tweakMasUrl(
                             url = it,
-                            homeserver = client.server() ?: client.homeserver(),
                             urlContentFetcher = getUrlResolver,
                         )
                     }
@@ -329,7 +340,11 @@ class RustMatrixAuthenticationService(
                     passphrase = pendingKey.formattedAsString(),
                     sessionPaths = currentSessionPaths,
                 )
-                val matrixClient = rustMatrixClientFactory.create(client, sessionData)
+                val matrixClient = rustMatrixClientFactory.create(client, sessionData, isMessageSearchAvailable())
+
+                // Apply enterprise hooks to the newly created client as soon as possible
+                clientEnterpriseHook(matrixClient)
+
                 matrixClient.waitForKnownVerificationState()
 
                 newMatrixClientObservers.forEach { it.invoke(matrixClient) }
@@ -394,7 +409,11 @@ class RustMatrixAuthenticationService(
                         passphrase = pendingKey.formattedAsString(),
                         sessionPaths = emptySessionPaths,
                     )
-                val matrixClient = rustMatrixClientFactory.create(client, sessionData)
+                val matrixClient = rustMatrixClientFactory.create(client, sessionData, isMessageSearchAvailable())
+
+                // Apply enterprise hooks to the newly created client as soon as possible
+                clientEnterpriseHook(matrixClient)
+
                 newMatrixClientObservers.forEach { it.invoke(matrixClient) }
                 sessionStore.addSession(sessionData)
 
@@ -426,7 +445,7 @@ class RustMatrixAuthenticationService(
                 sessionPaths = sessionPaths,
                 clientSecret = pendingKey,
                 slidingSyncType = ClientBuilderSlidingSync.Discovered,
-                isMessageSearchAvailable = true,
+                isMessageSearchAvailable = isMessageSearchAvailable(),
             )
             .config()
             .build()
@@ -459,7 +478,7 @@ class RustMatrixAuthenticationService(
                 sessionPaths = sessionPaths,
                 clientSecret = pendingKey,
                 slidingSyncType = ClientBuilderSlidingSync.Discovered,
-                isMessageSearchAvailable = true,
+                isMessageSearchAvailable = isMessageSearchAvailable(),
             )
             .serverNameOrHomeserverUrl(baseUrlOrServerName)
             .build()
@@ -471,6 +490,9 @@ class RustMatrixAuthenticationService(
         }
         currentClient = null
     }
+
+    private suspend fun isMessageSearchAvailable(): Boolean =
+        featureFlagService.isFeatureEnabled(FeatureFlags.MessageSearch)
 
     private suspend fun MatrixClient.waitForKnownVerificationState() {
         withTimeoutOrNull(10.seconds) {

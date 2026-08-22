@@ -170,9 +170,31 @@ class RustMatrixClientTest {
 
         featureFlagService.setFeatureEnabled(FeatureFlags.MessageSearch, true)
 
-        // The index is always attached, so a mid-session enable only needs the backfill kicked
-        // off — no restart involved.
+        // The index was attached at client build, so re-enabling only needs the backfill kicked off.
         assertThat(submissions.filterIsInstance<SearchBackfillRequestBuilder>()).hasSize(1)
+        client.destroy()
+    }
+
+    @Test
+    fun `enabling message search does not schedule a backfill without an index`() = runTest {
+        val submissions = mutableListOf<WorkManagerRequestBuilder>()
+        val featureFlagService = FakeFeatureFlagService()
+        val client = createRustMatrixClient(
+            featureFlagService = featureFlagService,
+            workManagerScheduler = FakeWorkManagerScheduler(submitLambda = { submissions += it }),
+            isMessageSearchAvailable = false,
+            dispatchers = CoroutineDispatchers(
+                io = StandardTestDispatcher(testScheduler),
+                computation = StandardTestDispatcher(testScheduler),
+                main = UnconfinedTestDispatcher(testScheduler),
+            ),
+        )
+
+        featureFlagService.setFeatureEnabled(FeatureFlags.MessageSearch, true)
+
+        // The session was built with the flag off, so no index exists to backfill into until the
+        // app is restarted.
+        assertThat(submissions.filterIsInstance<SearchBackfillRequestBuilder>()).isEmpty()
         client.destroy()
     }
 

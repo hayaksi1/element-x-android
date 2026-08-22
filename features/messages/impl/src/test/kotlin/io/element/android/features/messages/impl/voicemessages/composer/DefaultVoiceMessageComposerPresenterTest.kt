@@ -189,7 +189,10 @@ class DefaultVoiceMessageComposerPresenterTest {
         )
         presenter.test {
             awaitItem().eventSink(VoiceMessageComposerEvent.RecorderEvent(VoiceMessageRecorderEvent.Start))
-            val finalState = consumeItemsUntilTimeout().last()
+
+            // Skip until we reach the final state, which should have the last 128 levels
+            skipItems(numberOfLevels - 1)
+            val finalState = awaitItem()
             assertThat(finalState.voiceMessageState).isInstanceOf(VoiceMessageState.Recording::class.java)
             val recordingState = finalState.voiceMessageState as VoiceMessageState.Recording
             // The number of levels should be limited to 128 items
