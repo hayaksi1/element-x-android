@@ -25,12 +25,14 @@ import io.element.android.features.preferences.impl.tasks.ClearCacheUseCase
 import io.element.android.features.preferences.impl.tasks.ComputeCacheSizeUseCase
 import io.element.android.features.preferences.impl.tasks.MarkAllRoomsAsRead
 import io.element.android.features.preferences.impl.tasks.VacuumStoresUseCase
+import io.element.android.features.preferences.impl.utils.ShowDeveloperSettingsProvider
 import io.element.android.libraries.androidutils.filesize.FileSizeFormatter
 import io.element.android.libraries.architecture.AsyncAction
 import io.element.android.libraries.architecture.AsyncData
 import io.element.android.libraries.architecture.Presenter
 import io.element.android.libraries.architecture.runCatchingUpdatingState
 import io.element.android.libraries.core.data.ByteUnit
+import io.element.android.libraries.core.meta.BuildMeta
 import io.element.android.libraries.featureflag.api.FeatureFlagService
 import io.element.android.libraries.featureflag.api.FeatureFlags
 import io.element.android.libraries.matrix.api.MatrixClient
@@ -58,6 +60,8 @@ class DeveloperSettingsPresenter(
     private val featureFlagService: FeatureFlagService,
     private val matrixClient: MatrixClient,
     private val messageSearchIndexer: MessageSearchIndexer,
+    private val showDeveloperSettingsProvider: ShowDeveloperSettingsProvider,
+    private val buildMeta: BuildMeta,
 ) : Presenter<DeveloperSettingsState> {
     @Composable
     override fun present(): DeveloperSettingsState {
@@ -100,6 +104,7 @@ class DeveloperSettingsPresenter(
             sweepActivity = sweepActivity,
             cursor = sweepCursor,
         )
+        val showDeveloperSettings by showDeveloperSettingsProvider.showDeveloperSettings.collectAsState()
 
         fun handleEvent(event: DeveloperSettingsEvents) {
             when (event) {
@@ -112,6 +117,9 @@ class DeveloperSettingsPresenter(
                         ?.substring(2, 8)
                         ?.padStart(7, '#')
                     enterpriseService.overrideBrandColor(sessionId, color)
+                }
+                is DeveloperSettingsEvents.SetShowDeveloperSettings -> {
+                    showDeveloperSettingsProvider.setShowDeveloperSettings(event.show)
                 }
                 is DeveloperSettingsEvents.SetShowColorPicker -> {
                     showColorPicker = event.show
@@ -142,12 +150,13 @@ class DeveloperSettingsPresenter(
 
         val appDeveloperSettingsState = appDeveloperSettingsPresenter.present()
         return DeveloperSettingsState(
+            showDeveloperSettings = showDeveloperSettings,
             appDeveloperSettingsState = appDeveloperSettingsState,
             cacheSize = cacheSize.value,
             databaseSizes = databaseSizes.value,
             clearCacheAction = clearCacheAction.value,
             markAllRoomsAsReadAction = markAllRoomsAsReadAction.value,
-            isEnterpriseBuild = enterpriseService.isEnterpriseBuild,
+            isEnterpriseBuild = buildMeta.isEnterpriseBuild,
             showColorPicker = showColorPicker,
             messageSearchIndexStatus = messageSearchIndexStatus,
             eventSink = ::handleEvent,
