@@ -27,6 +27,7 @@ import io.element.android.features.preferences.impl.tasks.ClearCacheUseCase
 import io.element.android.features.preferences.impl.tasks.ComputeCacheSizeUseCase
 import io.element.android.features.preferences.impl.tasks.MarkAllRoomsAsRead
 import io.element.android.features.preferences.impl.tasks.VacuumStoresUseCase
+import io.element.android.features.preferences.impl.utils.ShowDeveloperSettingsProvider
 import io.element.android.libraries.androidutils.filesize.FileSizeFormatter
 import io.element.android.libraries.architecture.AsyncAction
 import io.element.android.libraries.architecture.AsyncData
@@ -66,6 +67,7 @@ class DeveloperSettingsPresenter(
     private val databaseSizesUseCase: GetDatabaseSizesUseCase,
     private val fileSizeFormatter: FileSizeFormatter,
     private val markAllRoomsAsRead: MarkAllRoomsAsRead,
+    private val showDeveloperSettingsProvider: ShowDeveloperSettingsProvider,
     private val buildMeta: BuildMeta,
     private val notificationSettingsService: NotificationSettingsService,
     private val featureFlagService: FeatureFlagService,
@@ -122,6 +124,8 @@ class DeveloperSettingsPresenter(
             cursor = sweepCursor,
         )
 
+        val showDeveloperSettings by showDeveloperSettingsProvider.showDeveloperSettings.collectAsState()
+
         fun handleEvent(event: DeveloperSettingsEvent) {
             when (event) {
                 DeveloperSettingsEvent.ClearCache -> coroutineScope.clearCache(clearCacheAction)
@@ -133,6 +137,9 @@ class DeveloperSettingsPresenter(
                         ?.substring(2, 8)
                         ?.padStart(7, '#')
                     enterpriseService.overrideBrandColor(sessionId, color)
+                }
+                is DeveloperSettingsEvent.SetShowDeveloperSettings -> {
+                    showDeveloperSettingsProvider.setShowDeveloperSettings(event.show)
                 }
                 is DeveloperSettingsEvent.SetShowColorPicker -> {
                     showColorPicker = event.show
@@ -167,6 +174,7 @@ class DeveloperSettingsPresenter(
 
         val appDeveloperSettingsState = appDeveloperSettingsPresenter.present()
         return DeveloperSettingsState(
+            showDeveloperSettings = showDeveloperSettings,
             appDeveloperSettingsState = appDeveloperSettingsState,
             cacheSize = cacheSize.value,
             databaseSizes = databaseSizes.value,

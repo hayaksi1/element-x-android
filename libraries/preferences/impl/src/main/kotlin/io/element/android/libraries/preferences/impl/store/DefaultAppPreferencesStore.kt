@@ -32,6 +32,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 private val developerModeKey = booleanPreferencesKey("developerMode")
+private val showDeveloperSettingsKey = booleanPreferencesKey("showDeveloperSettings")
 private val hideSpaceRoomsKey = booleanPreferencesKey("hideSpaceRooms")
 private val conversationNotificationsKey = booleanPreferencesKey("conversationNotifications")
 private val customElementCallBaseUrlKey = stringPreferencesKey("elementCallBaseUrl")
@@ -71,6 +72,18 @@ class DefaultAppPreferencesStore(
         return store.data.map { prefs ->
             // disabled by default on release and nightly, enabled by default on debug
             prefs[developerModeKey] ?: (buildMeta.buildType == BuildType.DEBUG)
+        }
+    }
+
+    override suspend fun setShowDeveloperSettings(show: Boolean) {
+        store.edit { prefs ->
+            prefs[showDeveloperSettingsKey] = show
+        }
+    }
+
+    override fun showDeveloperSettingsFlow(): Flow<Boolean> {
+        return store.data.map { prefs ->
+            prefs[showDeveloperSettingsKey] ?: (buildMeta.buildType != BuildType.RELEASE)
         }
     }
 
