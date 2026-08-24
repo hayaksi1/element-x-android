@@ -44,6 +44,7 @@ fun AppDeveloperSettingsView(
     state: AppDeveloperSettingsState,
     onOpenShowkase: () -> Unit,
     modifier: Modifier = Modifier,
+    showTopDivider: Boolean = false,
     afterFeatureFlags: @Composable () -> Unit = {},
 ) {
     Column(
@@ -52,7 +53,7 @@ fun AppDeveloperSettingsView(
         // Note: this is OK to hardcode strings in this debug screen.
         PreferenceCategory(
             title = "Feature flags",
-            showTopDivider = false,
+            showTopDivider = showTopDivider,
         ) {
             FeatureListContent(state)
         }

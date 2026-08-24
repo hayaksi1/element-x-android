@@ -19,11 +19,13 @@ import io.element.android.features.preferences.impl.tasks.FakeClearCacheUseCase
 import io.element.android.features.preferences.impl.tasks.FakeComputeCacheSizeUseCase
 import io.element.android.features.preferences.impl.tasks.FakeMarkAllRoomsAsRead
 import io.element.android.features.preferences.impl.tasks.VacuumStoresUseCase
+import io.element.android.features.preferences.impl.utils.ShowDeveloperSettingsProvider
 import io.element.android.libraries.androidutils.filesize.FakeFileSizeFormatter
 import io.element.android.libraries.architecture.AsyncAction
 import io.element.android.libraries.architecture.AsyncData
 import io.element.android.libraries.core.data.megaBytes
 import io.element.android.libraries.core.meta.BuildMeta
+import io.element.android.libraries.core.meta.BuildType
 import io.element.android.libraries.featureflag.api.FeatureFlags
 import io.element.android.libraries.featureflag.test.FakeFeatureFlagService
 import io.element.android.libraries.matrix.api.analytics.GetDatabaseSizesUseCase
@@ -37,16 +39,20 @@ import io.element.android.libraries.matrix.test.A_SESSION_ID
 import io.element.android.libraries.matrix.test.FakeMatrixClient
 import io.element.android.libraries.matrix.test.core.aBuildMeta
 import io.element.android.libraries.matrix.test.search.FakeMessageSearchIndexer
+import io.element.android.libraries.preferences.test.InMemoryAppPreferencesStore
 import io.element.android.tests.testutils.WarmUpRule
 import io.element.android.tests.testutils.consumeItemsUntilPredicate
 import io.element.android.tests.testutils.lambda.lambdaRecorder
 import io.element.android.tests.testutils.lambda.value
 import io.element.android.tests.testutils.test
 import kotlinx.collections.immutable.persistentMapOf
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
+import kotlin.coroutines.EmptyCoroutineContext
 
 class DeveloperSettingsPresenterTest {
     @get:Rule
@@ -264,6 +270,25 @@ class DeveloperSettingsPresenterTest {
         cancelRecorder.assertions().isCalledOnce().with(value(A_SESSION_ID))
     }
 
+    @Test
+    fun `present - turning the developer options switch off persists the choice`() = runTest {
+        val appPreferencesStore = InMemoryAppPreferencesStore(showDeveloperSettings = true)
+        val presenter = createDeveloperSettingsPresenter(
+            showDeveloperSettingsProvider = ShowDeveloperSettingsProvider(
+                buildMeta = aBuildMeta(BuildType.DEBUG),
+                appPreferencesStore = appPreferencesStore,
+                appCoroutineScope = backgroundScope,
+            ),
+        )
+        presenter.test {
+            val state = consumeItemsUntilPredicate { it.showDeveloperSettings }.last()
+            state.eventSink(DeveloperSettingsEvents.SetShowDeveloperSettings(false))
+            consumeItemsUntilPredicate { !it.showDeveloperSettings }
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertThat(appPreferencesStore.showDeveloperSettingsFlow().first()).isFalse()
+    }
+
     private fun createDeveloperSettingsPresenter(
         sessionId: SessionId = A_SESSION_ID,
         deviceId: DeviceId = A_DEVICE_ID,
@@ -276,6 +301,11 @@ class DeveloperSettingsPresenterTest {
         featureFlagService: FakeFeatureFlagService = FakeFeatureFlagService(),
         matrixClient: FakeMatrixClient = FakeMatrixClient(),
         messageSearchIndexer: FakeMessageSearchIndexer = FakeMessageSearchIndexer(),
+        showDeveloperSettingsProvider: ShowDeveloperSettingsProvider = ShowDeveloperSettingsProvider(
+            buildMeta = aBuildMeta(BuildType.DEBUG),
+            appPreferencesStore = InMemoryAppPreferencesStore(showDeveloperSettings = true),
+            appCoroutineScope = CoroutineScope(EmptyCoroutineContext),
+        ),
         buildMeta: BuildMeta = aBuildMeta(),
     ): DeveloperSettingsPresenter {
         return DeveloperSettingsPresenter(
@@ -292,6 +322,7 @@ class DeveloperSettingsPresenterTest {
             featureFlagService = featureFlagService,
             matrixClient = matrixClient,
             messageSearchIndexer = messageSearchIndexer,
+            showDeveloperSettingsProvider = showDeveloperSettingsProvider,
             buildMeta = buildMeta,
         )
     }

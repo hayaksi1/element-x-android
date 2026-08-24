@@ -24,12 +24,14 @@ import androidx.compose.ui.unit.dp
 import io.element.android.compound.theme.ElementTheme
 import io.element.android.features.preferences.impl.R
 import io.element.android.features.preferences.impl.developer.appsettings.AppDeveloperSettingsView
+import io.element.android.features.preferences.impl.utils.ShowDeveloperSettingsProvider
 import io.element.android.libraries.androidutils.system.copyToClipboard
 import io.element.android.libraries.designsystem.components.ProgressDialog
 import io.element.android.libraries.designsystem.components.dialogs.ConfirmationDialog
 import io.element.android.libraries.designsystem.components.list.ListItemContent
 import io.element.android.libraries.designsystem.components.preferences.PreferenceCategory
 import io.element.android.libraries.designsystem.components.preferences.PreferencePage
+import io.element.android.libraries.designsystem.components.preferences.PreferenceSwitch
 import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
 import io.element.android.libraries.designsystem.theme.components.CircularProgressIndicator
@@ -77,9 +79,11 @@ fun DeveloperSettingsView(
         title = stringResource(id = CommonStrings.common_developer_options)
     ) {
         // Note: this is OK to hardcode strings in this debug screen.
+        DeveloperSettingsToggle(state)
         AppDeveloperSettingsView(
             state = state.appDeveloperSettingsState,
             onOpenShowkase = onOpenShowkase,
+            showTopDivider = true,
             afterFeatureFlags = { MessageSearchIndexCategory(state) },
         )
         SessionCategory(deviceId = state.deviceId)
@@ -273,6 +277,23 @@ private fun CancelSearchIndexingItem(state: DeveloperSettingsState) {
         content = { Text("Cancel indexing") },
         onClick = { state.eventSink(DeveloperSettingsEvents.CancelSearchIndexing) },
     )
+}
+
+@Composable
+private fun DeveloperSettingsToggle(state: DeveloperSettingsState) {
+    PreferenceCategory(showTopDivider = false) {
+        PreferenceSwitch(
+            title = if (state.showDeveloperSettings) "On" else "Off",
+            subtitle = if (state.showDeveloperSettings) {
+                null
+            } else {
+                "Developer options are no longer listed in Settings. Tap the version number " +
+                    "${ShowDeveloperSettingsProvider.DEVELOPER_SETTINGS_COUNTER} times to bring them back."
+            },
+            isChecked = state.showDeveloperSettings,
+            onCheckedChange = { state.eventSink(DeveloperSettingsEvents.SetShowDeveloperSettings(it)) },
+        )
+    }
 }
 
 @Composable
