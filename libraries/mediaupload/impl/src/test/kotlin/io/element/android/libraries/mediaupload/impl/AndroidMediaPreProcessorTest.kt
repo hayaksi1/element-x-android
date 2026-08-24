@@ -138,7 +138,7 @@ class AndroidMediaPreProcessorTest : RobolectricTest() {
     }
 
     @Test
-    fun `a file that is not an image falls back to the default subtype of the wildcard`() = runTest {
+    fun `a file that is not an image falls back to the default subtype of the wildcard it was shared with`() = runTest {
         val mediaUploadInfo = process(
             asset = assetText,
             mimeType = MimeTypes.Images,
