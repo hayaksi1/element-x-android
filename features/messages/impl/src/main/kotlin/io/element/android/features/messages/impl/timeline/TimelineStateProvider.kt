@@ -67,6 +67,7 @@ fun aTimelineState(
     displayJumpToUnread: Boolean = false,
     jumpToUnread: JumpToUnreadState = JumpToUnreadState.Hidden,
     paginationFailures: ImmutableSet<Timeline.PaginationDirection> = persistentSetOf(),
+    canJumpBack: Boolean = false,
     newEventState: NewEventState = NewEventState.None,
     eventSink: (TimelineEvent) -> Unit = {},
 ): TimelineState {
@@ -90,6 +91,7 @@ fun aTimelineState(
         displayJumpToUnread = displayJumpToUnread,
         jumpToUnread = jumpToUnread,
         paginationFailures = paginationFailures,
+        canJumpBack = canJumpBack,
         eventSink = eventSink,
     )
 }
