@@ -114,6 +114,7 @@ class AdvancedSettingsViewTest : RobolectricTest() {
     }
 
     @Test
+    @Config(qualifiers = "h1080dp")
     fun `clicking on media to enable compression emits the expected event`() = runAndroidComposeUiTest {
         val eventsRecorder = EventsRecorder<AdvancedSettingsEvents>()
         val analyticsService = FakeAnalyticsService()
@@ -135,6 +136,7 @@ class AdvancedSettingsViewTest : RobolectricTest() {
     }
 
     @Test
+    @Config(qualifiers = "h1080dp")
     fun `clicking on media to disable compression emits the expected event`() = runAndroidComposeUiTest {
         val eventsRecorder = EventsRecorder<AdvancedSettingsEvents>()
         val analyticsService = FakeAnalyticsService()
