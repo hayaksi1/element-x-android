@@ -47,6 +47,7 @@ class DefaultSessionPreferencesStore(
     private val sendTypingNotificationsKey = booleanPreferencesKey("sendTypingNotifications")
     private val renderTypingNotificationsKey = booleanPreferencesKey("renderTypingNotifications")
     private val skipSessionVerification = booleanPreferencesKey("skipSessionVerification")
+    private val recoveryBannerDismissed = booleanPreferencesKey("recoveryBannerDismissed")
     private val compressImages = booleanPreferencesKey("compressMedia")
     private val compressMediaPreset = stringPreferencesKey("compressMediaPreset")
     private val selectedRoomListFilters = stringSetPreferencesKey("selectedRoomListFilters")
@@ -93,6 +94,9 @@ class DefaultSessionPreferencesStore(
 
     override suspend fun setSkipSessionVerification(skip: Boolean) = update(skipSessionVerification, skip)
     override fun isSessionVerificationSkipped(): Flow<Boolean> = get(skipSessionVerification) { false }
+
+    override suspend fun setRecoveryBannerDismissed(dismissed: Boolean) = update(recoveryBannerDismissed, dismissed)
+    override fun isRecoveryBannerDismissed(): Flow<Boolean> = get(recoveryBannerDismissed) { false }
 
     override suspend fun setOptimizeImages(compress: Boolean) = update(compressImages, compress)
     override fun doesOptimizeImages(): Flow<Boolean> = get(compressImages) { true }
