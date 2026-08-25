@@ -99,6 +99,7 @@ open class MessagesStatePreviewParam : PreviewParameterProvider<MessagesState> {
 
 fun aMessagesState(
     roomName: String? = ROOM_NAME,
+    memberCount: Long? = 42,
     roomAvatar: AvatarData = AvatarData("!id:domain", ROOM_NAME, size = AvatarSize.TimelineRoom),
     userEventPermissions: UserEventPermissions = aUserEventPermissions(),
     composerState: MessageComposerState = aMessageComposerState(
@@ -138,6 +139,7 @@ fun aMessagesState(
 ) = MessagesState(
     roomId = RoomId("!id:domain"),
     roomName = roomName,
+    memberCount = memberCount,
     roomAvatar = roomAvatar,
     heroes = persistentListOf(),
     userEventPermissions = userEventPermissions,
