@@ -189,6 +189,12 @@ private fun NotificationSettingsContentView(
                 },
                 onClick = onDirectChatsClick
             )
+            PreferenceSwitch(
+                modifier = Modifier,
+                title = stringResource(id = R.string.screen_notification_settings_invite_for_me_label),
+                isChecked = matrixSettings.inviteForMeNotificationsEnabled,
+                onCheckedChange = onInviteForMeNotificationsChange
+            )
         }
 
         PreferenceCategory(title = stringResource(id = R.string.screen_notification_settings_mode_mentions)) {
@@ -209,12 +215,6 @@ private fun NotificationSettingsContentView(
 //                    switchAlignment = Alignment.Top,
 //                    onCheckedChange = onCallsNotificationsChanged
 //                )
-            PreferenceSwitch(
-                modifier = Modifier,
-                title = stringResource(id = R.string.screen_notification_settings_invite_for_me_label),
-                isChecked = matrixSettings.inviteForMeNotificationsEnabled,
-                onCheckedChange = onInviteForMeNotificationsChange
-            )
             PreferenceSwitch(
                 modifier = Modifier,
                 title = stringResource(id = R.string.screen_notification_settings_conversations_label),
