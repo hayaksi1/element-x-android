@@ -4,4 +4,6 @@
   <string name="screen_advanced_settings_hide_space_rooms_description">"Rooms that belong to a Space are only shown when you open that Space."</string>
   <string name="screen_advanced_settings_markdown_title">"Format messages with Markdown"</string>
   <string name="screen_advanced_settings_markdown_description">"Turn Markdown such as *bold* or `code` into formatting when a message is sent."</string>
+  <string name="screen_notification_settings_conversations_label">"Use conversation notifications"</string>
+  <string name="screen_notification_settings_conversations_description">"Show room notifications as conversations. Turning this off lets Do Not Disturb silence them."</string>
 </resources>

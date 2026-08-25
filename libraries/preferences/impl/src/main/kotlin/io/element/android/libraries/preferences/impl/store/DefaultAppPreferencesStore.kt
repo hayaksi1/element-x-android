@@ -32,6 +32,7 @@ import kotlinx.coroutines.flow.map
 private val developerModeKey = booleanPreferencesKey("developerMode")
 private val showDeveloperSettingsKey = booleanPreferencesKey("showDeveloperSettings")
 private val hideSpaceRoomsKey = booleanPreferencesKey("hideSpaceRooms")
+private val conversationNotificationsKey = booleanPreferencesKey("conversationNotifications")
 private val customElementCallBaseUrlKey = stringPreferencesKey("elementCallBaseUrl")
 private val themeKey = stringPreferencesKey("theme")
 private val hideInviteAvatarsKey = booleanPreferencesKey("hideInviteAvatars")
@@ -92,6 +93,18 @@ class DefaultAppPreferencesStore(
     override fun hideSpaceRoomsFlow(): Flow<Boolean> {
         return store.data.map { prefs ->
             prefs[hideSpaceRoomsKey] ?: false
+        }
+    }
+
+    override suspend fun setConversationNotificationsEnabled(enabled: Boolean) {
+        store.edit { prefs ->
+            prefs[conversationNotificationsKey] = enabled
+        }
+    }
+
+    override fun isConversationNotificationsEnabledFlow(): Flow<Boolean> {
+        return store.data.map { prefs ->
+            prefs[conversationNotificationsKey] ?: true
         }
     }
 
