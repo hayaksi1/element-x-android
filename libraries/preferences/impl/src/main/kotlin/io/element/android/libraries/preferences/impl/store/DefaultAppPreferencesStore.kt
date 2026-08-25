@@ -32,6 +32,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 private val developerModeKey = booleanPreferencesKey("developerMode")
+private val hideSpaceRoomsKey = booleanPreferencesKey("hideSpaceRooms")
 private val customElementCallBaseUrlKey = stringPreferencesKey("elementCallBaseUrl")
 private val themeKey = stringPreferencesKey("theme")
 private val roomListActivityVisibilityKey = stringPreferencesKey("roomListActivityVisibility")
@@ -83,6 +84,18 @@ class DefaultAppPreferencesStore(
             prefs[roomListActivityVisibilityKey]
                 ?.let { runCatchingExceptions { RoomListActivityVisibility.valueOf(it) }.getOrNull() }
                 ?: RoomListActivityVisibility.CURRENT
+    }
+    }
+
+    override suspend fun setHideSpaceRooms(hide: Boolean) {
+        store.edit { prefs ->
+            prefs[hideSpaceRoomsKey] = hide
+        }
+    }
+
+    override fun hideSpaceRoomsFlow(): Flow<Boolean> {
+        return store.data.map { prefs ->
+            prefs[hideSpaceRoomsKey] ?: false
         }
     }
 

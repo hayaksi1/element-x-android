@@ -16,6 +16,7 @@ sealed interface AdvancedSettingsEvent {
     data class SetSharePresenceEnabled(val enabled: Boolean) : AdvancedSettingsEvent
     data class SetMarkdownEnabled(val enabled: Boolean) : AdvancedSettingsEvent
     data class SetRenderRedactedMessagesEnabled(val enabled: Boolean) : AdvancedSettingsEvent
+    data class SetHideSpaceRooms(val hide: Boolean) : AdvancedSettingsEvent
     data class SetCompressMedia(val compress: Boolean) : AdvancedSettingsEvent
     data class SetCompressImages(val compress: Boolean) : AdvancedSettingsEvent
     data class SetVideoUploadQuality(val videoPreset: VideoCompressionPreset) : AdvancedSettingsEvent
