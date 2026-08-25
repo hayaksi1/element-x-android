@@ -9,7 +9,6 @@ package io.element.android.features.login.impl.support
 
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.ContributesBinding
-import dev.zacsweers.metro.Inject
 import io.element.android.libraries.androidutils.text.takeIfNotBlank
 import io.element.android.libraries.core.extensions.runCatchingExceptions
 import io.element.android.libraries.core.uri.ensureProtocol
@@ -31,7 +30,6 @@ interface HomeserverSupportContactProvider {
 }
 
 @ContributesBinding(AppScope::class)
-@Inject
 class DefaultHomeserverSupportContactProvider(
     private val retrofitFactory: RetrofitFactory,
 ) : HomeserverSupportContactProvider {
