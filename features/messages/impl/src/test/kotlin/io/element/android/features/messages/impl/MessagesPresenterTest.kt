@@ -128,6 +128,7 @@ import org.junit.Rule
 import org.junit.Test
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
+import io.element.android.libraries.matrix.api.room.RoomInfo
 
 @Suppress("LargeClass")
 class MessagesPresenterTest {
@@ -1497,6 +1498,27 @@ class MessagesPresenterTest {
             // And if we remove the items, it should update accordingly
             itemsFlow.value = emptyList()
             assertThat(awaitItem().threads.hasThreads).isFalse()
+        }
+    }
+
+
+    @Test
+    fun `present - a group room reports how many members it has`() = runTest {
+        val presenter = createMessagesPresenter(
+            joinedRoom = aJoinedRoomWithInfo(aRoomInfo(id = A_ROOM_ID, name = "", isDm = false, joinedMembersCount = 12)),
+        )
+        presenter.testWithLifecycleOwner {
+            assertThat(consumeItemsUntilTimeout().last().memberCount).isEqualTo(12)
+        }
+    }
+
+    @Test
+    fun `present - a direct message does not report a member count`() = runTest {
+        val presenter = createMessagesPresenter(
+            joinedRoom = aJoinedRoomWithInfo(aRoomInfo(id = A_ROOM_ID, name = "", isDm = true, joinedMembersCount = 2)),
+        )
+        presenter.testWithLifecycleOwner {
+            assertThat(consumeItemsUntilTimeout().last().memberCount).isNull()
         }
     }
 
