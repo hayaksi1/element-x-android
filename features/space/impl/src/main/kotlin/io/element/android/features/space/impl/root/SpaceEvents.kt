@@ -21,6 +21,8 @@ sealed interface SpaceEvents {
     data class ShowTopicViewer(val topic: String) : SpaceEvents
     data object HideTopicViewer : SpaceEvents
 
+    data class OnSearchActiveChanged(val active: Boolean) : SpaceEvents
+
     // Manage mode events
     data object EnterManageMode : SpaceEvents
     data object ExitManageMode : SpaceEvents
