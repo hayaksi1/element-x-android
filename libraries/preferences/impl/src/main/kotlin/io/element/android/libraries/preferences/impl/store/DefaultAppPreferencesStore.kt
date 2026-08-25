@@ -15,6 +15,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.ContributesBinding
+import io.element.android.libraries.core.extensions.runCatchingExceptions
 import io.element.android.libraries.core.meta.BuildMeta
 import io.element.android.libraries.core.meta.BuildType
 import io.element.android.libraries.matrix.api.media.MediaPreviewValue
@@ -25,6 +26,7 @@ import io.element.android.libraries.preferences.api.store.NotificationSound
 import io.element.android.libraries.preferences.api.store.NotificationSound.Companion.toStored
 import io.element.android.libraries.preferences.api.store.NotificationSoundChannelConfig
 import io.element.android.libraries.preferences.api.store.PreferenceDataStoreFactory
+import io.element.android.libraries.preferences.api.store.RoomListActivityVisibility
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -35,6 +37,7 @@ private val hideSpaceRoomsKey = booleanPreferencesKey("hideSpaceRooms")
 private val conversationNotificationsKey = booleanPreferencesKey("conversationNotifications")
 private val customElementCallBaseUrlKey = stringPreferencesKey("elementCallBaseUrl")
 private val themeKey = stringPreferencesKey("theme")
+private val roomListActivityVisibilityKey = stringPreferencesKey("roomListActivityVisibility")
 private val hideInviteAvatarsKey = booleanPreferencesKey("hideInviteAvatars")
 private val timelineMediaPreviewValueKey = stringPreferencesKey("timelineMediaPreviewValue")
 private val liveLocationMinimumDistanceUpdateKey = intPreferencesKey("liveLocationMinimumDistanceUpdate")
@@ -105,6 +108,20 @@ class DefaultAppPreferencesStore(
     override fun isConversationNotificationsEnabledFlow(): Flow<Boolean> {
         return store.data.map { prefs ->
             prefs[conversationNotificationsKey] ?: true
+        }
+    }
+
+    override suspend fun setRoomListActivityVisibility(visibility: RoomListActivityVisibility) {
+        store.edit { prefs ->
+            prefs[roomListActivityVisibilityKey] = visibility.name
+        }
+    }
+
+    override fun getRoomListActivityVisibilityFlow(): Flow<RoomListActivityVisibility> {
+        return store.data.map { prefs ->
+            prefs[roomListActivityVisibilityKey]
+                ?.let { runCatchingExceptions { RoomListActivityVisibility.valueOf(it) }.getOrNull() }
+                ?: RoomListActivityVisibility.CURRENT
         }
     }
 
