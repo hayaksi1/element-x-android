@@ -226,6 +226,10 @@ class MessageComposerPresenter(
             sessionPreferencesStore.isSendTypingNotificationsEnabled()
         }.collectAsState(initial = true)
 
+        val isMarkdownEnabled by remember {
+            sessionPreferencesStore.isMarkdownEnabled()
+        }.collectAsState(initial = true)
+
         LaunchedEffect(cameraPermissionState.permissionGranted) {
             if (cameraPermissionState.permissionGranted) {
                 when (pendingEvent) {
@@ -294,6 +298,7 @@ class MessageComposerPresenter(
                         markdownTextEditorState = markdownTextEditorState,
                         richTextEditorState = richTextEditorState,
                         slashCommandAction = slashCommandAction,
+                        isMarkdownEnabled = isMarkdownEnabled,
                     )
                 }
                 is MessageComposerEvent.SendUri -> {
@@ -506,6 +511,7 @@ class MessageComposerPresenter(
         markdownTextEditorState: MarkdownTextEditorState,
         richTextEditorState: RichTextEditorState,
         slashCommandAction: MutableState<AsyncAction<Unit>>,
+        isMarkdownEnabled: Boolean,
     ) = launch {
         val message = currentComposerMessage(markdownTextEditorState, richTextEditorState, withMentions = true)
         val capturedMode = messageComposerContext.composerMode
@@ -576,7 +582,9 @@ class MessageComposerPresenter(
                 sendMessage(
                     body = message.markdown,
                     htmlBody = message.html,
-                    intentionalMentions = message.intentionalMentions
+                    intentionalMentions = message.intentionalMentions,
+                    // Only the plain composer produces markdown to interpret; the rich composer has already built the html.
+                    asPlainText = message.html == null && !isMarkdownEnabled,
                 )
             }
             is MessageComposerMode.Edit -> {

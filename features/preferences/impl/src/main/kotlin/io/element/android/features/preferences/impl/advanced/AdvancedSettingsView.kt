@@ -116,6 +116,18 @@ fun AdvancedSettingsView(
             ),
             onClick = { state.eventSink(AdvancedSettingsEvents.SetSharePresenceEnabled(!state.isSharePresenceEnabled)) }
         )
+        ListItem(
+            content = {
+                Text(text = stringResource(id = R.string.screen_advanced_settings_markdown_title))
+            },
+            supportingContent = {
+                Text(text = stringResource(id = R.string.screen_advanced_settings_markdown_description))
+            },
+            trailingContent = ListItemContent.Switch(
+                checked = state.isMarkdownEnabled,
+            ),
+            onClick = { state.eventSink(AdvancedSettingsEvents.SetMarkdownEnabled(!state.isMarkdownEnabled)) }
+        )
         val compressImages = state.mediaOptimizationState?.shouldCompressImages
 
         when (state.mediaOptimizationState) {

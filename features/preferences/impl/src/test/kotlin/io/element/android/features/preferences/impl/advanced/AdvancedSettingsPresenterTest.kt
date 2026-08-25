@@ -107,6 +107,29 @@ class AdvancedSettingsPresenterTest {
     }
 
     @Test
+    fun `present - markdown on off`() = runTest {
+        val presenter = createAdvancedSettingsPresenter()
+        moleculeFlow(RecompositionMode.Immediate) {
+            presenter.present()
+        }.test {
+            // Skip until the initial data it loaded
+            skipItems(1)
+
+            with(awaitItem()) {
+                assertThat(isMarkdownEnabled).isTrue()
+                eventSink(AdvancedSettingsEvents.SetMarkdownEnabled(false))
+            }
+            with(awaitItem()) {
+                assertThat(isMarkdownEnabled).isFalse()
+                eventSink(AdvancedSettingsEvents.SetMarkdownEnabled(true))
+            }
+            with(awaitItem()) {
+                assertThat(isMarkdownEnabled).isTrue()
+            }
+        }
+    }
+
+    @Test
     fun `present - share presence off on`() = runTest {
         val presenter = createAdvancedSettingsPresenter()
         moleculeFlow(RecompositionMode.Immediate) {
