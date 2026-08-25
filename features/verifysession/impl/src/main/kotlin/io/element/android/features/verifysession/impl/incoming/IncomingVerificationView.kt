@@ -254,7 +254,7 @@ private fun IncomingVerificationBottomMenu(
                 Button(
                     modifier = Modifier.fillMaxWidth(),
                     text = stringResource(CommonStrings.action_ignore),
-                    onClick = { eventSink(IncomingVerificationViewEvent.IgnoreVerification) },
+                    onClick = { eventSink(IncomingVerificationViewEvents.IgnoreVerification) },
                 )
             }
         }

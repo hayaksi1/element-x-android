@@ -315,7 +315,7 @@ class OnBoardingPresenterTest {
         )
         presenter.test {
             skipItems(3)
-            awaitItem().eventSink(OnBoardingEvent.OnSignIn(A_HOMESERVER_URL_2))
+            awaitItem().eventSink(OnBoardingEvents.OnSignIn(A_HOMESERVER_URL_2))
             skipItems(1)
             val error = (awaitItem().loginModeState.loginMode as AsyncData.Failure).error
             assertThat(error).isEqualTo(ChangeServerError.InvalidServer(supportContact = "admin@example.org"))
@@ -347,7 +347,7 @@ class OnBoardingPresenterTest {
         )
         presenter.test {
             skipItems(3)
-            awaitItem().eventSink(OnBoardingEvent.OnSignIn(A_HOMESERVER_URL_2))
+            awaitItem().eventSink(OnBoardingEvents.OnSignIn(A_HOMESERVER_URL_2))
             skipItems(1)
             val error = (awaitItem().loginModeState.loginMode as AsyncData.Failure).error
             assertThat(error).isEqualTo(ChangeServerError.InvalidServer())
