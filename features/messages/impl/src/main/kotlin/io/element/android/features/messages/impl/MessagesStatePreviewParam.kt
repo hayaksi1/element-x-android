@@ -24,6 +24,7 @@ import io.element.android.features.messages.impl.messagecomposer.aMessageCompose
 import io.element.android.features.messages.impl.pinned.banner.PinnedMessagesBannerState
 import io.element.android.features.messages.impl.pinned.banner.aLoadedPinnedMessagesBannerState
 import io.element.android.features.messages.impl.timeline.TimelineState
+import io.element.android.features.messages.impl.timeline.aTimelineItemEvent
 import io.element.android.features.messages.impl.timeline.aTimelineItemList
 import io.element.android.features.messages.impl.timeline.aTimelineState
 import io.element.android.features.messages.impl.timeline.components.customreaction.CustomReactionEvent
@@ -38,7 +39,7 @@ import io.element.android.features.messages.impl.timeline.protection.TimelinePro
 import io.element.android.features.messages.impl.timeline.protection.aTimelineProtectionState
 import io.element.android.features.roomcall.api.RoomCallState
 import io.element.android.features.roomcall.api.aStandByCallState
-import io.element.android.features.roommembermoderation.api.RoomMemberModerationEvents
+import io.element.android.features.roommembermoderation.api.RoomMemberModerationEvent
 import io.element.android.features.roommembermoderation.api.RoomMemberModerationPermissions
 import io.element.android.features.roommembermoderation.api.RoomMemberModerationState
 import io.element.android.libraries.architecture.AsyncData
@@ -50,14 +51,14 @@ import io.element.android.libraries.matrix.api.core.ThreadId
 import io.element.android.libraries.matrix.api.encryption.identity.IdentityState
 import io.element.android.libraries.matrix.api.room.tombstone.SuccessorRoom
 import io.element.android.libraries.matrix.api.timeline.Timeline
+import io.element.android.libraries.matrix.api.user.DisplayedStatus
 import io.element.android.libraries.textcomposer.model.MessageComposerMode
 import io.element.android.libraries.textcomposer.model.aTextEditorStateMarkdown
 import io.element.android.libraries.textcomposer.model.aTextEditorStateRich
-import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentSetOf
 
-open class MessagesStateProvider : PreviewParameterProvider<MessagesState> {
+open class MessagesStatePreviewParam : PreviewParameterProvider<MessagesState> {
     override val values: Sequence<MessagesState>
         get() = sequenceOf(
             aMessagesState(),
@@ -92,6 +93,7 @@ open class MessagesStateProvider : PreviewParameterProvider<MessagesState> {
                 composerState = aMessageComposerState(textEditorState = aTextEditorStateMarkdown()),
                 identityChangeState = anIdentityChangeState(listOf(aRoomMemberIdentityStateChange()))
             ),
+            aMessagesState(eventToRedact = aTimelineItemEvent()),
         )
 }
 
@@ -130,7 +132,9 @@ fun aMessagesState(
     ),
     isCurrentlySharingLiveLocationInRoom: Boolean = false,
     canSearch: Boolean = false,
+    dmUserStatus: DisplayedStatus? = null,
     eventSink: (MessagesEvent) -> Unit = {},
+    eventToRedact: TimelineItem.Event? = null,
 ) = MessagesState(
     roomId = RoomId("!id:domain"),
     roomName = roomName,
@@ -161,6 +165,8 @@ fun aMessagesState(
     threads = threads,
     showLiveLocationShareBanner = isCurrentlySharingLiveLocationInRoom,
     canSearch = canSearch,
+    dmUserStatus = dmUserStatus,
+    eventToRedact = eventToRedact,
     eventSink = eventSink,
 )
 
@@ -168,7 +174,7 @@ fun aRoomMemberModerationState(
     permissions: RoomMemberModerationPermissions = RoomMemberModerationPermissions.DEFAULT,
 ) = object : RoomMemberModerationState {
     override val permissions: RoomMemberModerationPermissions = permissions
-    override val eventSink: (RoomMemberModerationEvents) -> Unit = {}
+    override val eventSink: (RoomMemberModerationEvent) -> Unit = {}
 }
 
 fun aUserEventPermissions(
@@ -195,11 +201,9 @@ fun aReactionSummaryState(
 
 fun aCustomReactionState(
     target: CustomReactionState.Target = CustomReactionState.Target.None,
-    recentEmojis: ImmutableList<String> = persistentListOf(),
     eventSink: (CustomReactionEvent) -> Unit = {},
 ) = CustomReactionState(
     target = target,
-    recentEmojis = recentEmojis,
     selectedEmoji = persistentSetOf(),
     eventSink = eventSink,
 )
