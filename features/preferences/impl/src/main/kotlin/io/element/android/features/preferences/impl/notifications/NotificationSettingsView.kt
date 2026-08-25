@@ -201,6 +201,13 @@ private fun NotificationSettingsContentView(
                 isChecked = matrixSettings.atRoomNotificationsEnabled,
                 onCheckedChange = onMentionNotificationsChange
             )
+            PreferenceSwitch(
+                modifier = Modifier,
+                title = stringResource(id = R.string.screen_notification_settings_conversations_label),
+                subtitle = stringResource(id = R.string.screen_notification_settings_conversations_description),
+                isChecked = state.appSettings.conversationNotificationsEnabled,
+                onCheckedChange = { state.eventSink(NotificationSettingsEvent.SetConversationNotificationsEnabled(it)) },
+            )
         }
         SoundsPreferenceCategory(state = state)
         PreferenceCategory(title = stringResource(id = R.string.troubleshoot_notifications_entry_point_section)) {
