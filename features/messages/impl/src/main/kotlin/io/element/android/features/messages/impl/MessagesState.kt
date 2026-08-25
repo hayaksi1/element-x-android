@@ -18,6 +18,7 @@ import io.element.android.features.messages.impl.timeline.TimelineState
 import io.element.android.features.messages.impl.timeline.components.customreaction.CustomReactionState
 import io.element.android.features.messages.impl.timeline.components.reactionsummary.ReactionSummaryState
 import io.element.android.features.messages.impl.timeline.components.receipt.bottomsheet.ReadReceiptBottomSheetState
+import io.element.android.features.messages.impl.timeline.model.TimelineItem
 import io.element.android.features.messages.impl.timeline.protection.TimelineProtectionState
 import io.element.android.features.roomcall.api.RoomCallState
 import io.element.android.features.roommembermoderation.api.RoomMemberModerationState
@@ -63,6 +64,8 @@ data class MessagesState(
     val showLiveLocationShareBanner: Boolean,
     /** Whether the message search entry point is available in the top bar. */
     val canSearch: Boolean,
+    /** The event the user asked to remove, waiting for them to confirm and optionally give a reason. */
+    val eventToRedact: TimelineItem.Event?,
     val eventSink: (MessagesEvent) -> Unit
 ) {
     val isTombstoned = successorRoom != null

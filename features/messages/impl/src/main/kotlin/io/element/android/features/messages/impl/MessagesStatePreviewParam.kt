@@ -24,6 +24,7 @@ import io.element.android.features.messages.impl.messagecomposer.aMessageCompose
 import io.element.android.features.messages.impl.pinned.banner.PinnedMessagesBannerState
 import io.element.android.features.messages.impl.pinned.banner.aLoadedPinnedMessagesBannerState
 import io.element.android.features.messages.impl.timeline.TimelineState
+import io.element.android.features.messages.impl.timeline.aTimelineItemEvent
 import io.element.android.features.messages.impl.timeline.aTimelineItemList
 import io.element.android.features.messages.impl.timeline.aTimelineState
 import io.element.android.features.messages.impl.timeline.components.customreaction.CustomReactionEvent
@@ -92,6 +93,7 @@ open class MessagesStatePreviewParam : PreviewParameterProvider<MessagesState> {
                 composerState = aMessageComposerState(textEditorState = aTextEditorStateMarkdown()),
                 identityChangeState = anIdentityChangeState(listOf(aRoomMemberIdentityStateChange()))
             ),
+            aMessagesState(eventToRedact = aTimelineItemEvent()),
         )
 }
 
@@ -132,6 +134,7 @@ fun aMessagesState(
     canSearch: Boolean = false,
     dmUserStatus: DisplayedStatus? = null,
     eventSink: (MessagesEvent) -> Unit = {},
+    eventToRedact: TimelineItem.Event? = null,
 ) = MessagesState(
     roomId = RoomId("!id:domain"),
     roomName = roomName,
@@ -163,6 +166,7 @@ fun aMessagesState(
     showLiveLocationShareBanner = isCurrentlySharingLiveLocationInRoom,
     canSearch = canSearch,
     dmUserStatus = dmUserStatus,
+    eventToRedact = eventToRedact,
     eventSink = eventSink,
 )
 
