@@ -29,11 +29,14 @@ import io.element.android.libraries.matrix.api.timeline.item.event.EventContent
 import io.element.android.libraries.matrix.api.timeline.item.event.MembershipChange
 import io.element.android.libraries.matrix.api.timeline.item.event.OtherMessageType
 import io.element.android.libraries.matrix.api.timeline.item.event.OtherState
+import io.element.android.libraries.matrix.api.timeline.item.event.ProfileDetails
 import io.element.android.libraries.matrix.api.timeline.item.event.RoomMembershipContent
 import io.element.android.libraries.matrix.api.timeline.item.event.StateContent
 import io.element.android.libraries.matrix.test.A_USER_ID
+import io.element.android.libraries.matrix.test.A_USER_ID_2
 import io.element.android.libraries.matrix.test.FakeMatrixClient
 import io.element.android.libraries.matrix.test.permalink.FakePermalinkParser
+import io.element.android.libraries.matrix.test.room.aRoomMember
 import io.element.android.libraries.matrix.test.timeline.aMessageContent
 import io.element.android.libraries.matrix.test.timeline.anEventTimelineItem
 import io.element.android.libraries.matrix.test.timeline.item.event.aRoomMembershipContent
@@ -259,6 +262,74 @@ class TimelineItemsFactoryTest {
             TimelineItemGroupPosition.First,
             TimelineItemGroupPosition.Last,
         ).inOrder()
+    }
+
+    @Test
+    fun `a sender the timeline knows nothing about is named from the room member list`() = runTest {
+        val factory = aTimelineItemsFactory(
+            config = TimelineItemsFactoryConfig(
+                computeReadReceipts = false,
+                computeReactions = false,
+            )
+        )
+        val items = listOf(
+            MatrixTimelineItem.Event(
+                uniqueId = UniqueId("event-0"),
+                event = anEventTimelineItem(
+                    sender = A_USER_ID,
+                    senderProfile = ProfileDetails.Unavailable,
+                    content = aMessageContent(body = "A regular message"),
+                ),
+            ),
+        )
+        factory.timelineItems.test {
+            factory.replaceWith(
+                timelineItems = items,
+                roomMembers = listOf(aRoomMember(userId = A_USER_ID, displayName = "Alice")),
+                renderReadReceipts = false,
+            )
+            val event = awaitItem().filterIsInstance<TimelineItem.Event>().single()
+            assertThat(event.senderProfile).isEqualTo(
+                ProfileDetails.Ready(
+                    displayName = "Alice",
+                    displayNameAmbiguous = false,
+                    avatarUrl = null,
+                    displayedStatus = null,
+                )
+            )
+            assertThat(event.senderAvatar.name).isEqualTo("Alice")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a sender the room member list knows nothing about keeps the profile the timeline gave`() = runTest {
+        val factory = aTimelineItemsFactory(
+            config = TimelineItemsFactoryConfig(
+                computeReadReceipts = false,
+                computeReactions = false,
+            )
+        )
+        val items = listOf(
+            MatrixTimelineItem.Event(
+                uniqueId = UniqueId("event-0"),
+                event = anEventTimelineItem(
+                    sender = A_USER_ID,
+                    senderProfile = ProfileDetails.Unavailable,
+                    content = aMessageContent(body = "A regular message"),
+                ),
+            ),
+        )
+        factory.timelineItems.test {
+            factory.replaceWith(
+                timelineItems = items,
+                roomMembers = listOf(aRoomMember(userId = A_USER_ID_2, displayName = "Bob")),
+                renderReadReceipts = false,
+            )
+            val event = awaitItem().filterIsInstance<TimelineItem.Event>().single()
+            assertThat(event.senderProfile).isEqualTo(ProfileDetails.Unavailable)
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 
     private suspend fun TestScope.groupPositionsOf(timestamps: List<Long>): List<TimelineItemGroupPosition> {
