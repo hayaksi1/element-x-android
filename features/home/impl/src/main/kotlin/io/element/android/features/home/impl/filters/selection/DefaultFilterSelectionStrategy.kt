@@ -9,7 +9,6 @@
 package io.element.android.features.home.impl.filters.selection
 
 import dev.zacsweers.metro.ContributesBinding
-import dev.zacsweers.metro.Inject
 import io.element.android.features.home.impl.filters.RoomListFilter
 import io.element.android.libraries.core.data.tryOrNull
 import io.element.android.libraries.di.SessionScope
@@ -21,7 +20,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 @ContributesBinding(SessionScope::class)
-@Inject
 class DefaultFilterSelectionStrategy(
     private val sessionPreferencesStore: SessionPreferencesStore,
     @SessionCoroutineScope private val sessionCoroutineScope: CoroutineScope,
