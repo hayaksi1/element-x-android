@@ -30,10 +30,12 @@ import io.element.android.libraries.matrix.api.timeline.item.event.MembershipCha
 import io.element.android.libraries.matrix.api.timeline.item.event.OtherMessageType
 import io.element.android.libraries.matrix.api.timeline.item.event.OtherState
 import io.element.android.libraries.matrix.api.timeline.item.event.ProfileDetails
+import io.element.android.libraries.matrix.api.timeline.item.event.Receipt
 import io.element.android.libraries.matrix.api.timeline.item.event.RoomMembershipContent
 import io.element.android.libraries.matrix.api.timeline.item.event.StateContent
 import io.element.android.libraries.matrix.test.A_USER_ID
 import io.element.android.libraries.matrix.test.A_USER_ID_2
+import io.element.android.libraries.matrix.test.A_USER_ID_3
 import io.element.android.libraries.matrix.test.FakeMatrixClient
 import io.element.android.libraries.matrix.test.permalink.FakePermalinkParser
 import io.element.android.libraries.matrix.test.room.aRoomMember
@@ -41,6 +43,7 @@ import io.element.android.libraries.matrix.test.timeline.aMessageContent
 import io.element.android.libraries.matrix.test.timeline.anEventTimelineItem
 import io.element.android.libraries.matrix.test.timeline.item.event.aRoomMembershipContent
 import io.element.android.tests.testutils.testCoroutineDispatchers
+import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
@@ -328,6 +331,42 @@ class TimelineItemsFactoryTest {
             )
             val event = awaitItem().filterIsInstance<TimelineItem.Event>().single()
             assertThat(event.senderProfile).isEqualTo(ProfileDetails.Unavailable)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `the sender's own read receipt is not shown on their message`() = runTest {
+        val factory = aTimelineItemsFactory(
+            config = TimelineItemsFactoryConfig(
+                computeReadReceipts = true,
+                computeReactions = false,
+            )
+        )
+        val items = listOf(
+            MatrixTimelineItem.Event(
+                uniqueId = UniqueId("event-0"),
+                event = anEventTimelineItem(
+                    sender = A_USER_ID_2,
+                    content = aMessageContent(body = "A message from Bob"),
+                    receipts = persistentListOf(
+                        Receipt(userId = A_USER_ID_2, timestamp = 0L),
+                        Receipt(userId = A_USER_ID_3, timestamp = 1L),
+                    ),
+                ),
+            ),
+        )
+        factory.timelineItems.test {
+            factory.replaceWith(
+                timelineItems = items,
+                roomMembers = emptyList(),
+                renderReadReceipts = true,
+            )
+            val receipts = awaitItem()
+                .filterIsInstance<TimelineItem.Event>()
+                .flatMap { it.readReceiptState.receipts }
+                .map { it.avatarData.id }
+            assertThat(receipts).containsExactly(A_USER_ID_3.value)
             cancelAndIgnoreRemainingEvents()
         }
     }
