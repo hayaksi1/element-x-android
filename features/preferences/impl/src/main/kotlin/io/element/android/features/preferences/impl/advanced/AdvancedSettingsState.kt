@@ -21,6 +21,7 @@ data class AdvancedSettingsState(
     val isSharePresenceEnabled: Boolean,
     val isMarkdownEnabled: Boolean,
     val isRenderRedactedMessagesEnabled: Boolean,
+    val hideSpaceRooms: Boolean,
     val mediaOptimizationState: MediaOptimizationState?,
     val theme: ThemeOption,
     val availableThemeOptions: ImmutableList<ThemeOption>,
