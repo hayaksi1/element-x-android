@@ -8,6 +8,7 @@
 
 package io.element.android.features.home.impl.components
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -68,6 +69,8 @@ import io.element.android.libraries.matrix.ui.components.DisplayNameWithStatus
 import io.element.android.libraries.matrix.ui.components.InviteSenderView
 import io.element.android.libraries.matrix.ui.model.InviteSender
 import io.element.android.libraries.preferences.api.store.RoomListActivityVisibility
+import io.element.android.libraries.testtags.TestTags
+import io.element.android.libraries.testtags.testTag
 import io.element.android.libraries.ui.strings.CommonStrings
 import timber.log.Timber
 
@@ -79,6 +82,7 @@ internal fun RoomSummaryRow(
     hideInviteAvatars: Boolean,
     isInviteSeen: Boolean,
     onClick: (RoomListRoomSummary) -> Unit,
+    onAvatarClick: (RoomListRoomSummary) -> Unit,
     modifier: Modifier = Modifier,
     showUnreadCount: Boolean = false,
     activityVisibility: RoomListActivityVisibility = RoomListActivityVisibility.CURRENT,
@@ -94,6 +98,7 @@ internal fun RoomSummaryRow(
                     room = room,
                     hideAvatarImage = hideInviteAvatars,
                     onClick = onClick,
+                    onAvatarClick = onAvatarClick,
                     onLongClick = {
                         Timber.d("Long click on invite room")
                     },
@@ -123,6 +128,7 @@ internal fun RoomSummaryRow(
                 RoomSummaryScaffoldRow(
                     room = room,
                     onClick = onClick,
+                    onAvatarClick = onAvatarClick,
                     onLongClick = {
                         eventSink(RoomListEvent.ShowContextMenu(room))
                     },
@@ -145,6 +151,7 @@ internal fun RoomSummaryRow(
                 RoomSummaryScaffoldRow(
                     room = room,
                     onClick = onClick,
+                    onAvatarClick = onAvatarClick,
                     onLongClick = {
                         Timber.d("Long click on knocked room")
                     },
@@ -184,6 +191,7 @@ private fun RoomSummaryScaffoldRow(
     room: RoomListRoomSummary,
     onClick: (RoomListRoomSummary) -> Unit,
     onLongClick: (RoomListRoomSummary) -> Unit,
+    onAvatarClick: (RoomListRoomSummary) -> Unit,
     modifier: Modifier = Modifier,
     hideAvatarImage: Boolean = false,
     content: @Composable ColumnScope.() -> Unit
@@ -216,6 +224,14 @@ private fun RoomSummaryScaffoldRow(
                 )
             },
             hideImage = hideAvatarImage,
+            modifier = Modifier
+                .clickable(
+                    enabled = room.avatarData.url != null && !hideAvatarImage,
+                    onClickLabel = stringResource(CommonStrings.action_view),
+                ) {
+                    onAvatarClick(room)
+                }
+                .testTag(TestTags.roomListAvatar),
         )
         Spacer(modifier = Modifier.width(16.dp))
         Column(
@@ -470,6 +486,7 @@ internal fun RoomSummaryRowPreview(@PreviewParameter(RoomListRoomSummaryPreviewP
         // Set isInviteSeen to true for the preview when the room has name "Bob"
         isInviteSeen = data.name == "Bob",
         onClick = {},
+        onAvatarClick = {},
         eventSink = {},
     )
 }
