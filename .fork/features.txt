@@ -26,6 +26,7 @@ fix/7270-emoji-picker-keyboard
 fix/786-top-bar-hitbox
 search/backfill-sweep
 search/matrix-layer
+feat/fork-misc
 #
 # Deliberately NOT listed (branches still exist, nothing was deleted):
 #   tmp-7538                      scratch branch owned by another session
