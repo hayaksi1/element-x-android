@@ -22,9 +22,9 @@ import kotlinx.coroutines.flow.updateAndGet
 
 class InMemoryAppPreferencesStore(
     isDeveloperModeEnabled: Boolean = false,
+    showDeveloperSettings: Boolean = false,
     hideSpaceRooms: Boolean = false,
     isConversationNotificationsEnabled: Boolean = true,
-    showDeveloperSettings: Boolean = false,
     customElementCallBaseUrl: String? = null,
     hideInviteAvatars: Boolean? = null,
     timelineMediaPreviewValue: MediaPreviewValue? = null,
@@ -42,9 +42,9 @@ class InMemoryAppPreferencesStore(
     callRingtoneDisplayName: String? = null,
 ) : AppPreferencesStore {
     private val isDeveloperModeEnabled = MutableStateFlow(isDeveloperModeEnabled)
+    private val showDeveloperSettings = MutableStateFlow(showDeveloperSettings)
     private val hideSpaceRooms = MutableStateFlow(hideSpaceRooms)
     private val isConversationNotificationsEnabled = MutableStateFlow(isConversationNotificationsEnabled)
-    private val showDeveloperSettings = MutableStateFlow(showDeveloperSettings)
     private val customElementCallBaseUrl = MutableStateFlow(customElementCallBaseUrl)
     private val theme = MutableStateFlow(theme)
     private val roomListActivityVisibility = MutableStateFlow(roomListActivityVisibility)
@@ -77,6 +77,14 @@ class InMemoryAppPreferencesStore(
         return isDeveloperModeEnabled
     }
 
+    override suspend fun setShowDeveloperSettings(show: Boolean) {
+        showDeveloperSettings.value = show
+    }
+
+    override fun showDeveloperSettingsFlow(): Flow<Boolean> {
+        return showDeveloperSettings
+    }
+
     override suspend fun setHideSpaceRooms(hide: Boolean) {
         hideSpaceRooms.value = hide
     }
@@ -91,14 +99,6 @@ class InMemoryAppPreferencesStore(
 
     override fun isConversationNotificationsEnabledFlow(): Flow<Boolean> {
         return isConversationNotificationsEnabled
-    }
-
-    override suspend fun setShowDeveloperSettings(show: Boolean) {
-        showDeveloperSettings.value = show
-    }
-
-    override fun showDeveloperSettingsFlow(): Flow<Boolean> {
-        return showDeveloperSettings
     }
 
     override suspend fun setCustomElementCallBaseUrl(string: String?) {

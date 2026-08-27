@@ -32,9 +32,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 private val developerModeKey = booleanPreferencesKey("developerMode")
+private val showDeveloperSettingsKey = booleanPreferencesKey("showDeveloperSettings")
 private val hideSpaceRoomsKey = booleanPreferencesKey("hideSpaceRooms")
 private val conversationNotificationsKey = booleanPreferencesKey("conversationNotifications")
-private val showDeveloperSettingsKey = booleanPreferencesKey("showDeveloperSettings")
 private val customElementCallBaseUrlKey = stringPreferencesKey("elementCallBaseUrl")
 private val themeKey = stringPreferencesKey("theme")
 private val roomListActivityVisibilityKey = stringPreferencesKey("roomListActivityVisibility")
@@ -75,18 +75,16 @@ class DefaultAppPreferencesStore(
         }
     }
 
-    override suspend fun setRoomListActivityVisibility(visibility: RoomListActivityVisibility) {
+    override suspend fun setShowDeveloperSettings(show: Boolean) {
         store.edit { prefs ->
-            prefs[roomListActivityVisibilityKey] = visibility.name
+            prefs[showDeveloperSettingsKey] = show
         }
     }
 
-    override fun getRoomListActivityVisibilityFlow(): Flow<RoomListActivityVisibility> {
+    override fun showDeveloperSettingsFlow(): Flow<Boolean> {
         return store.data.map { prefs ->
-            prefs[roomListActivityVisibilityKey]
-                ?.let { runCatchingExceptions { RoomListActivityVisibility.valueOf(it) }.getOrNull() }
-                ?: RoomListActivityVisibility.CURRENT
-    }
+            prefs[showDeveloperSettingsKey] ?: (buildMeta.buildType != BuildType.RELEASE)
+        }
     }
 
     override suspend fun setHideSpaceRooms(hide: Boolean) {
@@ -98,7 +96,7 @@ class DefaultAppPreferencesStore(
     override fun hideSpaceRoomsFlow(): Flow<Boolean> {
         return store.data.map { prefs ->
             prefs[hideSpaceRoomsKey] ?: false
-    }
+        }
     }
 
     override suspend fun setConversationNotificationsEnabled(enabled: Boolean) {
@@ -110,18 +108,20 @@ class DefaultAppPreferencesStore(
     override fun isConversationNotificationsEnabledFlow(): Flow<Boolean> {
         return store.data.map { prefs ->
             prefs[conversationNotificationsKey] ?: true
-    }
-    }
-
-    override suspend fun setShowDeveloperSettings(show: Boolean) {
-        store.edit { prefs ->
-            prefs[showDeveloperSettingsKey] = show
         }
     }
 
-    override fun showDeveloperSettingsFlow(): Flow<Boolean> {
+    override suspend fun setRoomListActivityVisibility(visibility: RoomListActivityVisibility) {
+        store.edit { prefs ->
+            prefs[roomListActivityVisibilityKey] = visibility.name
+        }
+    }
+
+    override fun getRoomListActivityVisibilityFlow(): Flow<RoomListActivityVisibility> {
         return store.data.map { prefs ->
-            prefs[showDeveloperSettingsKey] ?: (buildMeta.buildType != BuildType.RELEASE)
+            prefs[roomListActivityVisibilityKey]
+                ?.let { runCatchingExceptions { RoomListActivityVisibility.valueOf(it) }.getOrNull() }
+                ?: RoomListActivityVisibility.CURRENT
         }
     }
 

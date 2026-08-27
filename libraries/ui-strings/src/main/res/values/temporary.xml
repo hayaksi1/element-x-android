@@ -10,6 +10,8 @@
     <string name="a11y_state_collapsed">"Collapsed"</string>
     <string name="a11y_active">Active</string>
     <string name="a11y_inactive">Inactive</string>
+    <string name="screen_message_search_title">Search messages</string>
+    <string name="screen_message_search_error">Something went wrong while searching. Please try again.</string>
     <string name="screen_permission_rationale_title">Data access</string>
     <string name="screen_permission_rationale_subtitle">These permissions are only used for the features listed below, and only while you are using them.</string>
     <string name="screen_permission_rationale_camera_title">Camera</string>
@@ -20,6 +22,7 @@
     <string name="screen_permission_rationale_location_description">Sharing your location in a room.</string>
     <string name="screen_permission_rationale_notifications_title">Notifications</string>
     <string name="screen_permission_rationale_notifications_description">Letting you know about new messages, invitations and calls.</string>
-    <string name="screen_message_search_title">Search messages</string>
-    <string name="screen_message_search_error">Something went wrong while searching. Please try again.</string>
+    <string name="common_optional">"(Optional)"</string>
+    <string name="screen_room_confirm_removal_title">"Confirm removal"</string>
+    <string name="screen_room_confirm_removal_message">"Are you sure you wish to remove this message?"</string>
 </resources>

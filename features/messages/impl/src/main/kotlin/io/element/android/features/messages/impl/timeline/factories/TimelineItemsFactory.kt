@@ -75,9 +75,7 @@ class TimelineItemsFactory(
         lock.withLock {
             val displayableItems = timelineItems.keepDisplayableTimelineEvents()
             diffCacheUpdater.updateWith(displayableItems)
-            buildAndEmitTimelineItemStates(displayableItems, roomMembers, renderReadReceipts)
-            diffCacheUpdater.updateWith(timelineItems)
-            buildAndEmitTimelineItemStates(timelineItems, roomMembers, renderReadReceipts, renderRedactedMessages)
+            buildAndEmitTimelineItemStates(displayableItems, roomMembers, renderReadReceipts, renderRedactedMessages)
         }
     }
 
@@ -108,12 +106,9 @@ class TimelineItemsFactory(
                 newTimelineItemStates.add(updatedItem)
             }
         }
-        val renderableItems = newTimelineItemStates.filterNot { it.isStateEventWithBlankBody() }
-        val renderableItems = if (renderRedactedMessages) {
-            newTimelineItemStates
-        } else {
-            newTimelineItemStates.filterNot { it.isRedactedEvent() }
-        }
+        val renderableItems = newTimelineItemStates
+            .filterNot { it.isStateEventWithBlankBody() }
+            .filterNot { !renderRedactedMessages && it.isRedactedEvent() }
         val result = timelineItemGrouper.group(renderableItems).toImmutableList()
         this._timelineItems.emit(result)
     }
@@ -143,12 +138,12 @@ private fun TimelineItem.isRedactedEvent(): Boolean {
     return (this as? TimelineItem.Event)?.content is TimelineItemRedactedContent
 }
 
-private fun EventTimelineItem.isKeyVerificationRequest(): Boolean {
-    val messageType = (content as? MessageContent)?.type
-    return messageType is OtherMessageType && messageType.isKeyVerificationRequest
-}
-
 private fun TimelineItem.isStateEventWithBlankBody(): Boolean {
     val content = (this as? TimelineItem.Event)?.content
     return content is TimelineItemStateContent && content.body.isBlank()
+}
+
+private fun EventTimelineItem.isKeyVerificationRequest(): Boolean {
+    val messageType = (content as? MessageContent)?.type
+    return messageType is OtherMessageType && messageType.isKeyVerificationRequest
 }

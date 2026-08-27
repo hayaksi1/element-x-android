@@ -86,7 +86,8 @@ private object CustomHtmlToDomParser {
             heading.appendChild(bold)
             heading.tagName("p")
         }
-        return document.body().html()    }
+        return document.body().html()
+    }
 
     /**
      * `summary` is not in [safeList], so its content would be merged into the text of the

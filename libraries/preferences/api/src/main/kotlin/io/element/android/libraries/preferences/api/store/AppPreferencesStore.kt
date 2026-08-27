@@ -29,12 +29,22 @@ interface AppPreferencesStore {
     fun isDeveloperModeEnabledFlow(): Flow<Boolean>
 
     /**
+     * @param show true to list the developer options entry in the settings.
+     */
+    suspend fun setShowDeveloperSettings(show: Boolean)
+
+    /** Whether the developer options entry is listed in the settings; defaults to `true` on non release builds. */
+    fun showDeveloperSettingsFlow(): Flow<Boolean>
+
+    /**
      * @param hide true to leave the rooms which belong to a space out of the room list.
      */
     suspend fun setHideSpaceRooms(hide: Boolean)
 
     /** Whether the rooms which belong to a space are left out of the room list; defaults to `false`. */
     fun hideSpaceRoomsFlow(): Flow<Boolean>
+
+    /**
      * @param enabled true to publish room notifications as Android conversations, which lets the system show them as such and
      * lets Do Not Disturb treat them as conversations.
      */
@@ -42,12 +52,6 @@ interface AppPreferencesStore {
 
     /** Whether room notifications are published as Android conversations; defaults to `true`. */
     fun isConversationNotificationsEnabledFlow(): Flow<Boolean>
-     * @param show true to list the developer options entry in the settings.
-     */
-    suspend fun setShowDeveloperSettings(show: Boolean)
-
-    /** Whether the developer options entry is listed in the settings; defaults to `true` on non release builds. */
-    fun showDeveloperSettingsFlow(): Flow<Boolean>
 
     /**
      * @param string the Element Call deployment to use, or `null` to go back to the one from the homeserver.

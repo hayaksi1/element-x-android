@@ -151,8 +151,8 @@ fun MessagesView(
     onJoinCallClick: (isAudioCall: Boolean) -> Unit,
     onViewAllPinnedMessagesClick: () -> Unit,
     onThreadsListClick: () -> Unit,
-    knockRequestsBannerView: @Composable () -> Unit,
     onSearchClick: () -> Unit,
+    knockRequestsBannerView: @Composable () -> Unit,
     modifier: Modifier = Modifier,
     forceJumpToBottomVisibility: Boolean = false,
     customReactionBottomSheet: @Composable () -> Unit,
@@ -461,11 +461,12 @@ fun MessagesView(
         },
     )
 
-    if (state.eventToRedact != null) {
+    if (state.redactEventAction is MessagesState.ConfirmingRedaction) {
         TextFieldDialog(
-            title = stringResource(CommonStrings.action_remove_message),
-            label = stringResource(CommonStrings.common_reason),
-            placeholder = null,
+            title = stringResource(CommonStrings.screen_room_confirm_removal_title),
+            content = stringResource(CommonStrings.screen_room_confirm_removal_message),
+            placeholder = stringResource(CommonStrings.common_reason),
+            supportingText = stringResource(CommonStrings.common_optional),
             value = null,
             submitText = stringResource(CommonStrings.action_remove),
             destructiveSubmit = true,

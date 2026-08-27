@@ -10,7 +10,6 @@ package io.element.android.libraries.push.impl.notifications.conversations
 
 import android.content.Context
 import android.content.Intent
-import android.content.pm.ShortcutInfo
 import android.os.Build
 import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
@@ -55,35 +54,14 @@ class DefaultNotificationConversationServiceTest : RobolectricTest() {
     }
 
     @Test
-    fun `the shortcut is offered to the share sheet as a conversation`() = runTest {
-        val context = InstrumentationRegistry.getInstrumentation().context
-        val service = createService(context)
-
-        service.onSendMessage(
-            sessionId = A_SESSION_ID,
-            roomId = A_ROOM_ID,
-            roomName = "Room title",
-            roomIsDirect = false,
-            roomAvatarUrl = null,
-        )
-
-        val shortcut = ShortcutManagerCompat.getDynamicShortcuts(context).single()
-        assertThat(shortcut.categories).containsAtLeast(
-            ShortcutInfo.SHORTCUT_CATEGORY_CONVERSATION,
-            // Matches the <share-target> category in app/src/main/res/xml/shortcuts.xml
-            "io.element.android.category.SHARE_TARGET",
-        )
-    }
-
-    @Test
-    fun `onSendMessage adds no shortcut when conversation notifications are off`() = runTest {
+    fun `onMessageInRoom adds no shortcut when conversation notifications are off`() = runTest {
         val context = InstrumentationRegistry.getInstrumentation().context
         val service = createService(
             context = context,
             appPreferencesStore = InMemoryAppPreferencesStore(isConversationNotificationsEnabled = false),
         )
 
-        service.onSendMessage(
+        service.onMessageInRoom(
             sessionId = A_SESSION_ID,
             roomId = A_ROOM_ID,
             roomName = "Room title",

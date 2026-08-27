@@ -43,12 +43,6 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import timber.log.Timber
 
-/**
- * Category shared with the `<share-target>` in `app/src/main/res/xml/shortcuts.xml`. The system only offers a shortcut
- * in the Direct Share row of the share sheet when the two match, so the literal has to be kept in step with that file.
- */
-private const val SHARE_TARGET_CATEGORY = "io.element.android.category.SHARE_TARGET"
-
 @SingleIn(AppScope::class)
 @ContributesBinding(AppScope::class)
 class DefaultNotificationConversationService(
@@ -109,8 +103,7 @@ class DefaultNotificationConversationService(
         }
 
         val categories = setOfNotNull(
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N_MR1) ShortcutInfo.SHORTCUT_CATEGORY_CONVERSATION else null,
-            SHARE_TARGET_CATEGORY,
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N_MR1) ShortcutInfo.SHORTCUT_CATEGORY_CONVERSATION else null
         )
 
         val client = matrixClientProvider.getOrRestore(sessionId).getOrNull() ?: return

@@ -40,6 +40,7 @@ import io.element.android.libraries.matrix.api.permalink.PermalinkBuilder
 import io.element.android.libraries.matrix.api.room.JoinedRoom
 import io.element.android.libraries.matrix.api.timeline.Timeline
 import io.element.android.libraries.matrix.test.A_CAPTION
+import io.element.android.libraries.matrix.test.A_THREAD_ID
 import io.element.android.libraries.matrix.test.media.FakeMediaUploadHandler
 import io.element.android.libraries.matrix.test.permalink.FakePermalinkBuilder
 import io.element.android.libraries.matrix.test.room.FakeJoinedRoom
@@ -75,7 +76,9 @@ import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
@@ -437,16 +440,17 @@ class AttachmentsPreviewPresenterTest : RobolectricTest() {
 
     @Test
     fun `present - dismissing the progress dialog stops media upload`() = runTest {
-        val onDoneListenerResult = lambdaRecorder<Unit> {}
+        val uploadHandler = FakeMediaUploadHandler()
         val presenter = createAttachmentsPreviewPresenter(
             room = FakeJoinedRoom(
                 liveTimeline = FakeTimeline().apply {
                     sendFileLambda = { _, _, _, _, _ ->
-                        Result.success(FakeMediaUploadHandler())
+                        Result.success(uploadHandler)
                     }
                 }
             ),
-            onDoneListener = onDoneListenerResult,
+            // The upload must never complete, so the done listener must never be called
+            onDoneListener = OnDoneListener { lambdaError() },
         )
         presenter.test {
             skipItems(1)
@@ -456,8 +460,14 @@ class AttachmentsPreviewPresenterTest : RobolectricTest() {
             assertThat(awaitItem().sendActionState).isEqualTo(SendActionState.Sending.Processing(displayProgress = false))
             assertThat(awaitItem().sendActionState).isEqualTo(SendActionState.Sending.ReadyToUpload(listOf(mediaUploadInfo)))
             assertThat(awaitItem().sendActionState).isEqualTo(SendActionState.Sending.Uploading(listOf(mediaUploadInfo)))
+            // Let the upload start before cancelling it: FakeTimeline.sendFile only returns the handler after a delay
+            advanceTimeBy(1)
+            runCurrent()
             initialState.eventSink(AttachmentsPreviewEvent.CancelAndClearSendState)
             assertThat(awaitItem().sendActionState).isEqualTo(SendActionState.Sending.ReadyToUpload(listOf(mediaUploadInfo)))
+            // The upload itself is aborted, not only the coroutine awaiting it
+            uploadHandler.assertCancelled()
+            advanceUntilIdle()
             // The sending is cancelled and the state is kept at ReadyToUpload
             ensureAllEventsConsumed()
         }
@@ -933,6 +943,108 @@ class AttachmentsPreviewPresenterTest : RobolectricTest() {
         }
     }
 
+    @Test
+    fun `present - a handed over caption pre-fills the caption editor`() = runTest {
+        val presenter = createAttachmentsPreviewPresenter(caption = A_CAPTION)
+        presenter.test {
+            skipItems(1)
+            val initialState = awaitItem()
+            assertThat(initialState.textEditorState.messageMarkdown(FakePermalinkBuilder())).isEqualTo(A_CAPTION)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `present - without a handed over caption the caption editor is empty`() = runTest {
+        val presenter = createAttachmentsPreviewPresenter(caption = null)
+        presenter.test {
+            skipItems(1)
+            val initialState = awaitItem()
+            assertThat(initialState.textEditorState.messageMarkdown(FakePermalinkBuilder())).isEmpty()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `present - sending an attachment reports the handed over caption as sent`() = runTest {
+        val attachmentCaptionHandOver = AttachmentCaptionHandOver()
+        val presenter = createAttachmentsPreviewPresenter(
+            room = aRoomAcceptingFiles(),
+            caption = A_CAPTION,
+            attachmentCaptionHandOver = attachmentCaptionHandOver,
+            onDoneListener = { },
+        )
+        presenter.test {
+            skipItems(1)
+            awaitItem().eventSink(AttachmentsPreviewEvent.SendAttachment)
+            consumeItemsUntilPredicate { it.sendActionState == SendActionState.Done }
+            assertThat(attachmentCaptionHandOver.consumeSent(Timeline.Mode.Live)).isTrue()
+        }
+    }
+
+    @Test
+    fun `present - sending an attachment without a handed over caption reports nothing`() = runTest {
+        val attachmentCaptionHandOver = AttachmentCaptionHandOver()
+        val presenter = createAttachmentsPreviewPresenter(
+            room = aRoomAcceptingFiles(),
+            caption = null,
+            attachmentCaptionHandOver = attachmentCaptionHandOver,
+            onDoneListener = { },
+        )
+        presenter.test {
+            skipItems(1)
+            awaitItem().eventSink(AttachmentsPreviewEvent.SendAttachment)
+            consumeItemsUntilPredicate { it.sendActionState == SendActionState.Done }
+            assertThat(attachmentCaptionHandOver.consumeSent(Timeline.Mode.Live)).isFalse()
+        }
+    }
+
+    @Test
+    fun `present - cancelling a preview does not report the handed over caption as sent`() = runTest {
+        val attachmentCaptionHandOver = AttachmentCaptionHandOver()
+        val presenter = createAttachmentsPreviewPresenter(
+            caption = A_CAPTION,
+            attachmentCaptionHandOver = attachmentCaptionHandOver,
+            temporaryUriDeleter = FakeTemporaryUriDeleter { },
+            onDoneListener = { },
+        )
+        presenter.test {
+            skipItems(1)
+            awaitItem().eventSink(AttachmentsPreviewEvent.CancelAndDismiss)
+            consumeItemsUntilPredicate { it.sendActionState == SendActionState.Done }
+            assertThat(attachmentCaptionHandOver.consumeSent(Timeline.Mode.Live)).isFalse()
+        }
+    }
+
+    @Test
+    fun `present - sending an attachment in a thread reports the caption for that thread only`() = runTest {
+        val attachmentCaptionHandOver = AttachmentCaptionHandOver()
+        val presenter = createAttachmentsPreviewPresenter(
+            room = aRoomAcceptingFiles(),
+            timelineMode = Timeline.Mode.Thread(A_THREAD_ID),
+            caption = A_CAPTION,
+            attachmentCaptionHandOver = attachmentCaptionHandOver,
+            onDoneListener = { },
+        )
+        presenter.test {
+            skipItems(1)
+            awaitItem().eventSink(AttachmentsPreviewEvent.SendAttachment)
+            consumeItemsUntilPredicate { it.sendActionState == SendActionState.Done }
+            assertThat(attachmentCaptionHandOver.consumeSent(Timeline.Mode.Live)).isFalse()
+            assertThat(attachmentCaptionHandOver.consumeSent(Timeline.Mode.Thread(A_THREAD_ID))).isTrue()
+        }
+    }
+
+    private fun aRoomAcceptingFiles(): FakeJoinedRoom {
+        val timeline = FakeTimeline().apply {
+            sendFileLambda = { _, _, _, _, _ -> Result.success(FakeMediaUploadHandler()) }
+        }
+        return FakeJoinedRoom(
+            liveTimeline = timeline,
+            createTimelineResult = { Result.success(timeline) },
+        )
+    }
+
     private fun TestScope.createAttachmentsPreviewPresenter(
         attachments: List<Attachment> = listOf(
             aMediaAttachment(
@@ -977,6 +1089,8 @@ class AttachmentsPreviewPresenterTest : RobolectricTest() {
             }
         },
         videoCompressionPresetSelector: VideoCompressionPresetSelector = VideoCompressionPresetSelector(),
+        caption: String? = null,
+        attachmentCaptionHandOver: AttachmentCaptionHandOver = AttachmentCaptionHandOver(),
     ): AttachmentsPreviewPresenter {
         return AttachmentsPreviewPresenter(
             attachments = attachments.toImmutableList(),
@@ -1000,6 +1114,8 @@ class AttachmentsPreviewPresenterTest : RobolectricTest() {
             videoCompressionPresetSelector = videoCompressionPresetSelector,
             timelineMode = timelineMode,
             inReplyToEventId = null,
+            caption = caption,
+            attachmentCaptionHandOver = attachmentCaptionHandOver,
             mediaOptimizationConfigProvider = mediaOptimizationConfigProvider,
         )
     }

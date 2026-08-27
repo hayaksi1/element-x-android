@@ -24,6 +24,8 @@ class InMemorySessionPreferencesStore(
     isRecoveryBannerDismissed: Boolean = false,
     doesCompressMedia: Boolean = true,
     videoCompressionPreset: VideoCompressionPreset = VideoCompressionPreset.STANDARD,
+    selectedRoomListFilters: Set<String> = emptySet(),
+    isMarkdownEnabled: Boolean = true,
 ) : SessionPreferencesStore {
     private val isSharePresenceEnabled = MutableStateFlow(isSharePresenceEnabled)
     private val isSendPublicReadReceiptsEnabled = MutableStateFlow(isSendPublicReadReceiptsEnabled)
@@ -35,6 +37,8 @@ class InMemorySessionPreferencesStore(
     private val isRecoveryBannerDismissed = MutableStateFlow(isRecoveryBannerDismissed)
     private val doesCompressMedia = MutableStateFlow(doesCompressMedia)
     private val videoCompressionPreset = MutableStateFlow(videoCompressionPreset)
+    private val selectedRoomListFilters = MutableStateFlow(selectedRoomListFilters)
+    private val isMarkdownEnabled = MutableStateFlow(isMarkdownEnabled)
     var clearCallCount = 0
         private set
 
@@ -99,6 +103,18 @@ class InMemorySessionPreferencesStore(
     override fun getVideoCompressionPreset(): Flow<VideoCompressionPreset> {
         return videoCompressionPreset
     }
+
+    override suspend fun setSelectedRoomListFilters(filters: Set<String>) {
+        selectedRoomListFilters.tryEmit(filters)
+    }
+
+    override fun getSelectedRoomListFilters(): Flow<Set<String>> = selectedRoomListFilters
+
+    override suspend fun setMarkdownEnabled(enabled: Boolean) {
+        isMarkdownEnabled.tryEmit(enabled)
+    }
+
+    override fun isMarkdownEnabled(): Flow<Boolean> = isMarkdownEnabled
 
     override suspend fun clear() {
         clearCallCount++

@@ -24,6 +24,7 @@ import dev.zacsweers.metro.Assisted
 import dev.zacsweers.metro.AssistedFactory
 import dev.zacsweers.metro.AssistedInject
 import io.element.android.features.messages.impl.attachments.Attachment
+import io.element.android.features.messages.impl.attachments.AttachmentCaptionHandOver
 import io.element.android.features.messages.impl.attachments.preview.imageeditor.AttachmentImageEditor
 import io.element.android.features.messages.impl.attachments.preview.imageeditor.AttachmentImageEditorState
 import io.element.android.features.messages.impl.attachments.preview.imageeditor.AttachmentImageEdits
@@ -66,10 +67,12 @@ class AttachmentsPreviewPresenter(
     @Assisted private val onDoneListener: OnDoneListener,
     @Assisted private val timelineMode: Timeline.Mode,
     @Assisted private val inReplyToEventId: EventId?,
+    @Assisted private val caption: String?,
     mediaSenderFactory: MediaSenderFactory,
     private val permalinkBuilder: PermalinkBuilder,
     private val temporaryUriDeleter: TemporaryUriDeleter,
     private val attachmentImageEditor: AttachmentImageEditor,
+    private val attachmentCaptionHandOver: AttachmentCaptionHandOver,
     private val mediaOptimizationSelectorPresenterFactory: MediaOptimizationSelectorPresenter.Factory,
     private val videoCompressionPresetSelector: VideoCompressionPresetSelector,
     @SessionCoroutineScope private val sessionCoroutineScope: CoroutineScope,
@@ -83,6 +86,7 @@ class AttachmentsPreviewPresenter(
             timelineMode: Timeline.Mode,
             onDoneListener: OnDoneListener,
             inReplyToEventId: EventId?,
+            caption: String?,
         ): AttachmentsPreviewPresenter
     }
 
@@ -106,12 +110,13 @@ class AttachmentsPreviewPresenter(
         var displayImageEditError by remember { mutableStateOf(false) }
         var editedTempFiles by remember { mutableStateOf<Map<Int, File>>(emptyMap()) }
 
-        val markdownTextEditorState = rememberMarkdownTextEditorState(initialText = null, initialFocus = false)
+        val markdownTextEditorState = rememberMarkdownTextEditorState(initialText = caption, initialFocus = false)
         val textEditorState by rememberUpdatedState(
             TextEditorState.Markdown(markdownTextEditorState, isRoomEncrypted = null)
         )
 
         val ongoingSendAttachmentJob = remember { mutableStateOf<Job?>(null) }
+        val ongoingUploadJob = remember { mutableStateOf<Job?>(null) }
 
         var currentIndex by remember { mutableIntStateOf(0) }
 
@@ -264,7 +269,7 @@ class AttachmentsPreviewPresenter(
                         editedTempFiles = emptyMap()
 
                         // Send the media using the session coroutine scope so it doesn't matter if this screen or the chat one are closed
-                        sessionCoroutineScope.launch(dispatchers.io) {
+                        ongoingUploadJob.value = sessionCoroutineScope.launch(dispatchers.io) {
                             sendMedia(
                                 mediaUploadInfos = allMediaUploadInfos,
                                 caption = caption,
@@ -298,10 +303,16 @@ class AttachmentsPreviewPresenter(
                     )
                 }
                 AttachmentsPreviewEvent.CancelAndClearSendState -> {
-                    // Cancel media sending
+                    // Cancel media sending. The upload is aborted first: cancelling the coroutine that awaits it
+                    // would only detach from it and leave the upload running.
+                    mediaSender.cancelOngoingUploads()
                     ongoingSendAttachmentJob.value?.let {
                         it.cancel()
                         ongoingSendAttachmentJob.value = null
+                    }
+                    ongoingUploadJob.value?.let {
+                        it.cancel()
+                        ongoingUploadJob.value = null
                     }
 
                     val mediaUploadInfoList = sendActionState.value.mediaUploadInfoList()
@@ -548,6 +559,9 @@ class AttachmentsPreviewPresenter(
     }.fold(
         onSuccess = {
             mediaUploadInfos.forEach { cleanUp(it) }
+            if (this.caption != null) {
+                attachmentCaptionHandOver.onSent(timelineMode)
+            }
             sendActionState.value = SendActionState.Done
             onDoneListener()
         },

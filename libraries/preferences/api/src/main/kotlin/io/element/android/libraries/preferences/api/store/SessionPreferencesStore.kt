@@ -97,6 +97,22 @@ interface SessionPreferencesStore {
     /** The video compression preset; defaults to [VideoCompressionPreset.STANDARD], including when the stored value is unreadable. */
     fun getVideoCompressionPreset(): Flow<VideoCompressionPreset>
 
+    /**
+     * @param filters the names of the room list filters the user has selected.
+     */
+    suspend fun setSelectedRoomListFilters(filters: Set<String>)
+
+    /** The names of the room list filters the user has selected; defaults to none. */
+    fun getSelectedRoomListFilters(): Flow<Set<String>>
+
+    /**
+     * @param enabled true to turn the markdown in a message into formatting when it is sent.
+     */
+    suspend fun setMarkdownEnabled(enabled: Boolean)
+
+    /** Whether markdown typed in the composer is turned into formatting; defaults to `true`. */
+    fun isMarkdownEnabled(): Flow<Boolean>
+
     /** Erases every preference of this session, so they all fall back to their defaults. */
     suspend fun clear()
 }
