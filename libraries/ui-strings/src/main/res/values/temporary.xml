@@ -22,4 +22,7 @@
     <string name="screen_permission_rationale_location_description">Sharing your location in a room.</string>
     <string name="screen_permission_rationale_notifications_title">Notifications</string>
     <string name="screen_permission_rationale_notifications_description">Letting you know about new messages, invitations and calls.</string>
+    <string name="common_optional">"(Optional)"</string>
+    <string name="screen_room_confirm_removal_title">"Confirm removal"</string>
+    <string name="screen_room_confirm_removal_message">"Are you sure you wish to remove this message?"</string>
 </resources>
