@@ -45,7 +45,7 @@ class DeclineAndBlockViewTest : RobolectricTest() {
     @Test
     fun `a successful decline invokes the expected callback`() = runAndroidComposeUiTest {
         val eventsRecorder = EventsRecorder<DeclineAndBlockEvent>(expectEvents = false)
-        val eventsRecorder = EventsRecorder<DeclineAndBlockEvents>(expectEvents = false)
+        val eventsRecorder = EventsRecorder<DeclineAndBlockEvent>(expectEvents = false)
         ensureCalledOnce {
             setDeclineAndBlockView(
                 aDeclineAndBlockState(

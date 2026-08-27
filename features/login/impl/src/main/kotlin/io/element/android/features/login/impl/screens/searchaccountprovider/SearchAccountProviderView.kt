@@ -44,7 +44,7 @@ import io.element.android.compound.tokens.generated.CompoundIcons
 import io.element.android.features.login.impl.R
 import io.element.android.features.login.impl.accountprovider.AccountProvider
 import io.element.android.features.login.impl.accountprovider.AccountProviderView
-import io.element.android.features.login.impl.changeserver.ChangeServerEvents
+import io.element.android.features.login.impl.changeserver.ChangeServerEvent
 import io.element.android.features.login.impl.changeserver.ChangeServerView
 import io.element.android.features.login.impl.resolver.HomeserverData
 import io.element.android.libraries.architecture.AsyncData
@@ -172,7 +172,7 @@ fun SearchAccountProviderView(
                             AccountProviderView(
                                 item = item,
                                 onClick = {
-                                    state.changeServerState.eventSink.invoke(ChangeServerEvents.ChangeServer(item))
+                                    state.changeServerState.eventSink.invoke(ChangeServerEvent.ChangeServer(item))
                                 }
                             )
                         }

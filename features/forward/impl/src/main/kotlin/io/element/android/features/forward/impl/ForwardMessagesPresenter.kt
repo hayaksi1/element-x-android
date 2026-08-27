@@ -53,8 +53,8 @@ class ForwardMessagesPresenter(
         fun handleEvent(event: ForwardMessagesEvent) {
             when (event) {
                 ForwardMessagesEvent.ClearError -> forwardingActionState.value = AsyncAction.Uninitialized
-                ForwardMessagesEvents.ClearError -> forwardingActionState.value = AsyncAction.Uninitialized
-                ForwardMessagesEvents.Cancel -> {
+                ForwardMessagesEvent.ClearError -> forwardingActionState.value = AsyncAction.Uninitialized
+                ForwardMessagesEvent.Cancel -> {
                     forwardingJob?.cancel()
                     forwardingJob = null
                     forwardingActionState.value = AsyncAction.Uninitialized

@@ -454,7 +454,7 @@ class PreferencesRootViewTest : RobolectricTest() {
     }
 
     @Test
-    fun `clicking on version sends a PreferencesRootEvents`() = runAndroidComposeUiTest {
+    fun `clicking on version sends a PreferencesRootEvent`() = runAndroidComposeUiTest {
         val version = "VERSION"
         val eventsRecorder = EventsRecorder<PreferencesRootEvent>()
         setView(
