@@ -99,7 +99,8 @@ preflight() {
 # these conflict as binary instead: no markers, no corruptible object, and
 # rerere skips them automatically.
 ensure_snapshot_attrs() {
-  local f="$REPO_ROOT/.git/info/attributes"
+  local f
+  f="$(git rev-parse --git-common-dir)/info/attributes"
   mkdir -p "$(dirname "$f")"
   if ! grep -qs 'snapshots/\*\*/\*\.png' "$f" 2>/dev/null; then
     log "installing snapshot merge policy into .git/info/attributes"
