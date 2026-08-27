@@ -1,0 +1,164 @@
+name: Fork sync
+
+# Conflicts are this job's EXPECTED output and exit 0 (green).
+# Red means the job itself broke.
+on:
+  schedule:
+    - cron: '0 3 * * *'      # detect, nightly
+  workflow_dispatch:
+    inputs:
+      skip_verify:
+        description: 'Skip Gradle gates (detect only)'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: fork-sync
+  cancel-in-progress: false
+
+env:
+  ISSUE_TITLE: 'Fork sync: upstream merge conflicts'
+  ISSUE_LABEL: fork-sync
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history; LFS pointers only)
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+        env:
+          GIT_LFS_SKIP_SMUDGE: 1
+
+      # The enterprise submodule is private and deliberately absent.
+      # isEnterpriseBuild = File("enterprise/README.md").exists() -> false,
+      # which selects the FOSS build. No ssh-agent step, so nothing can fail.
+      - run: echo "::notice::FOSS build - enterprise submodule intentionally absent (no deploy key)"
+
+      - name: Add upstream remote
+        run: |
+          git remote add upstream https://github.com/element-hq/element-x-android.git || true
+          git fetch upstream --prune
+
+      - name: Fast-forward the mirror
+        run: |
+          if ! git merge-base --is-ancestor origin/develop upstream/develop; then
+            echo "::error::develop is not an ancestor of upstream/develop - it carries fork commits"
+            git log --oneline upstream/develop..origin/develop
+            exit 1
+          fi
+          git push origin "$(git rev-parse upstream/develop):refs/heads/develop"
+
+      # merge-tree does a real merge in the object database: no worktree, no
+      # checkout, no LFS smudge. It cannot replay rerere, so anything it flags
+      # is re-checked below with a real merge.
+      - name: Screen every branch for conflicts
+        id: screen
+        run: |
+          set -uo pipefail
+          : > conflicts.tsv
+          branches=$(sed -e 's/#.*//' -e 's/[[:space:]]*$//' \
+            .fork/features.txt .fork/pr-branches.txt | grep -v '^$' || true)
+          for b in $branches; do
+            git show-ref --verify --quiet "refs/remotes/origin/$b" || continue
+            if ! out=$(git merge-tree --write-tree --name-only \
+                       upstream/develop "origin/$b" 2>&1); then
+              paths=$(echo "$out" | tail -n +2 | grep -v '^$' \
+                      | grep -v '^Auto-merging' | grep -v '^CONFLICT' \
+                      | paste -sd, - || true)
+              printf '%s\t%s\n' "$b" "$paths" >> conflicts.tsv
+            fi
+          done
+          n=$(wc -l < conflicts.tsv)
+          echo "count=$n" >> "$GITHUB_OUTPUT"
+          # Hash the SORTED branch list: unsorted would read as "changed" nightly.
+          echo "hash=$(cut -f1 conflicts.tsv | sort | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+
+      - name: Write job summary
+        run: |
+          n='${{ steps.screen.outputs.count }}'
+          if [ "$n" -eq 0 ]; then
+            echo "## All fork branches merge cleanly :white_check_mark:" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::warning title=Merge conflicts::$n fork branches conflict with upstream/develop"
+            {
+              echo "## Conflicting branches ($n)"
+              echo
+              echo "| branch | conflicted paths |"
+              echo "|---|---|"
+              while IFS=$'\t' read -r b p; do echo "| \`$b\` | $p |"; done < conflicts.tsv
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Report into the single tracking issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          if [ "$(gh api "repos/$GITHUB_REPOSITORY" --jq .has_issues)" != "true" ]; then
+            echo "::warning::Issues are disabled on this repository - skipping issue report."
+            echo "Enable with: gh api -X PATCH repos/$GITHUB_REPOSITORY -f has_issues=true"
+            exit 0
+          fi
+          gh label create "$ISSUE_LABEL" --description "Fork sync automation" --color ededed 2>/dev/null || true
+
+          n='${{ steps.screen.outputs.count }}'
+          hash='${{ steps.screen.outputs.hash }}'
+
+          # Filter by our own label, then exact-match the title. Never --search:
+          # it is fuzzy full-text and matches unrelated issues.
+          num=$(gh issue list --label "$ISSUE_LABEL" --state all --limit 100 \
+                  --json number,title,state \
+                  --jq "map(select(.title==\"$ISSUE_TITLE\")) | sort_by(.number) | .[-1] | .number // empty")
+          state=$(gh issue list --label "$ISSUE_LABEL" --state all --limit 100 \
+                  --json number,title,state \
+                  --jq "map(select(.title==\"$ISSUE_TITLE\")) | sort_by(.number) | .[-1] | .state // empty")
+
+          prev=""
+          if [ -n "$num" ]; then
+            prev=$(gh issue view "$num" --json body -q .body \
+                   | sed -n 's/.*fork-sync-state: \([0-9a-f]*\).*/\1/p' | head -1)
+          fi
+
+          {
+            echo "Upstream: \`$(git rev-parse --short upstream/develop)\`  •  updated $(date -u '+%Y-%m-%d %H:%M UTC')"
+            echo
+            if [ "$n" -eq 0 ]; then
+              echo "All fork branches merge cleanly onto \`upstream/develop\`."
+            else
+              echo "### $n branch(es) conflict"
+              echo
+              echo "| branch | conflicted paths |"
+              echo "|---|---|"
+              while IFS=$'\t' read -r b p; do echo "| \`$b\` | $p |"; done < conflicts.tsv
+              echo
+              echo "Resolve one with:"
+              echo '```bash'
+              echo "git checkout master && git merge --no-ff <branch>"
+              echo "# fix, then: git add <files> && git commit"
+              echo ".fork/sync-upstream.sh --continue"
+              echo '```'
+            fi
+            echo
+            echo "<!-- fork-sync-state: $hash -->"
+          } > body.md
+
+          if [ -z "$num" ]; then
+            [ "$n" -gt 0 ] && gh issue create --title "$ISSUE_TITLE" --body-file body.md --label "$ISSUE_LABEL"
+          else
+            gh issue edit "$num" --body-file body.md
+            if [ "$n" -gt 0 ] && [ "$state" = "CLOSED" ]; then gh issue reopen "$num"; fi
+            if [ "$n" -gt 0 ] && [ "$hash" != "$prev" ]; then
+              gh issue comment "$num" --body "Conflict set changed. Now $n branch(es); see the issue body."
+            fi
+            if [ "$n" -eq 0 ] && [ "$state" = "OPEN" ]; then
+              gh issue close "$num" --reason completed \
+                --comment "All fork branches merge cleanly as of \`$(git rev-parse --short upstream/develop)\`."
+            fi
+          fi
