@@ -24,7 +24,10 @@ fix/7066-decline-invite-navigate-up
 fix/7205-intent-replayed-from-history
 fix/7270-emoji-picker-keyboard
 fix/786-top-bar-hitbox
-fix/developer-options-toggle
 search/backfill-sweep
 search/matrix-layer
-tmp-7538
+#
+# Deliberately NOT listed (branches still exist, nothing was deleted):
+#   tmp-7538                      scratch branch owned by another session
+#   fix/developer-options-toggle  old 165-commit aggregate, superseded
+#   batch*/rebuild/audit-*/pr7*/work/*/wip/*   aggregates and scratch
