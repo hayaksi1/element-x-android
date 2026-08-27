@@ -81,3 +81,46 @@ Flags: `--dry-run`, `--no-push`, `--continue`, `--features=a,b`, `--skip-verify`
   (`gh api -X PATCH repos/hayaksi1/element-x-android -f has_issues=true`).
 - Scheduled workflows only run from the **default branch**, so the workflow
   file must live there.
+
+## Lessons from the first rebuild (2026-08-28)
+
+**`git merge-tree` is ground truth only while the rerere cache is empty.**
+On the first rebuild this repo had no `rr-cache` at all, so merge-tree's verdict
+(51 of 73 branches clean, 22 conflicting) was exactly right. The cache now holds
+~40 recorded resolutions, and from here merge-tree will report conflicts that
+rerere silently fixes. That is why the detect job is **two-phase** — merge-tree
+screens cheaply, and anything it flags gets a real worktree merge with rerere
+replayed. It is not an optimisation; it is load-bearing the moment the cache is
+non-empty.
+
+**Never merge a PR-backed branch whose base predates the mirror.** The merge
+drags its stale base across everything already integrated and conflicts in files
+the branch never touched — one branch touching three files under
+`features/messages` conflicted on four unrelated `DeveloperSettings` files. PR
+branches must not be rebased, so the script cherry-picks their unique commits
+instead. **Signature to watch for:** conflicts that look topically unrelated to
+what the branch does.
+
+**Mechanical "keep both sides" resolution is not safe on its own.** It silently
+spliced two generations of `CodeBlockOverlay` together: duplicate
+`CodeBlockCopyButtons` and `computeCodeBlockBounds` definitions, a caller passing
+both APIs at once, and an off-by-one brace. Two checks are needed after any
+automatic resolution, and **neither alone is sufficient**:
+
+1. brace balance + no conflict markers
+2. **no duplicate top-level declarations** — this caught a third damaged file
+   that check 1 passed clean, because the union emitted a function twice with
+   identical bodies and balanced braces
+
+A real parse would catch both and is the better long-term answer.
+
+**The toolchain must be a JDK 21 with a compiler.** A JRE-only installation on
+the toolchain path fails while *configuring the root project* with
+`does not provide the required capabilities: [JAVA_COMPILER]`, which reads like
+a project fault. The script now checks for this first.
+
+**Upstream absorbs this fork continuously, and that reshapes branches.** During
+this work upstream merged PR #7539 and had already taken the message-search
+matrix layer (#7249) behind `FeatureFlags.MessageSearch`. The search branches
+therefore conflict by re-adding what upstream now ships; the resolution is to
+keep upstream's version of upstream logic and merge only the fork's UI on top.
