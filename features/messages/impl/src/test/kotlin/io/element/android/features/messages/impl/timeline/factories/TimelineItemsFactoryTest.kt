@@ -7,6 +7,7 @@
 
 package io.element.android.features.messages.impl.timeline.factories
 
+import io.element.android.libraries.matrix.test.timeline.aRedactedContent
 import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
 import io.element.android.features.messages.impl.fixtures.aTimelineItemContentFactory
@@ -284,7 +285,7 @@ class TimelineItemsFactoryTest {
                 uniqueId = UniqueId("event-0"),
                 event = anEventTimelineItem(
                     sender = A_USER_ID,
-                    content = RedactedContent,
+                    content = aRedactedContent(),
                 ),
             ),
             MatrixTimelineItem.Event(

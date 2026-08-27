@@ -8,6 +8,7 @@
 
 package io.element.android.features.messages.impl.timeline
 
+import io.element.android.libraries.matrix.test.timeline.aRedactedContent
 import app.cash.turbine.ReceiveTurbine
 import com.google.common.truth.Truth.assertThat
 import io.element.android.features.location.test.FakeActiveLiveLocationShareManager
@@ -881,7 +882,7 @@ class TimelinePresenterTest {
                 (0 until 3).map { index ->
                     MatrixTimelineItem.Event(
                         uniqueId = UniqueId("redacted_$index"),
-                        event = anEventTimelineItem(eventId = EventId("\$R$index"), content = RedactedContent),
+                        event = anEventTimelineItem(eventId = EventId("\$R$index"), content = aRedactedContent()),
                     )
                 }
             ),

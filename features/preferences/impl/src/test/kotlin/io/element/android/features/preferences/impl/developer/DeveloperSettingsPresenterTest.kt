@@ -10,6 +10,9 @@
 
 package io.element.android.features.preferences.impl.developer
 
+import io.element.android.tests.testutils.lambda.lambdaError
+import io.element.android.libraries.matrix.test.notificationsettings.FakeNotificationSettingsService
+import io.element.android.libraries.matrix.api.notificationsettings.NotificationSettingsService
 import androidx.compose.ui.graphics.Color
 import com.google.common.truth.Truth.assertThat
 import io.element.android.features.enterprise.api.EnterpriseService
@@ -307,6 +310,8 @@ class DeveloperSettingsPresenterTest {
             appCoroutineScope = CoroutineScope(EmptyCoroutineContext),
         ),
         buildMeta: BuildMeta = aBuildMeta(),
+        navigator: DeveloperSettingsNavigator = DeveloperSettingsNavigator { _, _ -> lambdaError() },
+        notificationSettingsService: NotificationSettingsService = FakeNotificationSettingsService(),
     ): DeveloperSettingsPresenter {
         return DeveloperSettingsPresenter(
             appDeveloperSettingsPresenter = { anAppDeveloperSettingsState() },
@@ -324,6 +329,8 @@ class DeveloperSettingsPresenterTest {
             messageSearchIndexer = messageSearchIndexer,
             showDeveloperSettingsProvider = showDeveloperSettingsProvider,
             buildMeta = buildMeta,
+            navigator = navigator,
+            notificationSettingsService = notificationSettingsService,
         )
     }
 }
