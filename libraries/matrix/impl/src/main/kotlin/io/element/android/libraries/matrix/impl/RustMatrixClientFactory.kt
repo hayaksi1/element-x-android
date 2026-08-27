@@ -155,6 +155,7 @@ class RustMatrixClientFactory(
             analyticsService = analyticsService,
             workManagerScheduler = workManagerScheduler,
             contentScanner = client.contentScanner()?.let { RustContentScanner(client, it) },
+            contentScanner = contentScanner,
             isMessageSearchAvailable = isMessageSearchAvailable,
         ).also {
             Timber.tag("RustMatrixClient").i("Creating Client with access token '$anonymizedAccessToken' and refresh token '$anonymizedRefreshToken'")
