@@ -152,8 +152,3 @@ private fun TimelineItem.isStateEventWithBlankBody(): Boolean {
     val content = (this as? TimelineItem.Event)?.content
     return content is TimelineItemStateContent && content.body.isBlank()
 }
-
-private fun EventTimelineItem.isKeyVerificationRequest(): Boolean {
-    val messageType = (content as? MessageContent)?.type
-    return messageType is OtherMessageType && messageType.isKeyVerificationRequest
-}
