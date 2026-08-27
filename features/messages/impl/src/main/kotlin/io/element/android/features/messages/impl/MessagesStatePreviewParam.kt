@@ -133,6 +133,7 @@ fun aMessagesState(
     ),
     isCurrentlySharingLiveLocationInRoom: Boolean = false,
     dmUserStatus: DisplayedStatus? = null,
+    canSearch: Boolean = false,
     eventSink: (MessagesEvent) -> Unit = {},
     eventToRedact: TimelineItem.Event? = null,
 ) = MessagesState(
@@ -167,6 +168,7 @@ fun aMessagesState(
     showLiveLocationShareBanner = isCurrentlySharingLiveLocationInRoom,
     dmUserStatus = dmUserStatus,
     eventToRedact = eventToRedact,
+    canSearch = canSearch,
     eventSink = eventSink,
 )
 

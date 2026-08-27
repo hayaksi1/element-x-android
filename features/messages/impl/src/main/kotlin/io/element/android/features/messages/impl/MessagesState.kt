@@ -65,6 +65,8 @@ data class MessagesState(
     val showLiveLocationShareBanner: Boolean,
     /** The event the user asked to remove, waiting for them to confirm and optionally give a reason. */
     val eventToRedact: TimelineItem.Event?,
+    /** Whether the message search entry point is available in the top bar. */
+    val canSearch: Boolean,
     val eventSink: (MessagesEvent) -> Unit
 ) {
     val isTombstoned = successorRoom != null

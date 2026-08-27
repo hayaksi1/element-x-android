@@ -87,6 +87,7 @@ class RustMatrixAuthenticationService(
     // Ideally it would be possible to get the sessionPath from the Client to avoid doing this.
     private var sessionPaths: SessionPaths? = null
     private var currentClient: Client? = null
+    private var currentClientIsMessageSearchAvailable = false
 
     private val newMatrixClientObservers = mutableListOf<(MatrixClient) -> Unit>()
     override fun listenToNewMatrixClients(lambda: (MatrixClient) -> Unit) {
@@ -172,6 +173,7 @@ class RustMatrixAuthenticationService(
                 // Apply enterprise hooks to the newly created client as soon as possible
                 clientEnterpriseHook(matrixClient)
 
+                val matrixClient = rustMatrixClientFactory.create(client, sessionData, currentClientIsMessageSearchAvailable)
                 newMatrixClientObservers.forEach { it.invoke(matrixClient) }
                 sessionStore.addSession(sessionData)
 
@@ -250,6 +252,7 @@ class RustMatrixAuthenticationService(
 
                 // Apply enterprise hooks to the newly created client as soon as possible
                 clientEnterpriseHook(matrixClient)
+                val matrixClient = rustMatrixClientFactory.create(client, sessionData, currentClientIsMessageSearchAvailable)
 
                 // We wait for the verification state to be known
                 matrixClient.waitForKnownVerificationState()
@@ -345,6 +348,7 @@ class RustMatrixAuthenticationService(
                 // Apply enterprise hooks to the newly created client as soon as possible
                 clientEnterpriseHook(matrixClient)
 
+                val matrixClient = rustMatrixClientFactory.create(client, sessionData, currentClientIsMessageSearchAvailable)
                 matrixClient.waitForKnownVerificationState()
 
                 newMatrixClientObservers.forEach { it.invoke(matrixClient) }
@@ -414,6 +418,7 @@ class RustMatrixAuthenticationService(
                 // Apply enterprise hooks to the newly created client as soon as possible
                 clientEnterpriseHook(matrixClient)
 
+                val matrixClient = rustMatrixClientFactory.create(client, sessionData, currentClientIsMessageSearchAvailable)
                 newMatrixClientObservers.forEach { it.invoke(matrixClient) }
                 sessionStore.addSession(sessionData)
 
@@ -447,6 +452,13 @@ class RustMatrixAuthenticationService(
                 slidingSyncType = ClientBuilderSlidingSync.Discovered,
                 isMessageSearchAvailable = isMessageSearchAvailable(),
             )
+        val baseClientBuilder = rustMatrixClientFactory.getBaseClientBuilder(
+            sessionPaths = sessionPaths,
+            clientSecret = pendingKey,
+            slidingSyncType = ClientBuilderSlidingSync.Discovered,
+        )
+        currentClientIsMessageSearchAvailable = baseClientBuilder.isMessageSearchAvailable
+        return baseClientBuilder.clientBuilder
             .config()
             .build()
     }
@@ -480,6 +492,13 @@ class RustMatrixAuthenticationService(
                 slidingSyncType = ClientBuilderSlidingSync.Discovered,
                 isMessageSearchAvailable = isMessageSearchAvailable(),
             )
+        val baseClientBuilder = rustMatrixClientFactory.getBaseClientBuilder(
+            sessionPaths = sessionPaths,
+            clientSecret = pendingKey,
+            slidingSyncType = ClientBuilderSlidingSync.Discovered,
+        )
+        currentClientIsMessageSearchAvailable = baseClientBuilder.isMessageSearchAvailable
+        return baseClientBuilder.clientBuilder
             .serverNameOrHomeserverUrl(baseUrlOrServerName)
             .build()
     }
@@ -489,6 +508,7 @@ class RustMatrixAuthenticationService(
             currentClient?.close()
         }
         currentClient = null
+        currentClientIsMessageSearchAvailable = false
     }
 
     private suspend fun isMessageSearchAvailable(): Boolean =

@@ -87,6 +87,7 @@ import io.element.android.libraries.matrix.test.A_THREAD_ID
 import io.element.android.libraries.matrix.test.A_TRANSACTION_ID
 import io.element.android.libraries.matrix.test.A_USER_ID
 import io.element.android.libraries.matrix.test.A_USER_ID_2
+import io.element.android.libraries.matrix.test.FakeMatrixClient
 import io.element.android.libraries.matrix.test.core.FakeSendHandle
 import io.element.android.libraries.matrix.test.core.aBuildMeta
 import io.element.android.libraries.matrix.test.encryption.FakeEncryptionService
@@ -158,6 +159,18 @@ class MessagesPresenterTest {
         )
         presenter.testWithLifecycleOwner {
             assertThat(consumeItemsUntilTimeout().last().memberCount).isEqualTo(12)
+    }
+    }
+
+    fun `present - message search stays unavailable when only the live feature flag is enabled`() = runTest {
+        val featureFlagService = FakeFeatureFlagService(
+            initialState = mapOf(FeatureFlags.MessageSearch.key to true),
+        )
+        val presenter = createMessagesPresenter(featureFlagService = featureFlagService)
+
+        presenter.testWithLifecycleOwner {
+            val state = consumeItemsUntilTimeout().last()
+            assertThat(state.canSearch).isFalse()
         }
     }
 
@@ -168,6 +181,17 @@ class MessagesPresenterTest {
         )
         presenter.testWithLifecycleOwner {
             assertThat(consumeItemsUntilTimeout().last().memberCount).isNull()
+    }
+    }
+
+    fun `present - message search is available when the live client has an index`() = runTest {
+        val presenter = createMessagesPresenter(
+            matrixClient = FakeMatrixClient(isMessageSearchAvailable = true),
+        )
+
+        presenter.testWithLifecycleOwner {
+            val state = consumeItemsUntilTimeout().last()
+            assertThat(state.canSearch).isTrue()
         }
     }
 
@@ -1571,6 +1595,7 @@ class MessagesPresenterTest {
         },
         encryptionService: FakeEncryptionService = FakeEncryptionService(),
         featureFlagService: FakeFeatureFlagService = FakeFeatureFlagService(),
+        matrixClient: FakeMatrixClient = FakeMatrixClient(),
         actionListEventSink: (ActionListEvent) -> Unit = {},
         addRecentEmoji: AddRecentEmoji = AddRecentEmoji { _ -> lambdaError() },
         markAsFullyRead: MarkAsFullyRead = FakeMarkAsFullyRead(),
@@ -1602,6 +1627,7 @@ class MessagesPresenterTest {
             analyticsService = analyticsService,
             encryptionService = encryptionService,
             featureFlagService = featureFlagService,
+            matrixClient = matrixClient,
             addRecentEmoji = addRecentEmoji,
             markAsFullyRead = markAsFullyRead,
             liveLocationShareManager = liveLocationShareManager,

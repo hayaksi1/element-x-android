@@ -20,4 +20,6 @@
     <string name="screen_permission_rationale_location_description">Sharing your location in a room.</string>
     <string name="screen_permission_rationale_notifications_title">Notifications</string>
     <string name="screen_permission_rationale_notifications_description">Letting you know about new messages, invitations and calls.</string>
+    <string name="screen_message_search_title">Search messages</string>
+    <string name="screen_message_search_error">Something went wrong while searching. Please try again.</string>
 </resources>
