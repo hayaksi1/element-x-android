@@ -37,6 +37,8 @@ open class DeveloperSettingsStatePreviewParam : PreviewParameterProvider<Develop
             ),
             aDeveloperSettingsState(
                 pushRulesAction = AsyncAction.Failure(Exception("A failure"))
+            ),
+            aDeveloperSettingsState(
                 messageSearchIndexStatus = MessageSearchIndexStatus.Idle,
             ),
             aDeveloperSettingsState(
