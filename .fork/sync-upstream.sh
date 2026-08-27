@@ -12,8 +12,11 @@
 # Re-exec from a temp copy: we switch branches while running and bash reads
 # scripts incrementally, so editing the tree under ourselves would corrupt it.
 if [[ "${FORK_SYNC_SELF_COPY:-}" != "1" ]]; then
+  # Resolve the repo from the CWD, not from $0: the temp copy lives outside it.
+  __root="$(git rev-parse --show-toplevel)" || {
+    echo "not inside a git repository" >&2; exit 1; }
   __tmp="$(mktemp)"; cp "$0" "$__tmp"; chmod +x "$__tmp"
-  FORK_SYNC_SELF_COPY=1 FORK_SYNC_ORIG="$(cd "$(dirname "$0")/.." && pwd)" exec "$__tmp" "$@"
+  FORK_SYNC_SELF_COPY=1 FORK_SYNC_ORIG="$__root" exec "$__tmp" "$@"
 fi
 
 set -euo pipefail
