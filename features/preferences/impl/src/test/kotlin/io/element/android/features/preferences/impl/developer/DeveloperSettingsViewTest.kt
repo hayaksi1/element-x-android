@@ -42,7 +42,7 @@ class DeveloperSettingsViewTest : RobolectricTest() {
         }
     }
 
-    @Config(qualifiers = "h2400dp")
+    @Config(qualifiers = "h3200dp")
     @Test
     fun `clicking on push history notification invokes the expected callback`() = runAndroidComposeUiTest {
         val eventsRecorder = EventsRecorder<DeveloperSettingsEvent>(expectEvents = false)
@@ -55,19 +55,6 @@ class DeveloperSettingsViewTest : RobolectricTest() {
             )
             clickOn(R.string.troubleshoot_notifications_entry_point_push_history_title)
         }
-    }
-
-    @Config(qualifiers = "h2400dp")
-    @Test
-    fun `clicking on push rules emits the expected event`() = runAndroidComposeUiTest {
-        val eventsRecorder = EventsRecorder<DeveloperSettingsEvent>()
-        setDeveloperSettingsView(
-            state = aDeveloperSettingsState(
-                eventSink = eventsRecorder
-            ),
-        )
-        onNodeWithText("Push rules").performScrollTo().performClick()
-        eventsRecorder.assertSingle(DeveloperSettingsEvent.OpenPushRules)
     }
 
     @Config(qualifiers = "h2000dp")

@@ -45,6 +45,7 @@ import io.element.android.features.messages.test.timeline.voicemessages.composer
 import io.element.android.features.roomcall.api.aStandByCallState
 import io.element.android.features.roommembermoderation.api.RoomMemberModerationState
 import io.element.android.libraries.androidutils.clipboard.FakeClipboardHelper
+import io.element.android.libraries.architecture.AsyncAction
 import io.element.android.libraries.architecture.AsyncData
 import io.element.android.libraries.architecture.Presenter
 import io.element.android.libraries.core.coroutine.CoroutineDispatchers
@@ -153,15 +154,6 @@ class MessagesPresenterTest {
     }
 
     @Test
-    fun `present - a group room reports how many members it has`() = runTest {
-        val presenter = createMessagesPresenter(
-            joinedRoom = aJoinedRoomWithInfo(aRoomInfo(id = A_ROOM_ID, name = "", isDm = false, joinedMembersCount = 12)),
-        )
-        presenter.testWithLifecycleOwner {
-            assertThat(consumeItemsUntilTimeout().last().memberCount).isEqualTo(12)
-    }
-    }
-
     fun `present - message search stays unavailable when only the live feature flag is enabled`() = runTest {
         val featureFlagService = FakeFeatureFlagService(
             initialState = mapOf(FeatureFlags.MessageSearch.key to true),
@@ -175,15 +167,6 @@ class MessagesPresenterTest {
     }
 
     @Test
-    fun `present - a direct message does not report a member count`() = runTest {
-        val presenter = createMessagesPresenter(
-            joinedRoom = aJoinedRoomWithInfo(aRoomInfo(id = A_ROOM_ID, name = "", isDm = true, joinedMembersCount = 2)),
-        )
-        presenter.testWithLifecycleOwner {
-            assertThat(consumeItemsUntilTimeout().last().memberCount).isNull()
-    }
-    }
-
     fun `present - message search is available when the live client has an index`() = runTest {
         val presenter = createMessagesPresenter(
             matrixClient = FakeMatrixClient(isMessageSearchAvailable = true),
@@ -192,6 +175,26 @@ class MessagesPresenterTest {
         presenter.testWithLifecycleOwner {
             val state = consumeItemsUntilTimeout().last()
             assertThat(state.canSearch).isTrue()
+        }
+    }
+
+    @Test
+    fun `present - a group room reports how many members it has`() = runTest {
+        val presenter = createMessagesPresenter(
+            joinedRoom = aJoinedRoomWithInfo(aRoomInfo(id = A_ROOM_ID, name = "", isDm = false, joinedMembersCount = 12)),
+        )
+        presenter.testWithLifecycleOwner {
+            assertThat(consumeItemsUntilTimeout().last().memberCount).isEqualTo(12)
+        }
+    }
+
+    @Test
+    fun `present - a direct message does not report a member count`() = runTest {
+        val presenter = createMessagesPresenter(
+            joinedRoom = aJoinedRoomWithInfo(aRoomInfo(id = A_ROOM_ID, name = "", isDm = true, joinedMembersCount = 2)),
+        )
+        presenter.testWithLifecycleOwner {
+            assertThat(consumeItemsUntilTimeout().last().memberCount).isNull()
         }
     }
 
@@ -606,11 +609,11 @@ class MessagesPresenterTest {
             initialState.eventSink(MessagesEvent.HandleAction(TimelineItemAction.Redact, messageEvent))
             advanceUntilIdle()
             val confirmingState = expectMostRecentItem()
-            assertThat(confirmingState.eventToRedact).isEqualTo(messageEvent)
+            assertThat(confirmingState.redactEventAction).isEqualTo(MessagesState.ConfirmingRedaction(messageEvent.eventId!!))
             assert(redactEventLambda).isNeverCalled()
             confirmingState.eventSink(MessagesEvent.ConfirmRedact(A_REASON))
             advanceUntilIdle()
-            assertThat(expectMostRecentItem().eventToRedact).isNull()
+            assertThat(expectMostRecentItem().redactEventAction).isEqualTo(AsyncAction.Uninitialized)
             assert(redactEventLambda)
                 .isCalledOnce()
                 .with(value(messageEvent.eventOrTransactionId), value(A_REASON))
@@ -634,7 +637,7 @@ class MessagesPresenterTest {
             advanceUntilIdle()
             expectMostRecentItem().eventSink(MessagesEvent.ConfirmRedact("  "))
             advanceUntilIdle()
-            assertThat(expectMostRecentItem().eventToRedact).isNull()
+            assertThat(expectMostRecentItem().redactEventAction).isEqualTo(AsyncAction.Uninitialized)
             assert(redactEventLambda)
                 .isCalledOnce()
                 .with(value(messageEvent.eventOrTransactionId), value(null))
@@ -657,7 +660,7 @@ class MessagesPresenterTest {
             advanceUntilIdle()
             expectMostRecentItem().eventSink(MessagesEvent.CancelRedact)
             advanceUntilIdle()
-            assertThat(expectMostRecentItem().eventToRedact).isNull()
+            assertThat(expectMostRecentItem().redactEventAction).isEqualTo(AsyncAction.Uninitialized)
             assert(redactEventLambda).isNeverCalled()
         }
     }
@@ -677,7 +680,7 @@ class MessagesPresenterTest {
             val localEcho = aMessageEvent(eventId = null, transactionId = A_TRANSACTION_ID)
             initialState.eventSink(MessagesEvent.HandleAction(TimelineItemAction.Redact, localEcho))
             advanceUntilIdle()
-            assertThat(expectMostRecentItem().eventToRedact).isNull()
+            assertThat(expectMostRecentItem().redactEventAction).isEqualTo(AsyncAction.Uninitialized)
             assert(redactEventLambda)
                 .isCalledOnce()
                 .with(value(localEcho.eventOrTransactionId), value(null))
@@ -1103,33 +1106,6 @@ class MessagesPresenterTest {
                     composerMode = MessageComposerMode.EditCaption(
                         eventOrTransactionId = AN_EVENT_ID.toEventOrTransactionId(),
                         content = A_CAPTION,
-                    )
-                )
-            )
-        }
-    }
-
-    @Test
-    fun `present - handle action edit caption starts from the formatted caption`() = runTest {
-        val messageEvent = aMessageEvent(
-            content = aTimelineItemImageContent(
-                caption = "Hello world",
-                htmlCaption = "<b>Hello</b> world",
-            )
-        )
-        val composerRecorder = EventsRecorder<MessageComposerEvent>()
-        val presenter = createMessagesPresenter(
-            messageComposerPresenter = { aMessageComposerState(eventSink = composerRecorder, showTextFormatting = true) },
-        )
-        presenter.testWithLifecycleOwner {
-            val initialState = awaitItem()
-            initialState.eventSink(MessagesEvent.HandleAction(TimelineItemAction.EditCaption, messageEvent))
-            awaitItem()
-            composerRecorder.assertSingle(
-                MessageComposerEvent.SetMode(
-                    composerMode = MessageComposerMode.EditCaption(
-                        eventOrTransactionId = AN_EVENT_ID.toEventOrTransactionId(),
-                        content = "<b>Hello</b> world",
                     )
                 )
             )

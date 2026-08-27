@@ -51,6 +51,7 @@ import io.element.android.libraries.matrix.api.timeline.item.event.EventReaction
 import io.element.android.libraries.matrix.api.timeline.item.event.LocalEventSendState
 import io.element.android.libraries.matrix.api.timeline.item.event.ReactionSender
 import io.element.android.libraries.matrix.api.timeline.item.event.Receipt
+import io.element.android.libraries.matrix.api.timeline.item.event.RedactedContent
 import io.element.android.libraries.matrix.api.timeline.item.event.TimelineItemEventOrigin
 import io.element.android.libraries.matrix.api.timeline.item.virtual.VirtualTimelineItem
 import io.element.android.libraries.matrix.test.AN_EVENT_ID
@@ -69,7 +70,6 @@ import io.element.android.libraries.matrix.test.room.aRoomMember
 import io.element.android.libraries.matrix.test.room.powerlevels.FakeRoomPermissions
 import io.element.android.libraries.matrix.test.timeline.FakeTimeline
 import io.element.android.libraries.matrix.test.timeline.aMessageContent
-import io.element.android.libraries.matrix.test.timeline.aRedactedContent
 import io.element.android.libraries.matrix.test.timeline.anEventTimelineItem
 import io.element.android.libraries.matrix.test.timeline.item.event.aRoomMembershipContent
 import io.element.android.libraries.matrix.ui.components.aMatrixUserList
@@ -881,7 +881,7 @@ class TimelinePresenterTest {
                 (0 until 3).map { index ->
                     MatrixTimelineItem.Event(
                         uniqueId = UniqueId("redacted_$index"),
-                        event = anEventTimelineItem(eventId = EventId("\$R$index"), content = aRedactedContent()),
+                        event = anEventTimelineItem(eventId = EventId("\$R$index"), content = RedactedContent),
                     )
                 }
             ),
@@ -1073,9 +1073,6 @@ class TimelinePresenterTest {
         val presenter = createTimelinePresenter(
             room = room,
             timeline = room.liveTimeline,
-        val presenter = createTimelinePresenter(
-            room = room,
-            timeline = room.liveTimeline,
         )
         presenter.test {
             val initialState = awaitFirstItem()
@@ -1095,9 +1092,6 @@ class TimelinePresenterTest {
             Result.success(true)
         }
         val room = aRoomWithDetachedTimeline(paginateLambda = paginateLambda)
-        val presenter = createTimelinePresenter(
-            room = room,
-            timeline = room.liveTimeline,
         val presenter = createTimelinePresenter(
             room = room,
             timeline = room.liveTimeline,
@@ -1122,9 +1116,6 @@ class TimelinePresenterTest {
             Result.success(false)
         }
         val room = aRoomWithDetachedTimeline(paginateLambda = paginateLambda)
-        val presenter = createTimelinePresenter(
-            room = room,
-            timeline = room.liveTimeline,
         val presenter = createTimelinePresenter(
             room = room,
             timeline = room.liveTimeline,
@@ -1838,14 +1829,6 @@ class TimelinePresenterTest {
     private fun aRoomWithDetachedTimeline(
         paginateLambda: (Timeline.PaginationDirection) -> Result<Boolean>,
         createTimelineResult: () -> Result<Timeline> = { Result.success(aDetachedTimeline(paginateLambda)) },
-    ): FakeJoinedRoom {
-        return FakeJoinedRoom(
-            liveTimeline = FakeTimeline(timelineItems = flowOf(emptyList())).apply {
-                this.paginateLambda = paginateLambda
-            },
-            createTimelineResult = { createTimelineResult() },
-        }
-
     ): FakeJoinedRoom {
         return FakeJoinedRoom(
             liveTimeline = FakeTimeline(timelineItems = flowOf(emptyList())).apply {
