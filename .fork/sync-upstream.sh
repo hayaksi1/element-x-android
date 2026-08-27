@@ -294,6 +294,22 @@ verify() {
     warn "verification SKIPPED -- push is disabled for this run"
     return 0
   fi
+
+  # The project needs a JDK 21 with a compiler. A JRE-only installation on the
+  # toolchain path fails deep inside Gradle with "does not provide the required
+  # capabilities: [JAVA_COMPILER]", which reads like a project fault.
+  if [[ -z "${JAVA_HOME:-}" || ! -x "${JAVA_HOME}/bin/javac" ]]; then
+    local found=""
+    local cand
+    for cand in /usr/lib/jvm/java-21-openjdk /usr/lib/jvm/java-21 "$JAVA_HOME"; do
+      [[ -n "$cand" && -x "$cand/bin/javac" ]] && { found="$cand"; break; }
+    done
+    if [[ -z "$found" ]]; then
+      die "no JDK 21 with a compiler found. Set JAVA_HOME to a full JDK 21 (not a JRE)."
+    fi
+    export JAVA_HOME="$found"
+    log "JAVA_HOME=$JAVA_HOME"
+  fi
   local failed=0
   local -a gates=(
     ":app:assembleGplayDebug app:assembleFDroidDebug -PallWarningsAsErrors=true"
