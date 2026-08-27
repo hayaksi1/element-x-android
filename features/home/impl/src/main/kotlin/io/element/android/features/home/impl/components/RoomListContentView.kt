@@ -285,6 +285,7 @@ private fun RoomsViewList(
                 isInviteSeen = room.displayType == RoomSummaryDisplayType.INVITE &&
                     state.seenRoomInvites.contains(room.roomId),
                 showUnreadCount = state.showUnreadCount,
+                activityVisibility = state.activityVisibility,
                 onClick = onRoomClick,
                 onAvatarClick = onRoomAvatarClick,
                 eventSink = eventSink,

@@ -68,6 +68,7 @@ import io.element.android.libraries.matrix.api.user.DisplayedStatus
 import io.element.android.libraries.matrix.ui.components.DisplayNameWithStatus
 import io.element.android.libraries.matrix.ui.components.InviteSenderView
 import io.element.android.libraries.matrix.ui.model.InviteSender
+import io.element.android.libraries.preferences.api.store.RoomListActivityVisibility
 import io.element.android.libraries.testtags.TestTags
 import io.element.android.libraries.testtags.testTag
 import io.element.android.libraries.ui.strings.CommonStrings
@@ -84,6 +85,7 @@ internal fun RoomSummaryRow(
     onAvatarClick: (RoomListRoomSummary) -> Unit,
     modifier: Modifier = Modifier,
     showUnreadCount: Boolean = false,
+    activityVisibility: RoomListActivityVisibility = RoomListActivityVisibility.CURRENT,
     eventSink: (RoomListEvent) -> Unit,
 ) {
     Box(modifier = modifier) {
@@ -135,9 +137,14 @@ internal fun RoomSummaryRow(
                         name = room.name,
                         timestamp = room.timestamp,
                         isHighlighted = room.isHighlighted,
+                        isEmphasised = room.emphasisesUnreadContent(activityVisibility),
                         dmUserStatus = room.dmUserStatus,
                     )
-                    MessagePreviewAndIndicatorRow(room = room, showUnreadCount = showUnreadCount)
+                    MessagePreviewAndIndicatorRow(
+                        room = room,
+                        showUnreadCount = showUnreadCount,
+                        activityVisibility = activityVisibility,
+                    )
                 }
             }
             RoomSummaryDisplayType.KNOCKED -> {
@@ -153,6 +160,7 @@ internal fun RoomSummaryRow(
                         name = room.name,
                         timestamp = null,
                         isHighlighted = room.isHighlighted,
+                        isEmphasised = true,
                         dmUserStatus = null,
                     )
                     if (room.canonicalAlias != null) {
@@ -238,6 +246,7 @@ private fun NameAndTimestampRow(
     name: String?,
     timestamp: String?,
     isHighlighted: Boolean,
+    isEmphasised: Boolean,
     dmUserStatus: DisplayedStatus?,
     modifier: Modifier = Modifier
 ) {
@@ -250,7 +259,7 @@ private fun NameAndTimestampRow(
             name = displayName,
             status = dmUserStatus,
             modifier = Modifier.weight(1f),
-            style = ElementTheme.typography.fontBodyLgMedium,
+            style = if (isEmphasised) ElementTheme.typography.fontBodyLgMedium else ElementTheme.typography.fontBodyLgRegular,
             nameColor = ElementTheme.colors.roomListRoomName,
             nameFontStyle = FontStyle.Italic.takeIf { name == null },
         )
@@ -294,6 +303,7 @@ private fun InviteSubtitle(
 private fun MessagePreviewAndIndicatorRow(
     room: RoomListRoomSummary,
     showUnreadCount: Boolean,
+    activityVisibility: RoomListActivityVisibility,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -350,7 +360,11 @@ private fun MessagePreviewAndIndicatorRow(
                         .clipToBounds(),
                     text = annotatedMessagePreview,
                     color = ElementTheme.colors.roomListRoomMessage,
-                    style = ElementTheme.typography.fontBodyMdRegular,
+                    style = if (room.emphasisesUnreadContent(activityVisibility)) {
+                        ElementTheme.typography.fontBodyMdMedium
+                    } else {
+                        ElementTheme.typography.fontBodyMdRegular
+                    },
                     minLines = 2,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
@@ -379,7 +393,7 @@ private fun MessagePreviewAndIndicatorRow(
             } else if (room.numberOfUnreadMentions > 0) {
                 MentionIndicatorAtom()
             }
-            if (room.hasNewContent) {
+            if (room.showsUnreadBadge(activityVisibility)) {
                 val contentDescription = stringResource(CommonStrings.a11y_notifications_new_messages)
                 val count = if (showUnreadCount) {
                     if (room.userDefinedNotificationMode == RoomNotificationMode.MUTE) {
