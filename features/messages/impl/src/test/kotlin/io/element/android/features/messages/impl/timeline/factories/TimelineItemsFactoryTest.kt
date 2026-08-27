@@ -32,9 +32,11 @@ import io.element.android.libraries.matrix.api.timeline.item.ThreadSummary
 import io.element.android.libraries.matrix.api.timeline.item.event.EventContent
 import io.element.android.libraries.matrix.api.timeline.item.event.MembershipChange
 import io.element.android.libraries.matrix.api.timeline.item.event.OtherMessageType
+import io.element.android.libraries.matrix.api.timeline.item.event.OtherState
 import io.element.android.libraries.matrix.api.timeline.item.event.ProfileDetails
 import io.element.android.libraries.matrix.api.timeline.item.event.Receipt
 import io.element.android.libraries.matrix.api.timeline.item.event.RoomMembershipContent
+import io.element.android.libraries.matrix.api.timeline.item.event.StateContent
 import io.element.android.libraries.matrix.test.A_THREAD_ID
 import io.element.android.libraries.matrix.test.A_USER_ID
 import io.element.android.libraries.matrix.test.A_USER_ID_2
@@ -316,37 +318,60 @@ class TimelineItemsFactoryTest {
         }
     }
 
+    fun `a custom state event is not emitted and does not split the group around it`() = runTest {
+        val items = listOf(
+            aMessage(index = 0, timestamp = 0L),
+            MatrixTimelineItem.Event(
+                uniqueId = UniqueId("custom"),
+                event = anEventTimelineItem(
+                    sender = A_USER_ID,
+                    timestamp = 30 * 1000L,
+                    content = StateContent(stateKey = "", content = OtherState.Custom("com.example.custom")),
+                ),
+            ),
+            aMessage(index = 1, timestamp = ONE_MINUTE),
+        )
+        val emitted = emittedItemsOf(items)
+        assertThat(emitted.filterIsInstance<TimelineItem.Event>().map { it.groupPosition }).containsExactly(
+            TimelineItemGroupPosition.First,
+            TimelineItemGroupPosition.Last,
+        ).inOrder()
+    }
+
     private suspend fun TestScope.groupPositionsOf(timestamps: List<Long>): List<TimelineItemGroupPosition> {
+        val items = timestamps.mapIndexed { index, timestamp -> aMessage(index, timestamp) }
+        return emittedItemsOf(items)
+            .filterIsInstance<TimelineItem.Event>()
+            .map { it.groupPosition }
+    }
+
+    private fun aMessage(index: Int, timestamp: Long) = MatrixTimelineItem.Event(
+        uniqueId = UniqueId("event-$index"),
+        event = anEventTimelineItem(
+            sender = A_USER_ID,
+            timestamp = timestamp,
+            content = aMessageContent(body = "Message $index"),
+        ),
+    )
+
+    private suspend fun TestScope.emittedItemsOf(items: List<MatrixTimelineItem>): List<TimelineItem> {
         val factory = aTimelineItemsFactory(
             config = TimelineItemsFactoryConfig(
                 computeReadReceipts = false,
                 computeReactions = false,
             )
         )
-        val items = timestamps.mapIndexed { index, timestamp ->
-            MatrixTimelineItem.Event(
-                uniqueId = UniqueId("event-$index"),
-                event = anEventTimelineItem(
-                    sender = A_USER_ID,
-                    timestamp = timestamp,
-                    content = aMessageContent(body = "Message $index"),
-                ),
-            )
-        }
-        var positions: List<TimelineItemGroupPosition> = emptyList()
+        var emitted: List<TimelineItem> = emptyList()
         factory.timelineItems.test {
             factory.replaceWith(
                 timelineItems = items,
                 roomMembers = emptyList(),
                 renderReadReceipts = false,
             )
-            positions = awaitItem()
-                .filterIsInstance<TimelineItem.Event>()
-                .map { it.groupPosition }
-                .reversed()
+            emitted = awaitItem().reversed()
             cancelAndIgnoreRemainingEvents()
         }
-        return positions
+        return emitted
     }
 
     private companion object {
