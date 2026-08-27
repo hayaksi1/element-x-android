@@ -139,6 +139,9 @@ class AndroidMediaPreProcessorTest : RobolectricTest() {
 
     @Test
     fun `a file that is not an image falls back to the default subtype of the wildcard it was shared with`() = runTest {
+    }
+
+    fun `a file that is not an image keeps the wildcard mime type it was shared with`() = runTest {
         val mediaUploadInfo = process(
             asset = assetText,
             mimeType = MimeTypes.Images,
@@ -150,6 +153,7 @@ class AndroidMediaPreProcessorTest : RobolectricTest() {
         )
         val info = mediaUploadInfo as MediaUploadInfo.Image
         assertThat(info.imageInfo.mimetype).isEqualTo(MimeTypes.Jpeg)
+        assertThat(info.imageInfo.mimetype).isEqualTo(MimeTypes.Images)
     }
 
     @Test

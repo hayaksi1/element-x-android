@@ -88,6 +88,11 @@ class AndroidMediaPreProcessor(
                 resolvedMimeType == MimeTypes.Svg -> processSvgImage(uri, resolvedMimeType)
                 resolvedMimeType.isMimeTypeImage() -> {
                     val imageMimeType = resolveImageMimeType(uri, mimeType).ensureDefaultSubtype()
+                }
+
+                mimeType == MimeTypes.Svg -> processSvgImage(uri, mimeType)
+                mimeType.isMimeTypeImage() -> {
+                    val imageMimeType = resolveImageMimeType(uri, mimeType)
                     val shouldBeCompressed = mediaOptimizationConfig.compressImages && imageMimeType !in notCompressibleImageTypes
                     processImage(uri, imageMimeType, shouldBeCompressed)
                 }
