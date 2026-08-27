@@ -202,18 +202,40 @@ rebuild_integration() {
   : > "$REPORT.conflicts"
   : > "$REPORT.retire"
 
-  local ordered=() b before after rc n
+  local ordered=() b before after rc n mode
   ordered+=("$TOOLING")
   mapfile -t -O "${#ordered[@]}" ordered < <(read_manifest "$FORK_DIR/features.txt")
   mapfile -t -O "${#ordered[@]}" ordered < <(read_manifest "$FORK_DIR/pr-branches.txt")
 
+  local prset
+  prset=" $(read_manifest "$FORK_DIR/pr-branches.txt" | tr '\n' ' ') "
+
   for b in "${ordered[@]}"; do
     git show-ref --verify --quiet "refs/heads/$b" || { warn "missing branch, skipping: $b"; continue; }
-    if [[ $DRY_RUN -eq 1 ]]; then printf '    [dry-run] merge --no-ff %s\n' "$b"; continue; fi
+    if [[ $DRY_RUN -eq 1 ]]; then printf '    [dry-run] integrate %s\n' "$b"; continue; fi
 
     before="$(git rev-parse HEAD)"
     rc=0
-    git merge --no-ff --no-edit "$b" >/dev/null 2>&1 || rc=$?
+
+    # A branch whose base predates the mirror cannot be MERGED: the merge would
+    # drag its stale base across everything already integrated and conflict in
+    # files the branch never touched. PR branches must not be rebased (upstream
+    # maintainers push onto them), so integrate their unique commits by
+    # cherry-pick instead -- that touches only the integration branch.
+    if [[ "$prset" == *" $b "* ]] && ! git merge-base --is-ancestor "$MIRROR" "$b"; then
+      mode="cherry-pick"
+      local picks
+      picks="$(git rev-list --reverse --no-merges "$MIRROR..$b")"
+      if [[ -z "$picks" ]]; then
+        log "nothing unique to pick: $b"
+        continue
+      fi
+      # shellcheck disable=SC2086
+      git cherry-pick --keep-redundant-commits $picks >/dev/null 2>&1 || rc=$?
+    else
+      mode="merge"
+      git merge --no-ff --no-edit "$b" >/dev/null 2>&1 || rc=$?
+    fi
 
     if [[ $rc -ne 0 ]]; then
       n="$(resolve_snapshot_conflicts)"
@@ -223,11 +245,19 @@ rebuild_integration() {
           printf '%s\t%s\n' "$b" "$(git status --porcelain \
             | grep -E '^(UU|AA|UD|DU|DD) ' | awk '{print $2}' | paste -sd, -)"
         } >> "$REPORT.conflicts"
-        warn "CONFLICT merging $b"
-        git merge --abort 2>/dev/null || true
+        warn "CONFLICT integrating $b ($mode)"
+        if [[ "$mode" == "cherry-pick" ]]; then
+          git cherry-pick --abort 2>/dev/null || true
+        else
+          git merge --abort 2>/dev/null || true
+        fi
         continue
       fi
-      git commit --no-edit >/dev/null 2>&1 || true
+      if [[ "$mode" == "cherry-pick" ]]; then
+        git -c core.editor=true cherry-pick --continue >/dev/null 2>&1 || true
+      else
+        git commit --no-edit >/dev/null 2>&1 || true
+      fi
     fi
 
     after="$(git rev-parse HEAD)"
