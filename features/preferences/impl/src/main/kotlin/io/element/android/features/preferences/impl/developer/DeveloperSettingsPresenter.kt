@@ -36,10 +36,16 @@ import io.element.android.libraries.architecture.runCatchingUpdatingState
 import io.element.android.libraries.core.data.ByteUnit
 import io.element.android.libraries.core.extensions.runCatchingExceptions
 import io.element.android.libraries.core.meta.BuildMeta
+import io.element.android.libraries.featureflag.api.FeatureFlagService
+import io.element.android.libraries.featureflag.api.FeatureFlags
+import io.element.android.libraries.matrix.api.MatrixClient
 import io.element.android.libraries.matrix.api.analytics.GetDatabaseSizesUseCase
 import io.element.android.libraries.matrix.api.core.DeviceId
 import io.element.android.libraries.matrix.api.core.SessionId
 import io.element.android.libraries.matrix.api.notificationsettings.NotificationSettingsService
+import io.element.android.libraries.matrix.api.search.MessageSearchIndexer
+import io.element.android.libraries.matrix.api.search.MessageSearchSweepActivity
+import io.element.android.libraries.matrix.api.search.SearchBackfillCursor
 import kotlinx.collections.immutable.ImmutableMap
 import kotlinx.collections.immutable.toImmutableMap
 import kotlinx.coroutines.CoroutineScope
@@ -62,6 +68,9 @@ class DeveloperSettingsPresenter(
     private val fileSizeFormatter: FileSizeFormatter,
     private val markAllRoomsAsRead: MarkAllRoomsAsRead,
     private val showDeveloperSettingsProvider: ShowDeveloperSettingsProvider,
+    private val featureFlagService: FeatureFlagService,
+    private val matrixClient: MatrixClient,
+    private val messageSearchIndexer: MessageSearchIndexer,
     private val buildMeta: BuildMeta,
     private val notificationSettingsService: NotificationSettingsService,
 ) : Presenter<DeveloperSettingsState> {
@@ -103,6 +112,21 @@ class DeveloperSettingsPresenter(
         }
 
         val showDeveloperSettings by showDeveloperSettingsProvider.showDeveloperSettings.collectAsState()
+        val isMessageSearchFlagEnabled by remember {
+            featureFlagService.isFeatureEnabledFlow(FeatureFlags.MessageSearch)
+        }.collectAsState(initial = false)
+        val sweepActivity by remember {
+            messageSearchIndexer.userSweepActivityFlow(sessionId)
+        }.collectAsState(initial = MessageSearchSweepActivity.NONE)
+        val sweepCursor by remember {
+            messageSearchIndexer.cursorFlow(sessionId)
+        }.collectAsState(initial = null)
+        val messageSearchIndexStatus = messageSearchIndexStatus(
+            flagEnabled = isMessageSearchFlagEnabled,
+            indexAvailable = matrixClient.isMessageSearchAvailable,
+            sweepActivity = sweepActivity,
+            cursor = sweepCursor,
+        )
 
         fun handleEvent(event: DeveloperSettingsEvents) {
             when (event) {
@@ -144,6 +168,13 @@ class DeveloperSettingsPresenter(
                 DeveloperSettingsEvent.DismissPushRulesError -> {
                     pushRulesAction.value = AsyncAction.Uninitialized
                 }
+
+                DeveloperSettingsEvents.StartSearchIndexing -> coroutineScope.launch {
+                    messageSearchIndexer.startUserInitiatedSweep(sessionId)
+                }
+                DeveloperSettingsEvents.CancelSearchIndexing -> {
+                    messageSearchIndexer.cancelSweep(sessionId)
+                }
             }
         }
 
@@ -158,9 +189,43 @@ class DeveloperSettingsPresenter(
             pushRulesAction = pushRulesAction.value,
             isEnterpriseBuild = buildMeta.isEnterpriseBuild,
             showColorPicker = showColorPicker,
+            messageSearchIndexStatus = messageSearchIndexStatus,
             deviceId = deviceId,
             eventSink = ::handleEvent,
         )
+    }
+
+    /**
+     * The order of the checks is the trust order of the signals: the flag gates everything, an
+     * unattached index makes any action pointless, live WorkManager activity beats whatever the
+     * stored cursor says (it may be a stale mid-flight snapshot of the sweep that is about to
+     * resume), and only then does the cursor get to describe the past.
+     */
+    private fun messageSearchIndexStatus(
+        flagEnabled: Boolean,
+        indexAvailable: Boolean,
+        sweepActivity: MessageSearchSweepActivity,
+        cursor: SearchBackfillCursor?,
+    ): MessageSearchIndexStatus {
+        return when {
+            !flagEnabled -> MessageSearchIndexStatus.Hidden
+            !indexAvailable -> MessageSearchIndexStatus.RestartNeeded
+            sweepActivity == MessageSearchSweepActivity.RUNNING -> MessageSearchIndexStatus.Running(
+                roomsDone = cursor?.index ?: 0,
+                roomsTotal = cursor?.queue?.size ?: 0,
+            )
+            sweepActivity == MessageSearchSweepActivity.WAITING -> MessageSearchIndexStatus.WaitingForRun
+            cursor == null -> MessageSearchIndexStatus.Idle
+            !cursor.isDrained -> MessageSearchIndexStatus.Paused(
+                roomsDone = cursor.index,
+                roomsTotal = cursor.queue.size,
+            )
+            cursor.queue.isNotEmpty() -> MessageSearchIndexStatus.Finished(
+                roomsSwept = cursor.queue.size,
+                pagesFetched = cursor.pagesIssued,
+            )
+            else -> MessageSearchIndexStatus.Idle
+        }
     }
 
     private fun CoroutineScope.computeCacheSize(cacheSize: MutableState<AsyncData<String>>) = launch {

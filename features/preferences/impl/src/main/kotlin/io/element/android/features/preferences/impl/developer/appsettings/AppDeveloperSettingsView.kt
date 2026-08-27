@@ -45,6 +45,7 @@ fun AppDeveloperSettingsView(
     onOpenShowkase: () -> Unit,
     modifier: Modifier = Modifier,
     showTopDivider: Boolean = false,
+    afterFeatureFlags: @Composable () -> Unit = {},
 ) {
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -56,6 +57,7 @@ fun AppDeveloperSettingsView(
         ) {
             FeatureListContent(state)
         }
+        afterFeatureFlags()
         ElementCallCategory(state = state)
         PreferenceCategory(title = "Room list") {
             PreferenceDropdown(
