@@ -72,6 +72,7 @@ fun TimelineItemTextView(
     ) {
         val text = getTextWithResolvedMentions(content)
         val codeBlockBounds = remember { mutableStateOf<ImmutableList<CodeBlockBounds>>(persistentListOf()) }
+        var codeBlockOverlays by remember { mutableStateOf<ImmutableList<CodeBlockOverlay>>(persistentListOf()) }
         val measureLastTextLine = ContentAvoidingLayout.measureLegacyLastTextLine(onContentLayoutChange = onContentLayoutChange)
         val density = LocalDensity.current
         val headerPx = with(density) { (CodeBlockHeaderHeight * fontScale).roundToPx() }
@@ -96,6 +97,8 @@ fun TimelineItemTextView(
             CodeBlockCopyButtons(
                 actions = actions,
                 boundsAt = { index -> codeBlockBounds.value.getOrNull(index) ?: CodeBlockBounds.Zero },
+                overlays = codeBlockOverlays,
+                latestOverlays = { codeBlockOverlays },
                 onLongClick = onLongClick,
             )
         }

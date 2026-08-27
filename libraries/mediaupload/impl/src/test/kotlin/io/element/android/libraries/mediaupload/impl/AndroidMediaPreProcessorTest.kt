@@ -82,6 +82,7 @@ class AndroidMediaPreProcessorTest : RobolectricTest() {
     private suspend fun TestScope.process(
         asset: Asset,
         mediaOptimizationConfig: MediaOptimizationConfig,
+        mimeType: String = asset.mimeType,
         sdkIntVersion: Int = Build.VERSION_CODES.P,
         deleteOriginal: Boolean = false,
         mimeType: String = asset.mimeType,

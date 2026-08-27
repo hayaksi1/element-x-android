@@ -76,6 +76,7 @@ internal data class CodeBlockAction(
 
 /**
  * The bounds of the box a code block is drawn in.
+ * A code block found in a rendered message, together with the bounds of the box it is drawn in.
  *
  * The pixel values are in the coordinate space of the [Layout] the block was measured in, and
  * already include the space reserved by [withCodeBlockChrome].
@@ -90,6 +91,14 @@ internal data class CodeBlockBounds(
         val Zero = CodeBlockBounds(leftPx = 0, topPx = 0, bottomPx = 0, widthPx = 0)
     }
 }
+internal data class CodeBlockOverlay(
+    val code: String,
+    val language: String?,
+    val blockLeftPx: Int,
+    val blockTopPx: Int,
+    val blockBottomPx: Int,
+    val blockWidthPx: Int,
+)
 
 /**
  * The language of each code block in [document], in document order, or null where none is declared.
@@ -185,6 +194,24 @@ internal fun computeCodeBlockBounds(
     return spanned.codeBlockRanges()
         .mapNotNull { (start, end) ->
             if (start < 0 || end > spanned.length || start >= end) return@mapNotNull null
+ }
+ }
+
+ * Finds every code block in [text] and measures the box it is drawn in.
+ *
+ * The blocks are returned in document order, which is also how [languages] is matched back on.
+ */
+internal fun computeCodeBlockOverlays(
+    text: CharSequence,
+    layout: Layout,
+    languages: List<String?> = emptyList(),
+): ImmutableList<CodeBlockOverlay> {
+    val spanned = text as? Spanned ?: return persistentListOf()
+    return spanned.getSpans(0, spanned.length, CodeBlockSpan::class.java)
+        .map { span -> spanned.getSpanStart(span) to spanned.getSpanEnd(span) }
+        .sortedBy { (start, _) -> start }
+        .mapIndexedNotNull { index, (start, end) ->
+            if (start < 0 || end > spanned.length || start >= end) return@mapIndexedNotNull null
             val firstLine = layout.getLineForOffset(start)
             val lastLine = layout.getLineForOffset(end - 1)
             val marginPx = spanned.getSpans(start, end, LeadingMarginSpan::class.java)
@@ -196,6 +223,13 @@ internal fun computeCodeBlockBounds(
                 topPx = layout.getLineTop(firstLine),
                 bottomPx = layout.getLineBottom(lastLine),
                 widthPx = layout.width - marginPx,
+            CodeBlockOverlay(
+                code = spanned.subSequence(start, end).toString(),
+                language = languages.getOrNull(index),
+                blockLeftPx = if (isRtl) 0 else marginPx,
+                blockTopPx = layout.getLineTop(firstLine),
+                blockBottomPx = layout.getLineBottom(lastLine),
+                blockWidthPx = layout.width - marginPx,
             )
         }
         .toImmutableList()
@@ -225,6 +259,21 @@ internal fun BoxScope.CodeBlockCopyButtons(
     onLongClick: (() -> Unit)?,
 ) {
     if (actions.isEmpty()) return
+ }
+
+ * The chrome's geometry is read from [latestOverlays] inside the placement and measure lambdas, not
+ * from the composed [overlays]. The overlays are produced during the TextView's measure pass, one
+ * phase after composition, so a compositional read would always draw the chrome one frame behind the
+ * text while the bubble is animating. A layout-phase read of the same state sees the value the
+ * TextView sibling has just written, keeping the chrome glued to the block in the same frame.
+ */
+@Composable
+internal fun BoxScope.CodeBlockCopyButtons(
+    overlays: ImmutableList<CodeBlockOverlay>,
+    latestOverlays: () -> ImmutableList<CodeBlockOverlay>,
+    onLongClick: (() -> Unit)?,
+) {
+    if (overlays.isEmpty()) return
     val context = LocalContext.current
     val snackbarDispatcher = LocalSnackbarDispatcher.current
     val copyLabel = stringResource(CommonStrings.action_copy)
@@ -238,6 +287,19 @@ internal fun BoxScope.CodeBlockCopyButtons(
                     .align(Alignment.TopStart)
                     .offset { boundsAt(index).let { IntOffset(x = it.leftPx, y = it.topPx) } }
                     .blockWidth { boundsAt(index).widthPx }
+    }
+    }
+
+    for ((index, overlay) in overlays.withIndex()) {
+        val separatorColor = ElementTheme.colors.borderInteractiveSecondary
+        fun latest() = latestOverlays().getOrNull(index) ?: overlay
+
+        if (overlay.language != null) {
+            Column(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .offset { latest().let { IntOffset(x = it.blockLeftPx, y = it.blockTopPx) } }
+                    .blockWidth { latest().blockWidthPx }
                     .height(CodeBlockHeaderHeight * fontScale),
             ) {
                 Text(
@@ -245,6 +307,7 @@ internal fun BoxScope.CodeBlockCopyButtons(
                         .weight(1f)
                         .padding(horizontal = CODE_BLOCK_HORIZONTAL_INSET),
                     text = action.language,
+                    text = overlay.language,
                     style = ElementTheme.typography.fontBodySmMedium,
                     color = ElementTheme.colors.textSecondary,
                     maxLines = 1,
@@ -263,6 +326,11 @@ internal fun BoxScope.CodeBlockCopyButtons(
                     }
                 }
                 .blockWidth { boundsAt(index).widthPx }
+                    latest().let {
+                        IntOffset(x = it.blockLeftPx, y = it.blockBottomPx - (CodeBlockFooterHeight * fontScale).roundToPx())
+                    }
+                }
+                .blockWidth { latest().blockWidthPx }
                 .height(CodeBlockFooterHeight * fontScale),
         ) {
             HorizontalDivider(color = separatorColor)
@@ -277,6 +345,7 @@ internal fun BoxScope.CodeBlockCopyButtons(
                         onClick = {
                             context.getSystemService<ClipboardManager>()
                                 ?.setPrimaryClip(ClipData.newPlainText("", action.code))
+                                ?.setPrimaryClip(ClipData.newPlainText("", overlay.code))
                             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
                                 snackbarDispatcher.post(SnackbarMessage(CommonStrings.common_copied_to_clipboard))
                             }

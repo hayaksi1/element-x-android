@@ -1,5 +1,6 @@
 /*
  * Copyright 2026 hayaksi1
+ * Copyright (c) 2026 Element Creations Ltd.
  *
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
  * Please see LICENSE files in the repository root for full details.
@@ -26,6 +27,7 @@ class CodeBlockOverlayTest : RobolectricTest() {
     fun `a plain CharSequence yields no code blocks`() {
         val text = "no spans here"
         assertThat(codeBlockActions(text)).isEmpty()
+        assertThat(computeCodeBlockOverlays(text, layoutOf(text))).isEmpty()
     }
 
     @Test
@@ -59,6 +61,7 @@ class CodeBlockOverlayTest : RobolectricTest() {
         assertThat(bounds).hasSize(codeBlockActions(text).size)
         assertThat(bounds.first().topPx).isEqualTo(layout.getLineTop(layout.getLineForOffset(4)))
         assertThat(bounds.last().topPx).isEqualTo(layout.getLineTop(layout.getLineForOffset(14)))
+        assertThat(computeCodeBlockOverlays(text, layoutOf(text))).isEmpty()
     }
 
     @Test
@@ -75,6 +78,14 @@ class CodeBlockOverlayTest : RobolectricTest() {
         assertThat(bounds.first().bottomPx).isEqualTo(layout.getLineBottom(layout.getLineForOffset(15)))
         assertThat(bounds.first().leftPx).isEqualTo(0)
         assertThat(bounds.first().widthPx).isEqualTo(layout.width)
+        val overlays = computeCodeBlockOverlays(text, layout)
+
+        assertThat(overlays).hasSize(1)
+        assertThat(overlays.first().code).isEqualTo("code line")
+        assertThat(overlays.first().blockTopPx).isEqualTo(layout.getLineTop(layout.getLineForOffset(7)))
+        assertThat(overlays.first().blockBottomPx).isEqualTo(layout.getLineBottom(layout.getLineForOffset(15)))
+        assertThat(overlays.first().blockLeftPx).isEqualTo(0)
+        assertThat(overlays.first().blockWidthPx).isEqualTo(layout.width)
     }
 
     @Test
@@ -88,6 +99,10 @@ class CodeBlockOverlayTest : RobolectricTest() {
 
         assertThat(bounds.leftPx).isEqualTo(30)
         assertThat(bounds.widthPx).isEqualTo(layout.width - 30)
+        val overlay = computeCodeBlockOverlays(text, layout).single()
+
+        assertThat(overlay.blockLeftPx).isEqualTo(30)
+        assertThat(overlay.blockWidthPx).isEqualTo(layout.width - 30)
     }
 
     @Test
@@ -101,6 +116,10 @@ class CodeBlockOverlayTest : RobolectricTest() {
 
         assertThat(bounds.leftPx).isEqualTo(0)
         assertThat(bounds.widthPx).isEqualTo(layout.width - 30)
+        val overlay = computeCodeBlockOverlays(text, layout).single()
+
+        assertThat(overlay.blockLeftPx).isEqualTo(0)
+        assertThat(overlay.blockWidthPx).isEqualTo(layout.width - 30)
     }
 
     @Test
@@ -114,6 +133,11 @@ class CodeBlockOverlayTest : RobolectricTest() {
         assertThat(codeBlockActions(text).single().code).isEqualTo("just code")
         assertThat(bounds.topPx).isEqualTo(layout.getLineTop(0))
         assertThat(bounds.bottomPx).isEqualTo(layout.getLineBottom(layout.lineCount - 1))
+        val overlay = computeCodeBlockOverlays(text, layout).single()
+
+        assertThat(overlay.code).isEqualTo("just code")
+        assertThat(overlay.blockTopPx).isEqualTo(layout.getLineTop(0))
+        assertThat(overlay.blockBottomPx).isEqualTo(layout.getLineBottom(layout.lineCount - 1))
     }
 
     @Test
@@ -126,6 +150,10 @@ class CodeBlockOverlayTest : RobolectricTest() {
 
         assertThat(codeBlockActions(text).single().code).isEqualTo("one\ntwo\n")
         assertThat(bounds.bottomPx).isEqualTo(layout.getLineBottom(layout.getLineForOffset(12)))
+        val overlay = computeCodeBlockOverlays(text, layout).single()
+
+        assertThat(overlay.code).isEqualTo("one\ntwo\n")
+        assertThat(overlay.blockBottomPx).isEqualTo(layout.getLineBottom(layout.getLineForOffset(12)))
     }
 
     @Test
@@ -135,6 +163,9 @@ class CodeBlockOverlayTest : RobolectricTest() {
         text.markCodeBlock(start = 4, end = 9)
 
         assertThat(codeBlockActions(text).map { it.code }).containsExactly("first", "second").inOrder()
+        val overlays = computeCodeBlockOverlays(text, layoutOf(text))
+
+        assertThat(overlays.map { it.code }).containsExactly("first", "second").inOrder()
     }
 
     @Test
@@ -143,6 +174,9 @@ class CodeBlockOverlayTest : RobolectricTest() {
         text.markCodeBlock(start = 6, end = 13)
 
         assertThat(codeBlockActions(text).single().code).isEqualTo("one\ntwo")
+        val overlays = computeCodeBlockOverlays(text, layoutOf(text))
+
+        assertThat(overlays.single().code).isEqualTo("one\ntwo")
     }
 
     @Test
@@ -164,6 +198,7 @@ class CodeBlockOverlayTest : RobolectricTest() {
 
         assertThat(display.toString()).isEqualTo(original.toString())
         assertThat(codeBlockActions(display).single().code).isEqualTo("one\ntwo")
+        assertThat(computeCodeBlockOverlays(display, layoutOf(display)).single().code).isEqualTo("one\ntwo")
     }
 
     @Test
@@ -291,6 +326,8 @@ class CodeBlockOverlayTest : RobolectricTest() {
         val chromed = layoutOf(display)
 
         assertThat(codeBlockActions(display, languages).map { it.language }).containsExactly(null, "kotlin").inOrder()
+        val overlays = computeCodeBlockOverlays(display, chromed, languages)
+        assertThat(overlays.map { it.language }).containsExactly(null, "kotlin").inOrder()
 
         val firstBlockLine = chromed.getLineForOffset(4)
         val secondBlockLine = chromed.getLineForOffset(14)
@@ -313,6 +350,9 @@ class CodeBlockOverlayTest : RobolectricTest() {
         text.markCodeBlock(start = 14, end = 20)
 
         assertThat(codeBlockActions(text, languages = listOf("kotlin")).map { it.language }).containsExactly("kotlin", null).inOrder()
+        val overlays = computeCodeBlockOverlays(text, layoutOf(text), languages = listOf("kotlin"))
+
+        assertThat(overlays.map { it.language }).containsExactly("kotlin", null).inOrder()
     }
 
     @Test
