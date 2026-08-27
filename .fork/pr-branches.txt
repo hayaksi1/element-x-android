@@ -1,0 +1,57 @@
+# Heads of OPEN upstream PRs. MERGED AS-IS.
+# NEVER rebase, rename, amend or force-push these -- element-hq
+# maintainers push commits directly onto them.
+# Regenerate with:
+#   gh pr list --repo element-hq/element-x-android --author hayaksi1 \
+#     --state open --limit 200 --json headRefName --jq '.[].headRefName' | sort -u
+
+feature/code-block-copy-button
+fix/1171-preview-formatting
+fix/1586-publish-conversation-shortcut
+fix/1612-redaction-reason
+fix/1874-empty-formatted-body
+fix/1933-legacy-call-member-events
+fix/2153-no-fullscreen-composer
+fix/2311-receipts-message-like-events
+fix/262-emoji-only-remember
+fix/2789-jump-back-after-reply
+fix/2914-phone-word-boundary
+fix/3434-mention-suggestion-ranking
+fix/3514-share-link
+fix/3568-room-member-count
+fix/3575-blank-state-event-rows
+fix/3654-decline-invalid-invite
+fix/3790-leave-room-navigation
+fix/3808-search-room-alias
+fix/3835-direct-share-targets
+fix/4095-hide-custom-state-events
+fix/4388-media-upload-progress
+fix/4417-hide-redacted-messages
+fix/4556-homeserver-support-contact
+fix/4566-destroy-one-shot-rooms
+fix/4600-timeline-talkback-actions
+fix/4883-cancel-media-upload
+fix/4910-remember-filters
+fix/5022-disable-markdown
+fix/5209-hide-no-change-events
+fix/5224-caption-from-composer
+fix/5242-forward-cancel
+fix/5344-verification-unavailable
+fix/5727-change-role-from-profile
+fix/5780-voice-recorder-stuck-recording
+fix/5823-recovery-banner-dismissal
+fix/6031-pin-keypad-randomiser
+fix/6402-clear-filters-a11y
+fix/6566-search-space-rooms
+fix/6641-room-list-activity-visibility
+fix/6857-hide-space-rooms
+fix/6959-pinned-count-matches-list
+fix/6970-room-list-avatar-preview
+fix/7062-invitations-under-notify-me
+fix/7310-membership-changes-public-rooms
+fix/7471-conversation-notifications
+fix/943-permission-rationale
+fix/developer-options-switch
+search/cache-bootstrap
+search/message-search-index
+search/room-search-screen
