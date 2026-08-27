@@ -1,0 +1,34 @@
+# Fork-only branches. REBASED onto develop each sync.
+# Order matters: earlier branches merge first.
+# feat/fork-tooling is implicit and always merges first.
+# Lines starting with # are comments. Blank lines ignored.
+
+feature/message-search
+feature/search-index-button
+fix/2690-verification-shows-account
+fix/2870-heading-line-break
+fix/3756-edit-composer-send-button
+fix/3964-preserve-image-transparency
+fix/4236-mention-list-not-updated
+fix/4328-strikethrough-tags
+fix/4702-push-gateway-rate-limited
+fix/4770-fake-voice-recorder
+fix/5267-room-alias-resolver-timeout
+fix/5797-carry-notification-setting
+fix/5813-no-own-read-receipt
+fix/5966-details-summary
+fix/6276-voice-message-audio-focus
+fix/6703-developer-options-layout-jump
+fix/6839-undelivered-image-preview
+fix/7066-decline-invite-navigate-up
+fix/7205-intent-replayed-from-history
+fix/7270-emoji-picker-keyboard
+fix/786-top-bar-hitbox
+search/backfill-sweep
+search/matrix-layer
+feat/fork-misc
+#
+# Deliberately NOT listed (branches still exist, nothing was deleted):
+#   tmp-7538                      scratch branch owned by another session
+#   fix/developer-options-toggle  old 165-commit aggregate, superseded
+#   batch*/rebuild/audit-*/pr7*/work/*/wip/*   aggregates and scratch
