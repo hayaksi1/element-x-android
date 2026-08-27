@@ -164,6 +164,18 @@ class ToPlainTextTest : RobolectricTest() {
     }
 
     @Test
+    fun `TextMessageType toPlainText - returns the body if the formatted one only contains an image`() {
+        val messageType = TextMessageType(
+            body = "\uD83D\uDE1C",
+            formatted = FormattedBody(
+                format = MessageFormat.HTML,
+                body = "<img data-mx-emoticon src=\"mxc://matrix.org/anImage\" height=\"32\" width=\"32\" alt=\"\uD83D\uDE1C\" />"
+            )
+        )
+        assertThat(messageType.toPlainText(permalinkParser = FakePermalinkParser())).isEqualTo("\uD83D\uDE1C")
+    }
+
+    @Test
     fun `TextMessageType toAnnotatedText - keeps the inline formatting`() {
         val messageType = TextMessageType(
             body = "Hello striked bold world",
@@ -191,16 +203,5 @@ class ToPlainTextTest : RobolectricTest() {
         )
 
         assertThat(messageType.toAnnotatedText(permalinkParser = FakePermalinkParser())).isEqualTo("Hello world")
-    }
-
-    fun `TextMessageType toPlainText - returns the body if the formatted one only contains an image`() {
-        val messageType = TextMessageType(
-            body = "\uD83D\uDE1C",
-            formatted = FormattedBody(
-                format = MessageFormat.HTML,
-                body = "<img data-mx-emoticon src=\"mxc://matrix.org/anImage\" height=\"32\" width=\"32\" alt=\"\uD83D\uDE1C\" />"
-            )
-        )
-        assertThat(messageType.toPlainText(permalinkParser = FakePermalinkParser())).isEqualTo("\uD83D\uDE1C")
     }
 }

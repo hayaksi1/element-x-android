@@ -110,9 +110,6 @@ interface MatrixClient : ClientUrlContentFetcher {
     val messageSearchService: MessageSearchService
 
     /** Reads and writes the account settings controlling whether media previews and avatars are shown. */
-    /** Whether this live client was built with an encrypted message search index. */
-    val isMessageSearchAvailable: Boolean
-    val messageSearchService: MessageSearchService
     val mediaPreviewService: MediaPreviewService
 
     /** Downloads media content, thumbnails and files from the homeserver, caching them on disk. */

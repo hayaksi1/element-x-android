@@ -87,14 +87,14 @@ class DeveloperSettingsViewTest : RobolectricTest() {
 
     @Test
     fun `clicking on the developer options switch emits the expected event`() = runAndroidComposeUiTest {
-        val eventsRecorder = EventsRecorder<DeveloperSettingsEvents>()
+        val eventsRecorder = EventsRecorder<DeveloperSettingsEvent>()
         setDeveloperSettingsView(
             state = aDeveloperSettingsState(
                 eventSink = eventsRecorder
             ),
         )
         onNodeWithText("On").performClick()
-        eventsRecorder.assertSingle(DeveloperSettingsEvents.SetShowDeveloperSettings(false))
+        eventsRecorder.assertSingle(DeveloperSettingsEvent.SetShowDeveloperSettings(false))
     }
 
     @Config(qualifiers = "h2400dp")

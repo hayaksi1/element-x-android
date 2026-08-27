@@ -108,9 +108,6 @@ class DeveloperSettingsPresenter(
             computeCacheSize(cacheSize)
         }
 
-        fun handleEvent(event: DeveloperSettingsEvent) {
-        }
-
         val showDeveloperSettings by showDeveloperSettingsProvider.showDeveloperSettings.collectAsState()
         val isMessageSearchFlagEnabled by remember {
             featureFlagService.isFeatureEnabledFlow(FeatureFlags.MessageSearch)
@@ -128,7 +125,7 @@ class DeveloperSettingsPresenter(
             cursor = sweepCursor,
         )
 
-        fun handleEvent(event: DeveloperSettingsEvents) {
+        fun handleEvent(event: DeveloperSettingsEvent) {
             when (event) {
                 DeveloperSettingsEvent.ClearCache -> coroutineScope.clearCache(clearCacheAction)
                 is DeveloperSettingsEvent.ChangeBrandColor -> coroutineScope.launch {
@@ -140,13 +137,10 @@ class DeveloperSettingsPresenter(
                         ?.padStart(7, '#')
                     enterpriseService.overrideBrandColor(sessionId, color)
                 }
-                is DeveloperSettingsEvent.SetShowColorPicker -> {
-                }
-
-                is DeveloperSettingsEvents.SetShowDeveloperSettings -> {
+                is DeveloperSettingsEvent.SetShowDeveloperSettings -> {
                     showDeveloperSettingsProvider.setShowDeveloperSettings(event.show)
                 }
-                is DeveloperSettingsEvents.SetShowColorPicker -> {
+                is DeveloperSettingsEvent.SetShowColorPicker -> {
                     showColorPicker = event.show
                 }
                 DeveloperSettingsEvent.VacuumStores -> coroutineScope.launch {
@@ -169,10 +163,10 @@ class DeveloperSettingsPresenter(
                     pushRulesAction.value = AsyncAction.Uninitialized
                 }
 
-                DeveloperSettingsEvents.StartSearchIndexing -> coroutineScope.launch {
+                DeveloperSettingsEvent.StartSearchIndexing -> coroutineScope.launch {
                     messageSearchIndexer.startUserInitiatedSweep(sessionId)
                 }
-                DeveloperSettingsEvents.CancelSearchIndexing -> {
+                DeveloperSettingsEvent.CancelSearchIndexing -> {
                     messageSearchIndexer.cancelSweep(sessionId)
                 }
             }

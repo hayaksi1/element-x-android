@@ -274,7 +274,7 @@ class DeveloperSettingsPresenterTest {
         )
         presenter.test {
             val state = consumeItemsUntilPredicate { it.showDeveloperSettings }.last()
-            state.eventSink(DeveloperSettingsEvents.SetShowDeveloperSettings(false))
+            state.eventSink(DeveloperSettingsEvent.SetShowDeveloperSettings(false))
             consumeItemsUntilPredicate { !it.showDeveloperSettings }
             cancelAndIgnoreRemainingEvents()
         }
@@ -359,8 +359,8 @@ class DeveloperSettingsPresenterTest {
         )
         presenter.test {
             val state = awaitItem()
-            state.eventSink(DeveloperSettingsEvents.StartSearchIndexing)
-            state.eventSink(DeveloperSettingsEvents.CancelSearchIndexing)
+            state.eventSink(DeveloperSettingsEvent.StartSearchIndexing)
+            state.eventSink(DeveloperSettingsEvent.CancelSearchIndexing)
             cancelAndIgnoreRemainingEvents()
         }
         startRecorder.assertions().isCalledOnce().with(value(A_SESSION_ID))
