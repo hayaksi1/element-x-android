@@ -202,11 +202,6 @@ class DefaultNotificationCreator(
         val newEvents = messagingStyle.filterOutAlreadyDisplayedEvents(events)
         messagingStyle.addMessagesFromEvents(newEvents, imageLoader)
         return builder
-            // ID of the corresponding shortcut, for conversation features under API 30+
-            // Must match those created in the ShortcutInfoCompat.Builder()
-            // for the notification to appear as a "Conversation":
-            // https://developer.android.com/develop/ui/views/notifications/conversations
-            .setShortcutId(createShortcutId(roomInfo.sessionId, roomInfo.roomId))
             .setCategory(category)
             .setNumber(events.size)
             .setOnlyAlertOnce(roomInfo.isUpdated || newEvents.isEmpty())
