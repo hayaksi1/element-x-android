@@ -42,6 +42,12 @@ interface AppPreferencesStore {
 
     /** Whether room notifications are published as Android conversations; defaults to `true`. */
     fun isConversationNotificationsEnabledFlow(): Flow<Boolean>
+     * @param show true to list the developer options entry in the settings.
+     */
+    suspend fun setShowDeveloperSettings(show: Boolean)
+
+    /** Whether the developer options entry is listed in the settings; defaults to `true` on non release builds. */
+    fun showDeveloperSettingsFlow(): Flow<Boolean>
 
     /**
      * @param string the Element Call deployment to use, or `null` to go back to the one from the homeserver.

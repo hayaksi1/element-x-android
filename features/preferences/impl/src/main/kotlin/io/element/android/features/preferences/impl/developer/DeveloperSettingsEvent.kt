@@ -20,3 +20,13 @@ sealed interface DeveloperSettingsEvent {
     data object OpenPushRules : DeveloperSettingsEvent
     data object DismissPushRulesError : DeveloperSettingsEvent
 }
+
+sealed interface DeveloperSettingsEvents {
+    data class SetShowDeveloperSettings(val show: Boolean) : DeveloperSettingsEvents
+    data class SetShowColorPicker(val show: Boolean) : DeveloperSettingsEvents
+    data class ChangeBrandColor(val color: Color?) : DeveloperSettingsEvents
+    data object ClearCache : DeveloperSettingsEvents
+    data object VacuumStores : DeveloperSettingsEvents
+    data class MarkAllRoomsAsRead(val needsConfirmation: Boolean) : DeveloperSettingsEvents
+    data object DismissMarkAllRoomsAsReadConfirmation : DeveloperSettingsEvents
+}
