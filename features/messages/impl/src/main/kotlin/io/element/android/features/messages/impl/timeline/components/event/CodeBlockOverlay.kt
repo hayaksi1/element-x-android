@@ -65,32 +65,11 @@ private const val LANGUAGE_CLASS_PREFIX = "language-"
 private const val FALLBACK_REPLY_NODE_TAG = "mx-reply"
 
 /**
- * What the chrome of a code block offers: the code its copy row puts on the clipboard, and the
- * language its header is labelled with. Read off the message's own spans, so it is known before the
- * message is measured.
- */
-internal data class CodeBlockAction(
-    val code: String,
-    val language: String?,
-)
-
-/**
- * The bounds of the box a code block is drawn in.
  * A code block found in a rendered message, together with the bounds of the box it is drawn in.
  *
  * The pixel values are in the coordinate space of the [Layout] the block was measured in, and
  * already include the space reserved by [withCodeBlockChrome].
  */
-internal data class CodeBlockBounds(
-    val leftPx: Int,
-    val topPx: Int,
-    val bottomPx: Int,
-    val widthPx: Int,
-) {
-    companion object {
-        val Zero = CodeBlockBounds(leftPx = 0, topPx = 0, bottomPx = 0, widthPx = 0)
-    }
-}
 internal data class CodeBlockOverlay(
     val code: String,
     val language: String?,
@@ -163,40 +142,6 @@ internal fun hasCodeBlock(text: CharSequence): Boolean {
 }
 
 /**
- * Finds every code block in [text] and reads what its chrome offers.
- *
- * The blocks are returned in document order, which is also how [languages] is matched back on.
- */
-internal fun codeBlockActions(
-    text: CharSequence,
-    languages: List<String?> = emptyList(),
-): ImmutableList<CodeBlockAction> {
-    val spanned = text as? Spanned ?: return persistentListOf()
-    return spanned.codeBlockRanges()
-        .mapIndexedNotNull { index, (start, end) ->
-            if (start < 0 || end > spanned.length || start >= end) return@mapIndexedNotNull null
-            CodeBlockAction(
-                code = spanned.subSequence(start, end).toString(),
-                language = languages.getOrNull(index),
-            )
-        }
-        .toImmutableList()
-}
-
-/**
- * Measures the box each code block in [text] is drawn in, in the same order as [codeBlockActions].
- */
-internal fun computeCodeBlockBounds(
-    text: CharSequence,
-    layout: Layout,
-): ImmutableList<CodeBlockBounds> {
-    val spanned = text as? Spanned ?: return persistentListOf()
-    return spanned.codeBlockRanges()
-        .mapNotNull { (start, end) ->
-            if (start < 0 || end > spanned.length || start >= end) return@mapNotNull null
- }
- }
-
  * Finds every code block in [text] and measures the box it is drawn in.
  *
  * The blocks are returned in document order, which is also how [languages] is matched back on.
@@ -218,11 +163,6 @@ internal fun computeCodeBlockOverlays(
                 .filter { it !is CodeBlockSpan && spanned.getSpanStart(it) <= start && start < spanned.getSpanEnd(it) }
                 .sumOf { it.getLeadingMargin(true) }
             val isRtl = layout.getParagraphDirection(firstLine) == Layout.DIR_RIGHT_TO_LEFT
-            CodeBlockBounds(
-                leftPx = if (isRtl) 0 else marginPx,
-                topPx = layout.getLineTop(firstLine),
-                bottomPx = layout.getLineBottom(lastLine),
-                widthPx = layout.width - marginPx,
             CodeBlockOverlay(
                 code = spanned.subSequence(start, end).toString(),
                 language = languages.getOrNull(index),
@@ -235,32 +175,10 @@ internal fun computeCodeBlockOverlays(
         .toImmutableList()
 }
 
-private fun Spanned.codeBlockRanges(): List<Pair<Int, Int>> =
-    getSpans(0, length, CodeBlockSpan::class.java)
-        .map { span -> getSpanStart(span) to getSpanEnd(span) }
-        .sortedBy { (start, _) -> start }
-
 /**
  * Draws the chrome of a code block: a language label and separator at the top, and a copy row at the
  * bottom, both inside the block's own box and within the space [withCodeBlockChrome] reserved.
  *
- * [boundsAt] is read from the placement and measure lambdas and never during composition. The bounds
- * are produced during the TextView's measure pass, so a composition that depended on them would both
- * draw the chrome a frame behind the text and recompose from inside the layout phase — and that
- * recomposition rebuilds the display text, which calls setText, which drops the TextView's Layout.
- * EditorStyledTextView skips a code block's background whenever it draws without a Layout, so the box
- * would then stay missing until something invalidated the view again. Reading in the layout phase
- * instead sees the value the TextView sibling has just written, in the same frame.
- */
-@Composable
-internal fun BoxScope.CodeBlockCopyButtons(
-    actions: ImmutableList<CodeBlockAction>,
-    boundsAt: (Int) -> CodeBlockBounds,
-    onLongClick: (() -> Unit)?,
-) {
-    if (actions.isEmpty()) return
- }
-
  * The chrome's geometry is read from [latestOverlays] inside the placement and measure lambdas, not
  * from the composed [overlays]. The overlays are produced during the TextView's measure pass, one
  * phase after composition, so a compositional read would always draw the chrome one frame behind the
@@ -278,18 +196,6 @@ internal fun BoxScope.CodeBlockCopyButtons(
     val snackbarDispatcher = LocalSnackbarDispatcher.current
     val copyLabel = stringResource(CommonStrings.action_copy)
     val fontScale = LocalDensity.current.fontScale
-    for ((index, action) in actions.withIndex()) {
-        val separatorColor = ElementTheme.colors.borderInteractiveSecondary
-
-        if (action.language != null) {
-            Column(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .offset { boundsAt(index).let { IntOffset(x = it.leftPx, y = it.topPx) } }
-                    .blockWidth { boundsAt(index).widthPx }
-    }
-    }
-
     for ((index, overlay) in overlays.withIndex()) {
         val separatorColor = ElementTheme.colors.borderInteractiveSecondary
         fun latest() = latestOverlays().getOrNull(index) ?: overlay
@@ -306,7 +212,6 @@ internal fun BoxScope.CodeBlockCopyButtons(
                     modifier = Modifier
                         .weight(1f)
                         .padding(horizontal = CODE_BLOCK_HORIZONTAL_INSET),
-                    text = action.language,
                     text = overlay.language,
                     style = ElementTheme.typography.fontBodySmMedium,
                     color = ElementTheme.colors.textSecondary,
@@ -321,11 +226,6 @@ internal fun BoxScope.CodeBlockCopyButtons(
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .offset {
-                    boundsAt(index).let {
-                        IntOffset(x = it.leftPx, y = it.bottomPx - (CodeBlockFooterHeight * fontScale).roundToPx())
-                    }
-                }
-                .blockWidth { boundsAt(index).widthPx }
                     latest().let {
                         IntOffset(x = it.blockLeftPx, y = it.blockBottomPx - (CodeBlockFooterHeight * fontScale).roundToPx())
                     }
@@ -344,7 +244,6 @@ internal fun BoxScope.CodeBlockCopyButtons(
                         onLongClick = onLongClick,
                         onClick = {
                             context.getSystemService<ClipboardManager>()
-                                ?.setPrimaryClip(ClipData.newPlainText("", action.code))
                                 ?.setPrimaryClip(ClipData.newPlainText("", overlay.code))
                             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
                                 snackbarDispatcher.post(SnackbarMessage(CommonStrings.common_copied_to_clipboard))

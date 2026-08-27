@@ -15,11 +15,7 @@ import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
@@ -27,7 +23,6 @@ import androidx.compose.ui.tooling.preview.PreviewParameter
 import io.element.android.compound.theme.ElementTheme
 import io.element.android.features.messages.impl.timeline.components.layout.ContentAvoidingLayout
 import io.element.android.features.messages.impl.timeline.components.layout.ContentAvoidingLayoutData
-import io.element.android.features.messages.impl.timeline.model.event.AN_EMOJI_ONLY_TEXT
 import io.element.android.features.messages.impl.timeline.model.event.TimelineItemTextBasedContent
 import io.element.android.features.messages.impl.timeline.model.event.TimelineItemTextBasedContentPreviewParam
 import io.element.android.features.messages.impl.timeline.model.event.aTimelineItemTextContent
@@ -40,8 +35,6 @@ import io.element.android.libraries.textcomposer.ElementRichTextEditorStyle
 import io.element.android.libraries.textcomposer.mentions.LocalMentionSpanUpdater
 import io.element.android.wysiwyg.compose.EditorStyledText
 import io.element.android.wysiwyg.link.Link
-import kotlinx.collections.immutable.ImmutableList
-import kotlinx.collections.immutable.persistentListOf
 
 @Composable
 fun TimelineItemTextView(
@@ -55,13 +48,8 @@ fun TimelineItemTextView(
     // The View <-> Compose interop is not working well with Compose UI tests (it loops indefinitely), so we skip it in the UI test mode.
     if (LocalUiTestMode.current) return
 
-    val isInPreview = LocalInspectionMode.current
-    val emojiOnly = remember(content.body, content.formattedBody, isInPreview) {
-        content.formattedBody.toString() == content.body &&
-            content.body.replace(" ", "").let { body ->
-                if (isInPreview) body == AN_EMOJI_ONLY_TEXT else body.containsOnlyEmojis()
-            }
-    }
+    val emojiOnly = content.formattedBody.toString() == content.body &&
+        content.body.replace(" ", "").containsOnlyEmojis()
     val textStyle = when {
         emojiOnly -> ElementTheme.typography.fontHeadingXlRegular
         else -> ElementTheme.typography.fontBodyLgRegular
@@ -71,7 +59,6 @@ fun TimelineItemTextView(
         LocalTextStyle provides textStyle
     ) {
         val text = getTextWithResolvedMentions(content)
-        val codeBlockBounds = remember { mutableStateOf<ImmutableList<CodeBlockBounds>>(persistentListOf()) }
         var codeBlockOverlays by remember { mutableStateOf<ImmutableList<CodeBlockOverlay>>(persistentListOf()) }
         val measureLastTextLine = ContentAvoidingLayout.measureLegacyLastTextLine(onContentLayoutChange = onContentLayoutChange)
         val density = LocalDensity.current
@@ -81,22 +68,16 @@ fun TimelineItemTextView(
         // Not remembered: a stable identity would stop EditorStyledText from calling setText again,
         // and in-place MentionSpan updates would never reach the TextView.
         val displayText = withCodeBlockChrome(text, headerPx, footerPx, languages)
-        val actions = codeBlockActions(displayText, languages)
         Box(modifier.semantics { contentDescription = content.plainText }) {
             EditorStyledText(
-                text = displayText,
+                text = text,
                 onLinkClickedListener = onLinkClick,
                 onLinkLongClickedListener = onLinkLongClick,
                 style = ElementRichTextEditorStyle.textStyle(),
-                onTextLayout = { layout ->
-                    measureLastTextLine(layout)
-                    codeBlockBounds.value = computeCodeBlockBounds(displayText, layout)
-                },
+                onTextLayout = ContentAvoidingLayout.measureLegacyLastTextLine(onContentLayoutChange = onContentLayoutChange),
                 releaseOnDetach = false,
             )
             CodeBlockCopyButtons(
-                actions = actions,
-                boundsAt = { index -> codeBlockBounds.value.getOrNull(index) ?: CodeBlockBounds.Zero },
                 overlays = codeBlockOverlays,
                 latestOverlays = { codeBlockOverlays },
                 onLongClick = onLongClick,
