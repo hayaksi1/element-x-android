@@ -53,12 +53,23 @@ die()  { printf '\033[1;31mERR\033[0m %s\n' "$*" >&2; exit 1; }
 run()  { if [[ $DRY_RUN -eq 1 ]]; then printf '    [dry-run] %s\n' "$*"; else "$@"; fi; }
 
 # --- manifest reading -------------------------------------------------------
+# Manifests live on the tooling branch. On a fresh integration branch they are
+# not in the worktree yet (tooling is merged first, but preflight runs before
+# that), so fall back to reading them straight out of the tooling branch.
 read_manifest() {
-  # shellcheck disable=SC2001
-  local file
+  local file base raw
   file="$1"
-  [[ -f "$file" ]] || die "missing manifest: $file"
-  sed -e 's/#.*//' -e 's/[[:space:]]*$//' "$file" | grep -v '^$' || true
+  base="$(basename "$file")"
+  if [[ -f "$file" ]]; then
+    raw="$(cat "$file")"
+  elif raw="$(git show "$TOOLING:.fork/$base" 2>/dev/null)"; then
+    :
+  elif raw="$(git show "origin/$TOOLING:.fork/$base" 2>/dev/null)"; then
+    :
+  else
+    die "missing manifest: $file (and not found on $TOOLING)"
+  fi
+  printf '%s\n' "$raw" | sed -e 's/#.*//' -e 's/[[:space:]]*$//' | grep -v '^$' || true
 }
 
 # --- preflight --------------------------------------------------------------
