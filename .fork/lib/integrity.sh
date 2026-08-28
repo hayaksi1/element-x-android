@@ -164,6 +164,16 @@ check_unmanaged_branches() {
 # "in no parent": fix/4388-media-upload-progress's merge b78f1cbf69 is 3711 bytes
 # of plumbing combined diff and 0 bytes with rename detection on.
 #
+# Measured against ground truth on 8338fec20c, whose count two readings of this
+# code disagreed on. Renames off says 11 lines, renames on says 6; add -M to the
+# plumbing form and it returns 6 too, byte-identical at 18259. Replaying that
+# branch's real pick list onto upstream/develop and grepping the result: 4 of the
+# 6 are genuinely absent, and all 5 of the extra lines renames-off adds are
+# PRESENT. They live in DeveloperSettingsStatePreviewParam.kt, which the merge
+# renamed, so without -M they read as new when the cherry-pick reproduces them
+# perfectly well. Renames on is nearer the truth and conservative in the safe
+# direction; renames off invents five losses that are not there.
+#
 # `git merge-tree --write-tree` is NOT the test either, though it looks like a
 # cleaner one: it answers "did a human touch this merge", which is a different
 # question. Cross-checked over all 14 merges in the manifests, it agrees on 12
