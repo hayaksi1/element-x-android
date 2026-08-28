@@ -5,8 +5,15 @@
 # 2026-08-28 from the state at that moment. Anything appearing on origin
 # after the seed is REPORTED, so a new branch cannot go unnoticed.
 #
-# Nothing here is deleted or renamed. To adopt one, move it into features.txt or
+# Every branch listed here STAYS. Being unmanaged is not evidence of being dead:
+# a closed-but-unmerged PR branch, an abandoned experiment and a live one all
+# look identical from here. To adopt one, move it into features.txt or
 # pr-branches.txt and delete its line here -- this list should only ever shrink.
+#
+# The one other way a line leaves: the branch is provably merged and is deleted
+# under "Branch retention" in FORK_RULES.md -- proven, archived to
+# refs/fork/archive/<b>, recorded in archived-branches.tsv, owner-approved.
+# Nothing here is ever renamed, folded or consolidated.
 #
 #
 # develop, master and feat/fork-tooling are excluded by the check itself.

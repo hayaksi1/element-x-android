@@ -60,6 +60,15 @@ Two manifests, opposite treatment, hard-fail if a branch appears in both:
 
 ## 2. Branch disposition
 
+> **Superseded 2026-08-28.** The `prune` rows below predate the branch-retention
+> rule and must not be acted on as written. A branch may be deleted **only if it
+> is provably merged** — GitHub `MERGED` plus `merge-base --is-ancestor` or a
+> zero-`+` `git cherry` — archived, recorded, and owner-approved first. That
+> re-qualifies every row: the 58 "fully absorbed" branches are candidates to
+> *test*, not to delete; `fix/developer-options-toggle` and the ~17 aggregates
+> almost certainly fail both proofs and therefore **stay**. Never fold or
+> consolidate them. See "Branch retention" in `FORK_RULES.md`.
+
 | Class | Count | Action |
 | :--- | ---: | :--- |
 | PR-backed (open upstream PR) | **50** | into `pr-branches.txt`, names frozen |
@@ -70,7 +79,8 @@ Two manifests, opposite treatment, hard-fail if a branch appears in both:
 | Develop-only feature commits with no branch | **23 + 2 new** | see §3 |
 
 Deletion is **local-only in this phase.** No remote branch is deleted without a
-separate, explicit approval listing refs and SHAs.
+separate, explicit approval listing refs and SHAs — still true, and now the
+weaker half of the rule: proof of merge and an archive ref come first.
 
 ---
 
@@ -174,9 +184,12 @@ coherent group (~6-8 branches), (b) a single `feat/fork-misc` bucket, or
 (b) for the true one-offs — but these are your features and I will not guess at
 their intent.
 
-**Q2 — remote branch deletion.** The 58 absorbed + ~17 aggregate branches also
-exist on `origin`. Delete them remotely now, or local-only and leave `origin`
-alone? I default to **local-only** until you say otherwise.
+**Q2 — remote branch deletion.** *Answered 2026-08-28.* Neither, as posed: the
+count is not the unit of decision. Each branch is tested individually, and only a
+provably merged one may go — archived to `refs/fork/archive/<b>`, written into
+`archived-branches.tsv`, and approved by the owner before the remote ref moves.
+The ~17 aggregates are not merged anywhere and stay. See "Branch retention" in
+`FORK_RULES.md`.
 
 **Q3 — default branch switch.** Scheduled workflows run only from the default
 branch, and `develop` must stay pristine. Switching the fork's default to
