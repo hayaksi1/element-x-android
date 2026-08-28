@@ -184,9 +184,11 @@ publish_ff() {
     die "assert_push_list is not defined -- .fork/lib/integrity.sh was not sourced"
   assert_push_list "$MIRROR" "$INTEGRATION" "$tag"
 
-  # Before the NO_PUSH return, exactly like assert_push_list above it: a
-  # rehearsal that prints "refs verified" while the mirror carries a fork commit
-  # is telling the operator the opposite of the truth.
+  # Before the NO_PUSH return, exactly like assert_push_list above it, so
+  # "refs verified" is never printed over a poisoned mirror. main() also asserts
+  # this much earlier, before the rebuild and the graft; this call is the
+  # tripwire that cannot be bypassed, since every path to the pushes below goes
+  # through it.
   assert_mirror_pristine
 
   if [[ $NO_PUSH -eq 1 ]]; then log "push skipped (--no-push); refs verified"; return 0; fi
