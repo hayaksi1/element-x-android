@@ -388,6 +388,42 @@ def _near(a, b):
     return hi.startswith(lo) and len(hi) - len(lo) <= 2
 
 
+_IDENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+
+
+def rename_splice_uses(ours, theirs, post):
+    """Two lines kept side by side that differ only by a renamed identifier.
+
+    The declaration rule below sees a rename splice only in the file that
+    DECLARES the type.  At a use site there is no declaration to compare, so a
+    `when` that ends up with both `ForwardMessagesEvent.ClearError ->` and
+    `ForwardMessagesEvents.ClearError ->` sails through every other rule --
+    braces balance, nothing is duplicated verbatim, no marker survives.  That
+    exact duplicate branch reached master once and had to be removed by hand.
+
+    Only fires when one line is unique to ours, the other unique to theirs, and
+    the two differ by a single identifier that is a near-rename of the other.
+    """
+    o = {l.strip() for l in ours.split("\n") if l.strip()}
+    t = {l.strip() for l in theirs.split("\n") if l.strip()}
+    seen, hits = set(), []
+    lines = [l.strip() for l in post.split("\n") if l.strip()]
+    o_only = [l for l in lines if l in o and l not in t]
+    t_only = [l for l in lines if l in t and l not in o]
+    for a in o_only:
+        for b in t_only:
+            if a == b or (a, b) in seen: continue
+            ta, tb = _IDENT.findall(a), _IDENT.findall(b)
+            if len(ta) != len(tb): continue
+            diff = [(x, y) for x, y in zip(ta, tb) if x != y]
+            if len(diff) != 1 or not _near(*diff[0]): continue
+            # The lines must be identical outside that one identifier.
+            if _IDENT.sub("\x00", a) != _IDENT.sub("\x00", b): continue
+            seen.add((a, b))
+            hits.append("both sides of a rename kept as sibling lines: '%s' and '%s'" % (a[:70], b[:70]))
+    return hits
+
+
 def rename_splice(ours_tick, theirs_tick, post_tick):
     """The resolution declares BOTH spellings of a renamed type.
 
@@ -448,6 +484,7 @@ def check_pair(preimage, postimage):
         ("dropped-annotation", dropped_annotation(ours, theirs, postimage)),
         ("rename-splice", rename_splice(code_only(ours, keep_ticks=True),
                                         code_only(theirs, keep_ticks=True), tick)),
+        ("rename-splice", rename_splice_uses(ours, theirs, postimage)),
     ):
         probs += [(rule, d) for d in found]
     return probs
