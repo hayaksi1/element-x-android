@@ -11,6 +11,11 @@ on:
         description: 'Skip Gradle gates (detect only)'
         type: boolean
         default: true
+      mode:
+        description: 'detect = screen branches only. rebuild = run the real integration.'
+        type: choice
+        options: [detect, rebuild]
+        default: detect
 
 permissions:
   contents: write
@@ -26,6 +31,7 @@ env:
 
 jobs:
   detect:
+    if: inputs.mode != 'rebuild'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout (full history; LFS pointers only)
@@ -222,3 +228,185 @@ jobs:
                 --comment "All fork branches merge cleanly as of \`$(git rev-parse --short upstream/develop)\`, and none is unmanaged."
             fi
           fi
+
+  # The rebuild the local script does, on a runner. It exists to answer one
+  # question the local machine cannot: what does a genuine, from-scratch
+  # integration actually produce, in an environment nobody has hand-tuned.
+  #
+  # It PUBLISHES NOTHING. --no-push is passed explicitly, and sync-upstream.sh
+  # additionally forces NO_PUSH under GITHUB_ACTIONS unless
+  # FORK_SYNC_AUTOPUBLISH=1, which is not set here. Two independent brakes,
+  # because a runner that can move develop is a runner that can break the
+  # mirror with nobody watching.
+  #
+  # Exit 3 is the EXPECTED outcome today: integration incomplete, so nothing is
+  # published. That is the script refusing correctly, not the job failing.
+  rebuild:
+    if: inputs.mode == 'rebuild'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    steps:
+      - name: Free space and record the starting headroom
+        run: |
+          df -h / | tee disk-before.txt
+          free -m  | tee mem-before.txt
+          nproc
+
+      - name: Checkout (full history; LFS pointers only)
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+        env:
+          GIT_LFS_SKIP_SMUDGE: 1
+
+      - run: echo "::notice::FOSS build - enterprise submodule intentionally absent"
+
+      - name: Identity and remotes
+        run: |
+          set -euo pipefail
+          git config user.name hayaksi1
+          git config user.email 193020925+hayaksi1@users.noreply.github.com
+          git remote add upstream https://github.com/element-hq/element-x-android.git || true
+          git fetch upstream --prune --tags
+          git fetch origin --prune
+
+      # The tooling on master is whatever the LAST rebuild baked in. This job is
+      # about the CURRENT tooling, so take .fork/ and the manifests from
+      # feat/fork-tooling explicitly rather than from the checked-out tree.
+      - name: Take the tooling from feat/fork-tooling, not from master
+        run: |
+          set -euo pipefail
+          git checkout --quiet -B feat/fork-tooling origin/feat/fork-tooling
+          echo "tooling at $(git rev-parse --short HEAD)"
+          echo "manifests: $(grep -cvE '^\s*(#|$)' .fork/features.txt) fork-only, $(grep -cvE '^\s*(#|$)' .fork/pr-branches.txt) pr-backed"
+
+      # A fresh clone has one local branch. integrate() looks up refs/heads/<b>
+      # and records missing-branch for anything absent, so every manifest branch
+      # needs a local ref before the run starts.
+      - name: Materialise every manifest branch locally
+        run: |
+          set -euo pipefail
+          n=0
+          for b in $(sed -e 's/#.*//' -e 's/[[:space:]]*$//' .fork/features.txt .fork/pr-branches.txt | grep -v '^$'); do
+            if git show-ref --verify --quiet "refs/remotes/origin/$b"; then
+              git update-ref "refs/heads/$b" "refs/remotes/origin/$b"; n=$((n+1))
+            else
+              echo "::warning::no origin ref for manifest entry $b"
+            fi
+          done
+          git update-ref refs/heads/develop refs/remotes/origin/develop
+          git update-ref refs/heads/master  refs/remotes/origin/master
+          echo "materialised $n manifest branch(es)"
+
+      # Installs the pre-commit guard, rerere, and merge=binary for snapshots,
+      # then ASSERTS the snapshot policy took effect. A runner is a fresh clone
+      # with no .git/info/attributes, and the committed .gitattributes names a
+      # merge driver that does not exist, so without this git text-merges LFS
+      # pointers into structurally valid garbage.
+      - name: Local git policy, asserted
+        run: |
+          set -euo pipefail
+          .fork/setup-local-git.sh
+          for p in a/snapshots/x.png screenshots/x.png libraries/compound/screenshots/x.png; do
+            got=$(git check-attr merge -- "$p" | sed 's/.*: //')
+            [ "$got" = binary ] || { echo "::error::snapshot merge policy not in effect for $p (merge=$got)"; exit 1; }
+          done
+          echo "::notice::snapshot merge policy asserted (merge=binary)"
+          echo "rerere.enabled=$(git config rerere.enabled) autoUpdate=$(git config rerere.autoUpdate)"
+
+      # rerere is CONSUMED here and never published: the run imports the
+      # committed cache so 87 recorded resolutions replay, and nothing in this
+      # job commits or pushes, so a resolution recorded on the runner cannot
+      # reach the repository. Asserted after the run rather than assumed.
+      - name: Run the rebuild (publishes nothing)
+        id: run
+        run: |
+          set -uo pipefail
+          set +e
+          .fork/sync-upstream.sh --no-push 2>&1 | tee rebuild.log
+          rc=${PIPESTATUS[0]}
+          set -e
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          echo "::notice::sync-upstream.sh exited $rc (3 = integration incomplete, nothing published: expected)"
+
+      - name: Assert nothing was published
+        if: always()
+        run: |
+          set -euo pipefail
+          git fetch origin --prune --quiet
+          for r in develop master; do
+            local_=$(git rev-parse "refs/remotes/origin/$r")
+            echo "origin/$r is $local_"
+          done
+          if grep -qE '^\s*(==>|)\s*pushing ' rebuild.log; then
+            echo "::error::the run reported pushing something. It must not."; exit 1
+          fi
+          echo "::notice::no push reported by the run"
+
+      - name: Failure rows into the job summary
+        if: always()
+        run: |
+          set -uo pipefail
+          {
+            echo "## Rebuild — exit ${{ steps.run.outputs.rc }}"
+            echo
+            echo "Tooling \`$(git rev-parse --short origin/feat/fork-tooling)\` · upstream \`$(git rev-parse --short upstream/develop)\`"
+            echo
+            if [ -s .fork/.report.incomplete ]; then
+              echo "### Incomplete rows ($(wc -l < .fork/.report.incomplete))"
+              echo
+              echo "| branch | kind | detail |"
+              echo "|---|---|---|"
+              while IFS=$'\t' read -r b k d; do echo "| \`$b\` | $k | $d |"; done < .fork/.report.incomplete
+              echo
+              echo "#### By kind"
+              cut -f2 .fork/.report.incomplete | sort | uniq -c | sed 's/^/    /'
+            else
+              echo "No incomplete rows."
+            fi
+            if [ -s .fork/.report.autoresolved ]; then
+              echo
+              echo "### AUTO-RESOLVED — resolved with no human in the loop ($(wc -l < .fork/.report.autoresolved))"
+              cut -f1 .fork/.report.autoresolved | sed 's/^/- /'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Headroom actually used
+        if: always()
+        run: |
+          { echo; echo "### Resources"; echo '```'
+            echo "-- disk before --"; cat disk-before.txt
+            echo "-- disk after  --"; df -h /
+            echo "-- mem before  --"; cat mem-before.txt
+            echo "-- mem after   --"; free -m
+            echo "-- repo --"; du -sh .git 2>/dev/null || true
+          echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fork-rebuild-evidence
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            rebuild.log
+            disk-before.txt
+            mem-before.txt
+            .fork/.report.incomplete
+            .fork/.report.conflicts
+            .fork/.report.autoresolved
+            .fork/.report.retire
+
+      - name: Reflect the script's exit code
+        if: always()
+        run: |
+          rc='${{ steps.run.outputs.rc }}'
+          if [ "$rc" = "3" ]; then
+            echo "::notice::exit 3 - integration incomplete, nothing published. Expected today."
+            exit 0
+          fi
+          exit "${rc:-1}"
