@@ -16,6 +16,31 @@ directory, so **nothing in here can ever conflict**. Same layout as the
 | `archived-branches.tsv` | Every branch ever deleted, and the proof that allowed it. |
 | `integration-patches/` | Cross-feature fixes that belong to no branch. |
 | `rr-cache/` | Committed rerere cache — resolve once, replay forever. |
+| `rr-cache-quarantined.tsv` | Every resolution moved aside, and what condemned it. |
+| `lib/rr_semantic.py` | The semantic rules the cache audit and `check-integration.py` share. |
+
+## The rerere cache is TWO caches
+
+`.fork/rr-cache/` is committed. `$(git rev-parse --git-common-dir)/rr-cache` is
+what git actually replays. They are **not** copies of each other:
+
+- `rr_cache_import` never overwrites a live entry, by design — the local one may
+  be a resolution recorded since, and the committed copy is the older answer.
+- So **deleting an entry from the committed cache does not stop it replaying**,
+  and the same id can hold *different content* in the two caches. In the
+  2026-08-28 audit 31 of the 63 shared ids had diverged, and for one of them the
+  live copy was clean while the committed copy was corrupt — which a fresh clone
+  or a CI runner, having no live cache, would have imported and replayed.
+- A bad entry therefore has to be removed from **both**, and an audit that reads
+  only one of them has a blind spot.
+
+Every worktree of this repository shares one live cache, so a sync run from an
+old worktree can re-import from that worktree's checked-out `.fork/rr-cache`.
+
+A failing entry is **quarantined, never cleared**: it moves to
+`$GITDIR/rr-cache-quarantine/<id>/` with a `QUARANTINE_REASON.txt` beside it, and
+gains a row in `rr-cache-quarantined.tsv`. Clearing the cache to deal with a
+handful of bad entries would re-ask every conflict already answered once.
 
 ## Why each choice
 
