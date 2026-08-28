@@ -33,6 +33,9 @@ rm -rf "$T"; mkdir -p "$T"
 MIRROR=develop
 INTEGRATION=master
 TOOLING=feat/fork-tooling
+# The fixture's stand-in for upstream/develop. publish_ff reads this: the mirror
+# push is gated on the mirror still being an ancestor of upstream.
+UPSTREAM_REF=up
 DRY_RUN=0; NO_PUSH=0; CONTINUE=0; SKIP_VERIFY=0; ONLY_FEATURES=""
 
 # --- helpers the module calls, copied verbatim from sync-upstream.sh --------
@@ -273,6 +276,96 @@ git checkout -q --detach HEAD~1                              # HEAD is no longer
 rc=0; ( graft_integration "$PREV" "$(sync_timestamp)" ) 2>"$T/pre_err.txt" || rc=$?
 sed 's/^/      /' "$T/pre_err.txt"
 eq "dies when refs/heads/master != HEAD" "$rc" "1"
+
+###############################################################################
+hdr "case 9: publish_ff pushes the mirror only while the mirror is pristine"
+###############################################################################
+# develop is a byte-exact copy of upstream. sync_mirror is the only thing that
+# ever checked that -- and it is called only when CONTINUE is 0, while publish_ff
+# pushes refs/heads/develop on every path. A --continue run published whatever
+# was on local develop, unchecked, exit 0. Both halves are proven here: the
+# healthy mirror must still be pushed, the poisoned one must stop the run dead.
+
+# --- healthy: develop == up, so the push happens exactly as before ------------
+W="$(fixture mirrorok)"; cd "$W"
+O="$T/mirrorok/origin.git"
+TS9=$(sync_timestamp)
+PREV="$(capture_prev_integration)"
+rebuild
+graft_integration "$PREV" "$TS9" >/dev/null
+tag_sync "$TS9" >/dev/null
+git fetch -q origin
+rc=0; git merge-base --is-ancestor refs/heads/develop up || rc=$?
+eq "fixture precondition: develop IS an ancestor of up" "$rc" "0"
+: > "$APL_LOG"
+rc=0; publish_ff "$TS9" >/dev/null 2>&1 || rc=$?
+eq "pristine mirror: publish_ff returns 0" "$rc" "0"
+eq "pristine mirror: origin/develop advanced to the local mirror" \
+   "$(git --git-dir="$O" rev-parse develop)" "$(git rev-parse develop)"
+eq "pristine mirror: origin/master advanced too" \
+   "$(git --git-dir="$O" rev-parse master)" "$(git rev-parse master)"
+
+# --- poisoned: a fork commit on develop, as a --continue run would find it ----
+W="$(fixture mirrorbad)"; cd "$W"
+O="$T/mirrorbad/origin.git"
+TS10=$(sync_timestamp)
+PREV="$(capture_prev_integration)"
+rebuild
+graft_integration "$PREV" "$TS10" >/dev/null
+tag_sync "$TS10" >/dev/null
+git fetch -q origin
+# Never checked out, exactly as the real script moves it: update-ref only.
+git checkout -q -b poison develop
+echo poison > poison.txt; git add poison.txt
+git commit -qm "a fork commit that must never reach the mirror"
+git update-ref refs/heads/develop "$(git rev-parse poison)"
+git checkout -q master
+rc=0; git merge-base --is-ancestor refs/heads/develop up || rc=$?
+eq "fixture precondition: develop is NO LONGER an ancestor of up" "$rc" "1"
+
+DEV_BEFORE="$(git --git-dir="$O" rev-parse develop)"
+MAS_BEFORE="$(git --git-dir="$O" rev-parse master)"
+TAG_BEFORE="$(git --git-dir="$O" for-each-ref --format='%(refname)' refs/tags | sort)"
+rc=0; ( publish_ff "$TS10" ) >/dev/null 2>"$T/mirror_err.txt" || rc=$?
+sed 's/^/      /' "$T/mirror_err.txt"
+eq "poisoned mirror: publish_ff dies (rc=1)" "$rc" "1"
+eq "poisoned mirror: origin/develop was NOT moved" \
+   "$(git --git-dir="$O" rev-parse develop)" "$DEV_BEFORE"
+eq "poisoned mirror: origin/master was NOT moved either" \
+   "$(git --git-dir="$O" rev-parse master)" "$MAS_BEFORE"
+eq "poisoned mirror: no tag was pushed" \
+   "$(git --git-dir="$O" for-each-ref --format='%(refname)' refs/tags | sort)" "$TAG_BEFORE"
+# Both halves, deliberately. The short sha ALONE is tautological: on the unfixed
+# module publish_ff succeeds and `git push` prints "d893513..14bebe1 develop"
+# to stderr, which contains that very sha -- the assertion passed against the
+# defect it exists to catch. The refusal's own wording is what distinguishes a
+# refusal from a successful push.
+if grep -q 'carries fork commit' "$T/mirror_err.txt" &&
+   grep -q "$(git rev-parse --short poison)" "$T/mirror_err.txt"; then
+  ok "poisoned mirror: the refusal says why AND names the offending commit"
+else
+  bad "poisoned mirror: refusal text does not both explain and name the commit"
+fi
+
+# A --no-push rehearsal prints "refs verified". It must not print that over a
+# poisoned mirror, so the guard runs before that early return -- as
+# assert_push_list already does.
+NO_PUSH=1; rc=0; ( publish_ff "$TS10" ) >/dev/null 2>&1 || rc=$?; NO_PUSH=0
+eq "poisoned mirror: --no-push does not report 'refs verified' either (rc=1)" "$rc" "1"
+
+# The mirror check cannot be satisfied by an unprovable upstream: "cannot tell"
+# must refuse, not push.
+git update-ref refs/heads/develop "$(git rev-parse up)"      # heal the mirror
+rc=0; ( UPSTREAM_REF=""            ; publish_ff "$TS10" ) >/dev/null 2>&1 || rc=$?
+eq "unset UPSTREAM_REF refuses rather than pushing unproven" "$rc" "1"
+rc=0; ( UPSTREAM_REF="no/such/ref" ; publish_ff "$TS10" ) >/dev/null 2>&1 || rc=$?
+eq "unresolvable UPSTREAM_REF refuses rather than pushing unproven" "$rc" "1"
+# ...and with the mirror healed and UPSTREAM_REF sane it really does push again,
+# so the four refusals above are proving the guard and not a broken function.
+rc=0; publish_ff "$TS10" >/dev/null 2>&1 || rc=$?
+eq "healed mirror: publish_ff returns 0 again" "$rc" "0"
+eq "healed mirror: origin/develop finally advanced" \
+   "$(git --git-dir="$O" rev-parse develop)" "$(git rev-parse develop)"
 
 ###############################################################################
 printf '\n\033[1m======== %s passed, %s failed ========\033[0m\n' "$PASSES" "$FAILURES"
