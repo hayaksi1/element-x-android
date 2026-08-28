@@ -43,6 +43,7 @@ REPORT="$FORK_DIR/.report"
 EXIT_INCOMPLETE=3
 EXIT_GATE=4
 SYNC_TS=""
+INTEGRATION_LOOP_DONE=0
 
 DRY_RUN=0; NO_PUSH=0; CONTINUE=0; SKIP_VERIFY=0; ONLY_FEATURES=""
 
@@ -401,6 +402,7 @@ rebuild_integration() {
     if [[ $DRY_RUN -eq 1 ]]; then printf '    [dry-run] integrate %s\n' "$b"; continue; fi
     integrate_branch "$b"
   done
+  INTEGRATION_LOOP_DONE=1
 }
 
 # --- step 4: integration patches -------------------------------------------
