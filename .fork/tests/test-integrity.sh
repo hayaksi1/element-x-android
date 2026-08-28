@@ -291,6 +291,27 @@ last_run_issue_body > "$T/issue.md"
 have "issue body counts the failures" "^8 outstanding integration failure(s):" "$T/issue.md"
 have "issue body names a branch"      "\`fix/2-behind\`"                       "$T/issue.md"
 
+section "9  every kind sync-upstream.sh passes to fail_add is registered"
+# This is the guard for a real failure: two call sites used kinds that were never
+# in _fork_kinds(), so the FIRST branch to hit one killed a 76-branch run 23
+# branches in, with "ERR fail_add: unknown kind". It was invisible until then --
+# no harness exercised the caller. Registration is checked against the script
+# itself, so a new fail_add with an unregistered kind fails here, not in production.
+SYNC="${FORK_SYNC:-$HERE/../sync-upstream.sh}"
+if [[ -r "$SYNC" ]]; then
+  registered=" $(_fork_kinds | tr '\n' ' ') "
+  used="$(grep -oE 'fail_add "\$b" [a-z-]+' "$SYNC" | awk '{print $3}' | sort -u)"
+  [[ -n "$used" ]] && ok "found fail_add call sites in sync-upstream.sh" \
+                   || bad "found NO fail_add call sites -- the grep is wrong, not the script"
+  while IFS= read -r k; do
+    [[ -n "$k" ]] || continue
+    if [[ "$registered" == *" $k "* ]]; then ok "kind '$k' is registered"
+    else bad "kind '$k' is used by sync-upstream.sh but NOT in _fork_kinds()"; fi
+  done <<< "$used"
+else
+  bad "cannot read $SYNC to check kind registration"
+fi
+
 # --- result -----------------------------------------------------------------
 printf '\n=====================================\n'
 printf '%s passed, %s failed\n' "$PASSED" "$FAILED"
