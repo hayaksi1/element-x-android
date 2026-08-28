@@ -610,7 +610,7 @@ main() {
   check_pr_drift
   check_unmanaged_branches
 
-  local prev_tip rebuild_sha gate_rc n
+  local prev_tip rebuild_sha gate_rc n missing
   SYNC_TS="$(sync_timestamp)"
 
   if [[ $CONTINUE -eq 0 ]]; then
@@ -635,7 +635,12 @@ main() {
   fi
 
   rebuild_integration
-  apply_patches
+  missing="$(incomplete_count)"
+  if [[ "$missing" -gt 0 ]]; then
+    warn "skipping integration patches: $missing branch(es) did not make it in, so they would be replayed onto a tree they were never exported from"
+  else
+    apply_patches
+  fi
   # The pre-graft tip. Captured here rather than after verify(): nothing in the
   # gates moves HEAD today, but this value's whole job is to be the tree the
   # graft publishes, and here it provably is.
