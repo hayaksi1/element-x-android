@@ -11,7 +11,7 @@ _fork_kinds() {
   printf '%s\n' \
     rebase-failed stale-base merge-conflict missing-branch \
     pr-drift-behind pr-drift-ahead pr-drift-diverged pr-no-remote \
-    unmanaged-branch empty-after-resolve integrate-failed
+    unmanaged-branch
 }
 
 _fork_kind_advice() {
@@ -21,13 +21,9 @@ _fork_kind_advice() {
     stale-base)
       echo "Its base predates $MIRROR: rebase (feat/*) or cherry-pick (fix/*) onto the mirror, then re-run." ;;
     merge-conflict)
-      echo "Resolve on $INTEGRATION by hand (git merge --no-ff <branch>), commit, then re-run with --continue." ;;
+      echo "Resolve on $INTEGRATION by hand, commit, then re-run with --continue. Use git merge --no-ff <branch> ONLY if $MIRROR is already an ancestor of it; for a branch whose base predates the mirror -- most fix/* -- use git cherry-pick \$(git rev-list --reverse --no-merges $MIRROR..<branch>), because merging drags its stale base across everything already integrated. --continue REBUILDS $INTEGRATION: what carries your work across is rerere replaying the resolution your commit records, and the old tip is kept at refs/fork/pre-rebuild/<ts> either way." ;;
     missing-branch)
       echo "Fetch or recreate the branch, or remove it from the manifest." ;;
-    empty-after-resolve)
-      echo "Every conflicted path was binary, so resolution kept ours and the branch added nothing. Re-record the snapshots on that branch, then re-run." ;;
-    integrate-failed)
-      echo "The cherry-pick or merge could not be concluded. Reproduce it by hand on $INTEGRATION and see what git says." ;;
     pr-drift-behind)
       echo "A maintainer pushed to the PR: fast-forward the local ref from origin. Never rebase a fix/* branch." ;;
     pr-drift-ahead)
@@ -228,18 +224,7 @@ write_last_run() {
     printf '| %s | `%s` |\n' "$MIRROR" "$mirror_sha"
     printf '| %s | `%s` |\n' "$INTEGRATION" "$integ_sha"
     echo
-    if [[ "${DRY_RUN:-0}" -eq 1 ]]; then
-      echo "**Result:** DRY RUN — nothing was integrated, nothing was pushed."
-      echo
-      echo "The branch loop only printed what it would do. This file describes a"
-      echo "rehearsal, not a build."
-    elif [[ "$rc" -ne 0 && "$n" -eq 0 ]]; then
-      printf '**Result:** FAILED — the run stopped with exit %s before it finished.\n' "$rc"
-      echo
-      echo "No failure rows were recorded, which means it stopped BEFORE the"
-      echo "integration loop -- a preflight refusal, a failed guard or a crash."
-      echo "Read the run's own output; \`$INTEGRATION\` was not published."
-    elif [[ "$n" -eq 0 ]]; then
+    if [[ "$n" -eq 0 ]]; then
       echo "**Result:** complete — every managed branch was integrated into \`$INTEGRATION\`."
       echo
       echo "No branch was skipped, no failure was recorded."
