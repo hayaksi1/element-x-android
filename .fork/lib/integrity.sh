@@ -29,7 +29,7 @@ _fork_kind_advice() {
     integrate-failed)
       echo "The cherry-pick or merge could not be concluded. Reproduce it by hand on $INTEGRATION and see what git says." ;;
     merge-only-content)
-      echo "A merge on that branch carries content that is in NEITHER of its parents -- a conflict resolution. Its base predates $MIRROR, so it is integrated by CHERRY-PICK, and the pick list is --no-merges: that content is in no non-merge commit and cannot be replayed, so it would be silently missing from $INTEGRATION. For a branch in features.txt, rebase it onto $MIRROR -- a plain rebase flattens the merge and replays its unique content -- then re-run. For a branch in pr-branches.txt, which may NEVER be rebased, export the merge's own content (git show --cc <sha> names the files) as an integration patch under .fork/integration-patches/ and commit it to $TOOLING." ;;
+      echo "A merge on that branch adds or removes lines that are in NONE of its parents -- a hand-made conflict resolution. Do NOT rebase it: a plain rebase replays --no-merges as well, so it DROPS that content silently and then leaves the branch on the merge path where nothing can see the loss. Put the content into a normal commit on the branch instead -- git show --cc <sha> is exactly what is missing -- and re-run; every integration path then carries it. For a branch in pr-branches.txt, which may never be rebased or amended, export it as an integration patch under .fork/integration-patches/ and commit that to $TOOLING." ;;
     pr-drift-behind)
       echo "A maintainer pushed to the PR: fast-forward the local ref from origin. Never rebase a fix/* branch." ;;
     pr-drift-ahead)
@@ -147,46 +147,84 @@ check_unmanaged_branches() {
   done < <(git for-each-ref --format='%(refname:short)' refs/remotes/origin)
 }
 
-# check_merge_only_content <base> <branch>
+# _fork_merge_only_lines <merge>
 #
-# The cherry-pick path in integrate_branch builds its pick list with
-# `git rev-list --reverse --no-merges`, so no merge commit in the range is ever
-# replayed. For an ordinary merge that is correct: its content lives in its
-# parents, and the parents' own commits ARE in the pick list. It is wrong for a
-# merge that carries content of its OWN. A conflict resolution exists in neither
-# parent, so it appears in no non-merge commit, so that pick list provably cannot
-# reproduce it. The branch was integrated, nothing was recorded, every gate
-# passed, and $INTEGRATION was published with the resolution missing.
+# Count the lines a merge adds or removes relative to EVERY one of its parents --
+# content that is in no parent at all. Combined-diff format makes this exact: the
+# first N characters of a content line are its per-parent status, so a prefix of
+# all '+' (or all '-') means "in none of them". Anything mixed -- " +", "+ " --
+# came from one parent, and that parent's own commits are in the pick list, so it
+# is reproducible.
 #
-# `git diff-tree --cc` prints exactly that content and nothing else -- it drops
-# any file whose result matches a parent -- so non-empty output IS the proof of
-# loss. --name-only keeps it cheap: the whole 75-branch manifest sweeps in under
-# half a second.
-#
-# Checked HERE, at the loss site, and not where the stale base comes from,
-# because a branch reaches the cherry-pick path by more than one route: a rebase
-# that failed on an earlier run (--continue truncates the ledger, so that row is
-# gone and never regenerated), a branch that --features left unselected, and
-# every pr-branches.txt branch, which rebase_features never touches at all. The
-# loss site is the only thing all of them have in common.
-#
-# Returns 1 when it recorded a failure, so the caller can skip the branch. The
-# run is then INCOMPLETE and will not push -- a warning it continued past would
-# publish the same broken $INTEGRATION, just noisily.
-check_merge_only_content() {
-  local base="$1" b="$2" m names carriers=""
+# The looser test "the combined diff is non-empty" is NOT the same thing and must
+# not be used: --cc also prints an ordinary interleaving of two parents' one-sided
+# changes. Measured across the manifests, the loose test flags
+# fix/2914-phone-word-boundary (6272 bytes, zero lines in neither parent) --
+# a false positive on a pr-branches.txt branch, whose base is permanently stale by
+# fork rule, so it would fail every run forever with no legal remedy.
+_fork_merge_only_lines() {
+  local m="$1" n
+  n="$(git rev-list --parents -n1 "$m" 2>/dev/null | wc -w)"
+  n=$((n - 1))
+  [[ $n -ge 2 ]] || { echo 0; return 0; }
+  git show --cc --format="" "$m" 2>/dev/null | awk -v n="$n" '
+    /^@@/    { inhunk = 1; next }
+    /^diff / { inhunk = 0; next }
+    inhunk {
+      p = substr($0, 1, n)
+      if (p ~ /^\++$/ || p ~ /^-+$/) c++
+    }
+    END { print c + 0 }'
+}
 
+# merge_only_carriers <base> <branch>
+# One "<short sha><TAB><lines>" row per merge in <base>..<branch> that carries
+# content of its own. Empty output means every merge in the range is reproducible
+# from its parents. Pure query, no side effects, so both call sites can use it.
+merge_only_carriers() {
+  local base="$1" b="$2" m n
   while IFS= read -r m; do
     [[ -n "$m" ]] || continue
-    names="$(git diff-tree --cc --no-commit-id --name-only -r "$m" 2>/dev/null || true)"
-    [[ -n "$names" ]] || continue
-    carriers+="${carriers:+; }$(git rev-parse --short "$m") ($(printf '%s' "$names" | paste -sd, -))"
+    # Cheap superset prefilter. With --name-only, --cc degenerates to -c: it
+    # lists every file differing from all parents, including a clean auto-merge
+    # whose --cc TEXT is empty. That is fine here -- it never misses a merge, it
+    # only skips generating the text diff for the ones that cannot possibly
+    # carry anything.
+    [[ -n "$(git diff-tree --cc --no-commit-id --name-only -r "$m" 2>/dev/null || true)" ]] || continue
+    n="$(_fork_merge_only_lines "$m")"
+    [[ "$n" -gt 0 ]] || continue
+    printf '%s\t%s\n' "$(git rev-parse --short "$m")" "$n"
   done < <(git rev-list --merges "$base..$b" 2>/dev/null || true)
+}
 
+# check_merge_only_content <base> <branch>
+#
+# A branch whose base predates the mirror is integrated by cherry-pick, and that
+# pick list is `git rev-list --reverse --no-merges`. For an ordinary merge that is
+# right: its content lives in its parents, whose commits are picked. It is wrong
+# for a merge carrying content of its own. A hand-made conflict resolution is in
+# NO parent, so it is in no non-merge commit, so the pick list provably cannot
+# reproduce it. The branch integrated, nothing was recorded, incomplete_count
+# ended 0, every gate passed, and $INTEGRATION published without it.
+#
+# Checked at the loss site, not where the stale base comes from, because a branch
+# arrives there by several routes and only the loss site is common to all: every
+# pr-branches.txt branch, which rebase_features never touches at all; a rebase
+# that failed on an earlier run (--continue truncates the ledger, so that row is
+# gone and never regenerated); and a branch --features left unselected.
+#
+# Returns 1 when it recorded a failure, so the caller can skip the branch. The run
+# is then INCOMPLETE and will not push. A warning it continued past would publish
+# the same broken $INTEGRATION, only noisily.
+check_merge_only_content() {
+  local base="$1" b="$2" carriers detail
+  carriers="$(merge_only_carriers "$base" "$b")"
   [[ -n "$carriers" ]] || return 0
 
+  detail="$(printf '%s\n' "$carriers" |
+            awk -F'\t' 'NF { printf "%s%s (%s line(s))", (n++ ? "; " : ""), $1, $2 }')"
   fail_add "$b" merge-only-content \
-    "its base predates $base so it is integrated by cherry-pick, which is --no-merges, but these merge(s) carry content present in neither parent -- it is in no non-merge commit and cannot be replayed: $carriers"
+    "its base predates $base, so it is integrated by cherry-pick, whose pick list is --no-merges; these merge(s) add or remove lines present in NO parent, so that content is in no non-merge commit and cannot be replayed: $detail"
   return 1
 }
 

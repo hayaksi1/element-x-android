@@ -412,13 +412,22 @@ case "$err" in
 esac
 
 # --- 13: check_merge_only_content -------------------------------------------
-section "13  check_merge_only_content refuses a branch the cherry-pick cannot replay"
-# A branch whose base predates the mirror is integrated by cherry-pick, and that
-# pick list is --no-merges. A merge that carries content of its own -- a conflict
-# resolution, present in neither parent -- is therefore dropped: it is in no
-# non-merge commit, so nothing replays it, nothing is recorded, every gate passes
-# and master publishes without it. This repo reproduces that shape exactly
-# (feature/search-index-button @ 3e79bd6a61 is the live one, 43844 bytes).
+section "13  check_merge_only_content: content a merge carries in no parent"
+# A branch whose base predates the mirror is integrated by cherry-pick, whose
+# pick list is --no-merges. A merge carrying content of its OWN -- lines in no
+# parent -- is therefore dropped: it is in no non-merge commit, nothing replays
+# it, nothing is recorded, every gate passes and master publishes without it.
+# feature/search-index-button @ 3e79bd6a61 is the live instance: 38 such lines.
+#
+# The fixture carries all three shapes the guard has to tell apart:
+#   feat/evil        a hand-made resolution      -> MUST fire
+#   feat/interleave  both parents' one-sided changes combined, so the combined
+#                    diff is NON-EMPTY but every line is in a parent -> must NOT
+#                    fire. This is fix/2914-phone-word-boundary's shape, and it
+#                    is in pr-branches.txt, whose base is permanently stale by
+#                    fork rule: firing on it would fail every future run with no
+#                    legal remedy.
+#   feat/linear      no merge at all             -> must NOT fire
 MR="$T/mergeonly"
 git init -q "$MR"
 (
@@ -427,80 +436,120 @@ git init -q "$MR"
   git config user.name  "merge-only test"
   git config commit.gpgsign false
 
-  printf 'shared\n' > f.txt
+  printf 'L1\nL2\nL3\n' > f.txt
   git add f.txt; git commit -qm base
   BASE="$(git rev-parse HEAD)"
-
-  printf 'shared\nupstream\n' > f.txt
+  printf 'TOP\nL1\nL2\nDEV-A\nDEV-B\nL3\n' > f.txt
   git add f.txt; git commit -qm u1
   git branch develop
 
-  # Off the OLD base, merges the mirror, RESOLVES the conflict into something
-  # that is in neither parent.
+  # A merge that edits a file itself, so the result is in NEITHER parent. Its own
+  # non-merge commit touches a DIFFERENT file, so the pick list replays cleanly
+  # and the loss is silent rather than a conflict.
   git checkout -q -b feat/evil "$BASE"
-  printf 'shared\nfeature\n' > f.txt
-  git add f.txt; git commit -qm f1
-  git merge -q --no-edit develop >/dev/null 2>&1 || true
-  printf 'shared\nupstream\nfeature\nRESOLVED-IN-THE-MERGE-ONLY\n' > f.txt
+  printf 'A\n' > a.txt
+  git add a.txt; git commit -qm e1
+  git merge --no-commit --no-ff develop >/dev/null 2>&1 || true
+  printf 'TOP\nL1\nL2\nDEV-A\nDEV-B\nL3\nRESOLVED-IN-THE-MERGE-ONLY\n' > f.txt
   git add f.txt; git commit -qm "Merge develop into feat/evil" >/dev/null
 
-  # An ORDINARY merge: nothing of its own, so the pick list loses nothing.
-  git checkout -q -b feat/plain "$BASE"
-  printf 'plain\n' > g.txt
-  git add g.txt; git commit -qm g1
-  git merge -q --no-edit develop >/dev/null
+  # fix/2914-phone-word-boundary's exact shape: both sides add different code in
+  # the SAME region, git raises a conflict, and the human resolves it by keeping
+  # both blocks verbatim. The result is in neither parent, so --cc prints real
+  # hunks -- but every line came from one parent, so the pick list reproduces it.
+  git checkout -q -b feat/interleave "$BASE"
+  printf 'L1\nL2\nFEAT-A\nFEAT-B\nL3\n' > f.txt
+  git add f.txt; git commit -qm i1
+  git merge --no-commit --no-ff develop >/dev/null 2>&1 || true
+  printf 'TOP\nL1\nL2\nDEV-A\nDEV-B\nFEAT-A\nFEAT-B\nL3\n' > f.txt
+  git add f.txt; git commit -qm "Merge develop into feat/interleave" >/dev/null
 
-  # No merge at all.
   git checkout -q -b feat/linear "$BASE"
   printf 'linear\n' > h.txt
   git add h.txt; git commit -qm h1
 
-  # The mirror moves on, so all three now have a base predating it and would be
+  # The mirror moves on, so all three have a base predating it and would be
   # integrated by cherry-pick rather than merged.
   git checkout -q develop
-  printf 'shared\nupstream\nlater\n' > f.txt
+  printf 'TOP\nL1\nL2\nDEV-A\nDEV-B\nL3\nlater\n' > f.txt
   git add f.txt; git commit -qm u2
   git checkout -q feat/linear
 )
 cd "$MR"
-
-# The harm itself, stated in git terms and independent of any module version.
 EVIL="$(git rev-list --merges develop..feat/evil)"
-seen_in_pick=0
-for c in $(git rev-list --no-merges develop..feat/evil); do
-  if git show "$c:f.txt" 2>/dev/null | grep -q RESOLVED-IN-THE-MERGE-ONLY; then seen_in_pick=1; fi
-done
-eq "the resolution is in NO non-merge commit, so --no-merges cannot replay it" 0 "$seen_in_pick"
-eq "...yet it IS in the branch tip"  1 "$(git show feat/evil:f.txt | grep -c RESOLVED-IN-THE-MERGE-ONLY)"
-eq "...and the merge's combined diff is non-empty, which is the detector" "f.txt" \
-   "$(git diff-tree --cc --no-commit-id --name-only -r "$EVIL")"
-eq "the ordinary merge's combined diff is EMPTY" "" \
-   "$(git diff-tree --cc --no-commit-id --name-only -r "$(git rev-list --merges develop..feat/plain)")"
+ILV="$(git rev-list --merges develop..feat/interleave)"
 
-# Everything below needs the guard itself. Reported as a failure rather than
-# left to kill the harness, so a run against a module that lacks it says so.
+# The harm, in git terms, independent of any module version.
+seen=0
+for c in $(git rev-list --no-merges develop..feat/evil); do
+  if git show "$c:f.txt" 2>/dev/null | grep -q RESOLVED-IN-THE-MERGE-ONLY; then seen=1; fi
+done
+eq "the resolution is in NO non-merge commit, so --no-merges cannot replay it" 0 "$seen"
+eq "...yet it IS in the branch tip" 1 "$(git show feat/evil:f.txt | grep -c RESOLVED-IN-THE-MERGE-ONLY)"
+
+# Why the loose test is not usable: BOTH merges have a non-empty combined diff.
+eq "the evil merge's combined diff names f.txt"       "f.txt" \
+   "$(git diff-tree --cc --no-commit-id --name-only -r "$EVIL")"
+eq "the INTERLEAVED merge's combined diff names it too -- the loose test cannot tell them apart" "f.txt" \
+   "$(git diff-tree --cc --no-commit-id --name-only -r "$ILV")"
+# Without this the interleave fixture can degenerate into a clean auto-merge,
+# whose --cc TEXT is empty -- and then the false-positive control below passes
+# against a loose byte-count predicate too, proving nothing. fix/2914 has 6272
+# such bytes and zero all-parent lines; the fixture must have the same shape.
+eq "the interleave really does emit combined-diff TEXT (as fix/2914 does)" 1 \
+   "$( [ "$(git show --cc --format="" "$ILV" | wc -c)" -gt 0 ] && echo 1 || echo 0 )"
+
+# A plain rebase is NOT a safe remedy: it replays --no-merges as well, so it
+# drops the resolution, exits 0, and leaves the branch on the merge path where
+# the cherry-pick guard can no longer see it. This is why the advice must not
+# say "rebase it" and why rebase_features skips such a branch.
+# Run it on a COPY: a rebase that goes wrong would otherwise leave a conflicted
+# index behind and take the rest of the harness with it.
+RB="$T/rebasedrop"
+rm -rf "$RB"; cp -r "$MR" "$RB"
+REB_RC=0
+(
+  cd "$RB"
+  git checkout -q -B rebasetest feat/evil
+  git rebase --onto develop "$(git merge-base rebasetest develop)" rebasetest >/dev/null 2>&1
+) || REB_RC=$?
+eq "the rebase SUCCEEDS (exit 0), so nothing marks it as a problem" 0 "$REB_RC"
+eq "...and the resolution is GONE from the rebased branch" 0 \
+   "$(git -C "$RB" show rebasetest:f.txt | grep -c RESOLVED-IN-THE-MERGE-ONLY)"
+git -C "$RB" merge-base --is-ancestor develop rebasetest && ANC=yes || ANC=no
+eq "...and the branch is now on the MERGE path, where no guard looks" "yes" "$ANC"
+
 if ! declare -F check_merge_only_content >/dev/null 2>&1; then
   bad "check_merge_only_content is not defined -- the cherry-pick loss site is unguarded, a branch whose only unique content is in a merge integrates silently and master publishes without it"
 else
-  incomplete_reset
-  rc=0; check_merge_only_content develop feat/evil 2>/dev/null || rc=$?
-  eq "fires on a merge carrying its own content (returns 1)" 1 "$rc"
-  eq "records exactly one row"                               1 "$(incomplete_count)"
-  eq "the row's kind is merge-only-content"                  1 "$(kind_rows merge-only-content)"
-  have "the row names the branch"        "^feat/evil	merge-only-content" "$REPORT.incomplete"
-  have "the detail names the file"       "f.txt"                                  "$REPORT.incomplete"
-  have "the detail names the merge sha"  "$(git rev-parse --short "$EVIL")"       "$REPORT.incomplete"
-  have "the detail says why it cannot be replayed" "cannot be replayed"           "$REPORT.incomplete"
+  eq "the strict count is non-zero for the hand-made resolution" 1 \
+     "$( [ "$(_fork_merge_only_lines "$EVIL")" -gt 0 ] && echo 1 || echo 0 )"
+  eq "the strict count is ZERO for the interleave"               0 "$(_fork_merge_only_lines "$ILV")"
 
   incomplete_reset
-  rc=0; check_merge_only_content develop feat/plain 2>/dev/null || rc=$?
-  eq "an ordinary merge is NOT flagged (returns 0)" 0 "$rc"
-  eq "...and records nothing"                       0 "$(incomplete_count)"
+  rc=0; check_merge_only_content develop feat/evil 2>/dev/null || rc=$?
+  eq "fires on a merge carrying content in no parent (returns 1)" 1 "$rc"
+  eq "records exactly one row"                                    1 "$(incomplete_count)"
+  eq "the row's kind is merge-only-content"                       1 "$(kind_rows merge-only-content)"
+  have "the row names the branch"        "^feat/evil	merge-only-content" "$REPORT.incomplete"
+  have "the detail names the merge sha"  "$(git rev-parse --short "$EVIL")"       "$REPORT.incomplete"
+  have "the detail says it cannot be replayed" "cannot be replayed"               "$REPORT.incomplete"
+
+  # The load-bearing negative control. Firing here would fail every future run
+  # on a branch the fork rules forbid rebasing, renaming or amending.
+  incomplete_reset
+  rc=0; check_merge_only_content develop feat/interleave 2>/dev/null || rc=$?
+  eq "an interleaved merge is NOT flagged (returns 0)" 0 "$rc"
+  eq "...and records nothing"                          0 "$(incomplete_count)"
 
   incomplete_reset
   rc=0; check_merge_only_content develop feat/linear 2>/dev/null || rc=$?
   eq "a branch with no merges is NOT flagged (returns 0)" 0 "$rc"
   eq "...and records nothing"                             0 "$(incomplete_count)"
+
+  eq "merge_only_carriers is silent on the interleave" "" "$(merge_only_carriers develop feat/interleave)"
+  eq "merge_only_carriers names the evil merge"        1  \
+     "$(merge_only_carriers develop feat/evil | grep -c "$(git rev-parse --short "$EVIL")")"
 
   if _fork_kinds | grep -qx merge-only-content; then
     ok "merge-only-content is registered in _fork_kinds"
@@ -512,29 +561,46 @@ else
     *"Unknown kind"*) bad "no advice registered for merge-only-content" ;;
     *)                ok  "advice is registered for merge-only-content" ;;
   esac
-  # The remedy differs by branch class: features.txt rebases, pr-branches.txt
-  # may never be rebased and needs an integration patch instead. Advice that
-  # says only "rebase it" would be wrong for half the branches it can fire on --
-  # and one of the two live instances, fix/2914-phone-word-boundary, is a PR one.
+  # The remedy must not be "rebase it": that is the one action proven above to
+  # destroy the content.
+  case "$ADV" in
+    *"Do NOT rebase"*) ok  "advice warns that a rebase drops the content" ;;
+    *)                 bad "advice does not warn against rebasing -- the one action that destroys it" ;;
+  esac
   case "$ADV" in
     *pr-branches.txt*) ok  "advice covers the branch class that may never be rebased" ;;
     *)                 bad "advice does not say what to do for a pr-branches.txt branch" ;;
   esac
 fi
 
-# Wiring: the guard has to be CALLED at the loss site, and before the pick list
-# is built -- a range holding only such a merge would otherwise leave through
-# the "nothing unique to pick" return in silence.
+# Every registered kind must have real advice. Nothing else checks this, and a
+# kind whose arm is missing silently falls through to "Unknown kind."
+missing_adv=0
+while IFS= read -r k; do
+  [[ -n "$k" ]] || continue
+  [[ "$(_fork_kind_advice "$k")" == "Unknown kind." ]] && missing_adv=$((missing_adv + 1))
+done < <(_fork_kinds)
+eq "every kind in _fork_kinds has advice that is not the fallback" 0 "$missing_adv"
+
+# Wiring: the guard must be CALLED at BOTH loss sites -- before the pick list is
+# built, and before the rebase that would drop the same content.
 cd "$REPO_ROOT"
 if [[ -r "$SYNC" ]]; then
   CALL_LN="$(grep -nF 'check_merge_only_content "$MIRROR" "$b"' "$SYNC" | head -n1 | cut -d: -f1)"
   PICK_LN="$(grep -nF 'picks="$(git rev-list --reverse --no-merges' "$SYNC" | head -n1 | cut -d: -f1)"
+  REB_CALL="$(grep -nF 'merge_only_carriers "$MIRROR" "$b"' "$SYNC" | head -n1 | cut -d: -f1)"
+  REB_LN="$(grep -nF 'git rebase --onto "$MIRROR"' "$SYNC" | head -n1 | cut -d: -f1)"
   if [[ -n "$CALL_LN" ]]; then ok "sync-upstream.sh calls the guard at the cherry-pick site"
   else bad "sync-upstream.sh never calls check_merge_only_content -- the guard is dead code"; fi
   if [[ -n "$CALL_LN" && -n "$PICK_LN" && "$CALL_LN" -lt "$PICK_LN" ]]; then
     ok "the guard runs BEFORE the --no-merges pick list is built"
   else
     bad "guard call (line ${CALL_LN:-none}) does not precede the pick list (line ${PICK_LN:-none})"
+  fi
+  if [[ -n "$REB_CALL" && -n "$REB_LN" && "$REB_CALL" -lt "$REB_LN" ]]; then
+    ok "rebase_features checks for merge-only content BEFORE rebasing"
+  else
+    bad "rebase_features rebases (line ${REB_LN:-none}) without checking first (check at ${REB_CALL:-none}) -- the rebase drops the content"
   fi
 else
   bad "cannot read $SYNC to check the guard is wired in"

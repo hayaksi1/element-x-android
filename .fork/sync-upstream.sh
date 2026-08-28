@@ -224,6 +224,18 @@ rebase_features() {
       log "absorbed upstream, nothing to rebase: $b"
       continue
     fi
+    # A plain rebase replays --no-merges too, so it DROPS a merge's own content
+    # -- the hand-made resolution is simply gone, the rebase exits 0, and the
+    # branch lands with $MIRROR as an ancestor, where the cherry-pick guard can
+    # never see it again. Leaving the branch on its old base loses nothing by
+    # comparison: it is then integrated by cherry-pick, where
+    # check_merge_only_content refuses it, or by merge, which carries the merge's
+    # content correctly. Rebasing is the only path here that destroys it.
+    if [[ -n "$(merge_only_carriers "$MIRROR" "$b")" ]]; then
+      warn "not rebasing $b: a merge on it carries content in no parent, which a rebase would drop"
+      continue
+    fi
+
     log "rebasing $b onto $MIRROR"
     if [[ $DRY_RUN -eq 1 ]]; then continue; fi
     if ! git rebase --onto "$MIRROR" "$(git merge-base "$b" "$MIRROR")" "$b" >/dev/null 2>&1; then
@@ -642,6 +654,16 @@ main() {
     log "--continue: skipping mirror sync and rebases"
     prev_tip="$(cat "$STATE.prev-integration" 2>/dev/null || true)"
   fi
+  # publish_ff asserts this too, and that assert is the one that cannot be
+  # bypassed -- but it runs after graft_integration has rewritten
+  # refs/heads/master and tag_sync has minted sync/<ts>, which is the documented
+  # rollback point. The script's own rule (see below, before the graft) is that
+  # anything which would refuse the push must refuse BEFORE either happens, so
+  # the mirror is checked here as well: on --continue this is the only mirror
+  # check that runs at all, and it costs one merge-base instead of a full
+  # rebuild and five Gradle gates on a build that can never be published.
+  assert_mirror_pristine
+
   # The graft exists so the REMOTE fast-forwards, so the remote's tip is the
   # authoritative parent. On a fresh run the locally captured value is the same
   # thing, but on --continue it is the tip from before the PREVIOUS run's
