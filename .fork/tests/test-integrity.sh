@@ -312,6 +312,34 @@ else
   bad "cannot read $SYNC to check kind registration"
 fi
 
+section "10  LAST_RUN.md keys 'truncated' off the loop, not off the exit code"
+# A real run finished the loop over both manifests, recorded 42 rows, and then
+# died in a later stage with exit 1. LAST_RUN.md told the operator the rows were
+# truncated. They were the complete picture.
+incomplete_reset
+fail_add "feat/one" rebase-failed  "conflicted"  2>/dev/null
+fail_add "feat/two" merge-conflict "conflicted"  2>/dev/null
+rm -f "$FORK_DIR/LAST_RUN.md"
+INTEGRATION_LOOP_DONE=1 write_last_run 1 "$C4" "$C4" "$X1"
+have  "loop finished: says the rows are the complete picture" \
+      "reached the end of both manifests" "$FORK_DIR/LAST_RUN.md"
+hasnt "loop finished: does NOT claim the rows are truncated" \
+      "truncated"                         "$FORK_DIR/LAST_RUN.md"
+have  "loop finished: still reports the failure" \
+      "^\*\*Result:\*\* FAILED"           "$FORK_DIR/LAST_RUN.md"
+have  "loop finished: still lists the rows" "\`feat/one\`" "$FORK_DIR/LAST_RUN.md"
+rm -f "$FORK_DIR/LAST_RUN.md"
+INTEGRATION_LOOP_DONE=0 write_last_run 1 "$C4" "$C4" "$X1"
+have  "loop cut short: says the rows are truncated" \
+      "truncated"                         "$FORK_DIR/LAST_RUN.md"
+hasnt "loop cut short: does not claim completeness" \
+      "reached the end of both manifests" "$FORK_DIR/LAST_RUN.md"
+# The signal is only consulted on the died-in-a-later-stage path. A clean
+# refusal already knows the loop ran.
+rm -f "$FORK_DIR/LAST_RUN.md"
+INTEGRATION_LOOP_DONE=0 write_last_run 3 "$C4" "$C4" "$X1"
+hasnt "exit 3 is a clean refusal, never 'truncated'" "truncated" "$FORK_DIR/LAST_RUN.md"
+
 # --- result -----------------------------------------------------------------
 printf '\n=====================================\n'
 printf '%s passed, %s failed\n' "$PASSED" "$FAILED"
