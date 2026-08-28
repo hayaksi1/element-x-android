@@ -12,7 +12,10 @@ What changed, ref by ref, and what is left for the owner.
 | `feat/fork-tooling` | did not exist | pushed | `.fork/` + workflow + rerere cache |
 | `feat/fork-misc` | did not exist | pushed | 16 commits that lived only on the old develop |
 
-**No branch was deleted or renamed.** All 76 pre-existing branches are untouched.
+**No branch was deleted or renamed by the cutover.** All 76 pre-existing branches
+are untouched. That is a property of *this* migration, not a standing ban: as of
+2026-08-28 a provably merged branch may be retired under "Branch retention" in
+`FORK_RULES.md`. Everything that fails those proofs stays.
 
 ## What is on `master`
 
@@ -114,4 +117,6 @@ Reverting the branch-model change itself means restoring the old `develop`, not
 git push --force-with-lease origin backup/develop-20260828-0119:develop
 ```
 
-No branch was ever deleted or renamed, so every feature branch survives either way.
+No branch was deleted or renamed by the cutover, so every feature branch survives
+either way. Nothing has been deleted since; anything that ever is gets archived to
+`refs/fork/archive/<b>` and recorded in `.fork/archived-branches.tsv` first.

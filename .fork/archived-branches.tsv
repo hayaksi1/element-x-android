@@ -1,0 +1,20 @@
+# Every branch this fork has ever deleted, and the proof that allowed it.
+#
+# A branch may be deleted only if it is PROVABLY MERGED: GitHub reports the PR
+# MERGED *and* at least one mechanical proof passes --
+#
+#   A  git merge-base --is-ancestor origin/$b upstream/develop
+#   B  git cherry upstream/develop origin/$b | grep -c "^+"   (0 => absorbed)
+#
+# B is the one that catches a squash-merge. If GitHub says MERGED and both
+# proofs fail, the branch is NOT prunable. See "Branch retention" in
+# FORK_RULES.md for the full rule, the archive ref, and the approval step.
+#
+# Append one row per deletion, AFTER refs/fork/archive/<branch> is pushed and
+# BEFORE the branch is removed. Never edit or remove a row -- this file is the
+# only record that survives a fresh clone. Recover with:
+#   git fetch origin "refs/fork/archive/*:refs/fork/archive/*"
+#   git branch <branch> refs/fork/archive/<branch>
+#
+# branch	sha	pr	proof	date
+

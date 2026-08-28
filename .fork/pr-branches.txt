@@ -1,9 +1,20 @@
 # Heads of OPEN upstream PRs. MERGED AS-IS.
 # NEVER rebase, rename, amend or force-push these -- element-hq
 # maintainers push commits directly onto them.
-# Regenerate with:
+#
+# NEVER regenerate this file by overwriting it. Selecting on --state open drops
+# every closed-but-unmerged branch on the floor and leaves a clean-looking
+# manifest that has quietly lost work. Query --state all, diff against this
+# file, and ADD what is new:
+#
 #   gh pr list --repo element-hq/element-x-android --author hayaksi1 \
-#     --state open --limit 200 --json headRefName --jq '.[].headRefName' | sort -u
+#     --state all --limit 400 --json headRefName,state \
+#     --jq '.[] | select(.state != "MERGED") | .headRefName' | sort -u
+#
+# then diff that against the branch lines below and append the additions.
+#
+# A line leaves this file only under "Branch retention" in FORK_RULES.md: the
+# branch is provably merged, archived, recorded, and the owner has approved it.
 
 feature/code-block-copy-button
 fix/1171-preview-formatting

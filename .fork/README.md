@@ -12,6 +12,8 @@ directory, so **nothing in here can ever conflict**. Same layout as the
 | `setup-local-git.sh` | One-time local setup. Idempotent. |
 | `features.txt` | Fork-only branches — **rebased**. |
 | `pr-branches.txt` | Open upstream PR heads — **merged as-is**. |
+| `unmanaged-branches.txt` | On `origin`, in neither manifest, deliberately. |
+| `archived-branches.tsv` | Every branch ever deleted, and the proof that allowed it. |
 | `integration-patches/` | Cross-feature fixes that belong to no branch. |
 | `rr-cache/` | Committed rerere cache — resolve once, replay forever. |
 
@@ -54,8 +56,16 @@ loop.
 continuously, so a manifest rots. But "merged clean and changed nothing" has a
 false positive: a branch whose merge *conflicted* and was auto-resolved shows
 an empty diff while its work is gone. So the check is gated on the merge
-exiting 0, and it only ever prints a suggestion. **Nothing is deleted or
-renamed, ever.**
+exiting 0, and it only ever prints a suggestion. **The script never deletes or
+renames a branch.**
+
+**Deleting one is a separate, manual, owner-approved act.** A branch may be
+deleted only if it is *provably merged* — GitHub `MERGED` plus a `merge-base
+--is-ancestor` or a zero-`+` `git cherry` against `upstream/develop` — archived
+to `refs/fork/archive/<b>` and written into `archived-branches.tsv` first. An
+advisory line is a prompt to run that check, not a verdict. Everything that
+fails it stays, however dead it looks. Full rule: "Branch retention" in
+`FORK_RULES.md`.
 
 **Conflicts exit 0.** A conflict is the job's expected output, not a failure.
 A nightly red badge is one nobody reads. Red is reserved for the job itself

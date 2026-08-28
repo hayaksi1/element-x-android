@@ -163,6 +163,10 @@ point at today's tip** — a fresh timestamped backup is still required.
 
 ### Branch classes
 
+> **The `prune` dispositions below are superseded** (2026-08-28) — see "Branch
+> retention" in `FORK_RULES.md`. `ahead == 0` is a *candidate* signal, not a
+> proof, and the aggregate/scratch row is not merged anywhere at all.
+
 | Class | Count | Disposition |
 | :--- | ---: | :--- |
 | Live feature branches with unique work | **76** | keep → become `feat/*` |
@@ -381,7 +385,9 @@ Grouped:
 | **`feat/fork-tooling`** (new) | 1 | `.fork/` + sync workflow, merged first |
 
 `fix/developer-options-toggle` (165 commits, 150 files) is **not** a feature
-branch — it is an old aggregate. Prune it.
+branch — it is an old aggregate. It is therefore excluded from `features.txt`,
+but it is **not** deleted: an aggregate is merged nowhere upstream and fails both
+retention proofs. It stays on `origin`, unlisted and untouched.
 
 ---
 
@@ -405,8 +411,11 @@ Proceed with the target model, with **three deviations** to be argued in Phase 2
 
 1. **Keep existing branch names**; add the `Fork-Feature:` trailer and
    `.fork/features.txt` ordering instead of renaming.
-2. **Prune the 58 absorbed + ~17 aggregate branches first.** Restructuring
-   around 153 branches when 76 are live is wasted motion.
+2. ~~**Prune the 58 absorbed + ~17 aggregate branches first.**~~ **Superseded
+   2026-08-28.** Deletion now needs per-branch proof of merge, an archive ref, a
+   row in `archived-branches.tsv` and the owner's approval; the aggregates fail
+   those proofs and stay. Restructuring proceeded around all of them instead. See
+   "Branch retention" in `FORK_RULES.md`.
 3. **Treat modularization as a non-goal for most branches.** They are upstream
    patches; the highest-value follow-up is upstreaming, not plugin seams.
 
