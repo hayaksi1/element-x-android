@@ -324,6 +324,15 @@ integrate_branch() {
         git merge --abort >/dev/null 2>&1 || true
         fail_add "$b" integrate-failed "$mode could not be concluded"
       fi
+      # `cherry-pick --quit` forgets the operation but LEAVES the conflicted
+      # index in place, and --abort can fail outright on a half-resolved state.
+      # Anything unmerged left here is inherited: the next branch's merge is
+      # refused, and apply_patches dies with "Dirty index: cannot apply patches",
+      # which is where a real run of this actually stopped.
+      if [[ -n "$(git ls-files -u)" ]]; then
+        warn "clearing a conflicted index left behind by $b"
+        git reset -q --hard HEAD
+      fi
       return 0
     fi
 
@@ -393,6 +402,10 @@ rebuild_integration() {
 # --- step 4: integration patches -------------------------------------------
 apply_patches() {
   local p count=0
+  if [[ -n "$(git ls-files -u 2>/dev/null)" ]]; then
+    warn "index still has unmerged paths before applying patches; resetting to HEAD"
+    git reset -q --hard HEAD
+  fi
   shopt -s nullglob
   for p in "$FORK_DIR"/integration-patches/*.patch; do
     log "applying integration patch $(basename "$p")"
