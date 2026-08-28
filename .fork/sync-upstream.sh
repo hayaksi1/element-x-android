@@ -278,6 +278,12 @@ integrate_branch() {
   fi
 
   if [[ $rc -ne 0 ]]; then
+    # What was conflicted before anything touched it. rerere.autoUpdate has
+    # already replayed whatever it recognised by this point, so a path that was
+    # conflicted and is now staged was resolved without a human this run.
+    local was_conflicted
+    was_conflicted="$(git status --porcelain | grep -E '^(UU|AA|UD|DU|DD) ' \
+                      | cut -c4- | paste -sd, - || true)"
     resolve_snapshot_conflicts
     # Anything still conflicted is real code. Never auto-resolve it.
     if git status --porcelain | grep -qE '^(UU|AA|UD|DU|DD) '; then
@@ -320,6 +326,16 @@ integrate_branch() {
       fi
       return 0
     fi
+
+    # This branch conflicted and was resolved with nobody watching -- by rerere
+    # replaying a recorded answer, or by the snapshot resolver keeping ours.
+    # Both are reported to git exactly like a clean merge, and rerere matches on
+    # the SHAPE of a conflict hunk, not its meaning: when upstream moves so that
+    # a hunk still hashes the same but now means something else, the stale
+    # answer is reapplied silently. This does not block a sync -- it is how the
+    # cache is supposed to work -- but a replay has to be distinguishable from a
+    # clean merge, or nobody can ever notice a stale one.
+    printf '%s\t%s\n' "$b" "${was_conflicted:-?}" >> "$REPORT.autoresolved"
   fi
 
   after="$(git rev-parse HEAD)"
@@ -357,6 +373,7 @@ rebuild_integration() {
 
   : > "$REPORT.conflicts"
   : > "$REPORT.retire"
+  : > "$REPORT.autoresolved"
 
   local ordered=() b
   ordered+=("$TOOLING")
@@ -493,6 +510,17 @@ emit_report() {
     printf '  ADVISORY -- these merged clean but changed nothing (likely absorbed upstream):\n'
     sed 's/^/    /' "$REPORT.retire"
     echo "    (nothing is deleted; review and remove from the manifest by hand if you agree)"
+  fi
+  if [[ -s "$REPORT.autoresolved" ]]; then
+    echo
+    printf '  AUTO-RESOLVED -- %s branch(es) conflicted and were resolved with no\n' \
+      "$(wc -l < "$REPORT.autoresolved")"
+    printf '  human in the loop, by a replayed rerere resolution or by the snapshot\n'
+    printf '  policy. git reports these exactly like a clean merge:\n'
+    while IFS=$'\t' read -r b paths; do
+      printf '    %-46s %s\n' "$b" "$paths"
+    done < "$REPORT.autoresolved"
+    printf '  Check these first if %s builds but behaves oddly.\n' "$INTEGRATION"
   fi
   if [[ -s "$REPORT.incomplete" ]]; then
     echo
