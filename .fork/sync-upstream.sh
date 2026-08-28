@@ -634,6 +634,24 @@ main() {
     fi
   fi
 
+  # Turning autopublish on is refused while rerere entries recorded DURING a run
+  # go un-re-audited. audit_rerere_cache runs over the cache as IMPORTED; every
+  # resolution this run records is never audited at all, and rerere.autoUpdate --
+  # which is load-bearing, see below -- stages a replayed one automatically. So an
+  # unreviewed answer can reach $INTEGRATION with nobody in the loop, and an
+  # unattended publish would then push it.
+  #
+  # autoUpdate cannot just be turned off to close this. Measured: with it false,
+  # rerere writes the resolution into the worktree but leaves the path unmerged,
+  # integrate() reads that as a real conflict at the status check below, and all
+  # 87 replayable entries go inert. The fix is to re-audit afterwards, not to stop
+  # staging -- so this refuses until that exists rather than pretending the
+  # advisory covers it. An advisory is a line the run continues past.
+  if [[ "${FORK_SYNC_AUTOPUBLISH:-0}" == "1" ]]; then
+    declare -F rr_reaudit_recorded >/dev/null 2>&1 || die \
+      "FORK_SYNC_AUTOPUBLISH=1 refused: rr_reaudit_recorded is not implemented. Entries rerere records during a run are never audited, and rerere.autoUpdate stages them unreviewed, so an unattended publish can push a resolution nobody checked. Implement the post-run re-audit first -- snapshot the rr-cache entry ids before integration, diff after, audit exactly the new set, quarantine an individual failure without clearing the cache."
+  fi
+
   incomplete_reset
   trap 'on_exit $?' EXIT
   trap 'finish 130' INT
