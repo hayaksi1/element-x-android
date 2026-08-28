@@ -29,7 +29,7 @@ _fork_kind_advice() {
     integrate-failed)
       echo "The cherry-pick or merge could not be concluded. Reproduce it by hand on $INTEGRATION and see what git says." ;;
     merge-only-content)
-      echo "A merge on that branch adds or removes lines that are in NONE of its parents -- a hand-made conflict resolution. Do NOT rebase it: a plain rebase replays --no-merges as well, so it DROPS that content silently and then leaves the branch on the merge path where nothing can see the loss. Put the content into a normal commit on the branch instead -- git show --cc <sha> is exactly what is missing -- and re-run; every integration path then carries it. For a branch in pr-branches.txt, which may never be rebased or amended, export it as an integration patch under .fork/integration-patches/ and commit that to $TOOLING." ;;
+      echo "A merge on that branch adds or removes lines that are in NONE of its parents -- a hand-made conflict resolution. Do NOT rebase it: a plain rebase replays --no-merges as well, so it DROPS that content silently and then leaves the branch on the merge path where nothing can see the loss. Put the content into a normal commit on the branch instead -- git show --cc <sha> is exactly what is missing -- and re-run; every integration path then carries it. For a branch in pr-branches.txt, which may never be rebased or amended, export it as an integration patch under .fork/integration-patches/, then record the merge sha in .fork/carried-merges.txt and commit both to $TOOLING -- without that line the run stays incomplete, and an incomplete run skips apply_patches, so the patch would never get the chance to apply." ;;
     pr-drift-behind)
       echo "A maintainer pushed to the PR: fast-forward the local ref from origin. Never rebase a fix/* branch." ;;
     pr-drift-ahead)
@@ -198,14 +198,42 @@ _fork_merge_only_lines() {
     END { print c + 0 }'
 }
 
+# _fork_carried_merges
+# Full shas of the merges listed in .fork/carried-merges.txt, whose own content
+# is carried into $INTEGRATION by an integration patch instead. Absent file, and
+# an entry that no longer resolves, both yield nothing: the guard then fires,
+# which is the safe direction.
+#
+# Read from the worktree, falling back to $TOOLING, for the same reason
+# read_manifest does: rebuild_integration resets the worktree to the mirror,
+# which has no .fork/ at all.
+_fork_carried_merges() {
+  local raw="" line sha
+  if [[ -f "$FORK_DIR/carried-merges.txt" ]]; then
+    raw="$(cat "$FORK_DIR/carried-merges.txt")"
+  elif raw="$(git show "$TOOLING:.fork/carried-merges.txt" 2>/dev/null)"; then
+    :
+  else
+    return 0
+  fi
+  while IFS= read -r line; do
+    [[ -n "$line" ]] || continue
+    sha="$(git rev-parse --verify --quiet "$line^{commit}" 2>/dev/null || true)"
+    [[ -n "$sha" ]] && printf '%s\n' "$sha"
+  done < <(printf '%s\n' "$raw" | sed -e 's/#.*//' -e 's/[[:space:]]*$//' | grep -v '^$' || true)
+}
+
 # merge_only_carriers <base> <branch>
 # One "<short sha><TAB><lines>" row per merge in <base>..<branch> that carries
 # content of its own. Empty output means every merge in the range is reproducible
 # from its parents. Pure query, no side effects, so both call sites can use it.
 merge_only_carriers() {
-  local base="$1" b="$2" m n
+  local base="$1" b="$2" m n carried
+  carried=" $(_fork_carried_merges | tr '\n' ' ') "
   while IFS= read -r m; do
     [[ -n "$m" ]] || continue
+    # Already carried by an integration patch; see .fork/carried-merges.txt.
+    [[ "$carried" == *" $(git rev-parse "$m") "* ]] && continue
     n="$(_fork_merge_only_lines "$m")"
     [[ "$n" -gt 0 ]] || continue
     printf '%s\t%s\n' "$(git rev-parse --short "$m")" "$n"
