@@ -13,3 +13,4 @@ rr-cache/**/thisimage*
 
 # The harnesses build throwaway git repos beside themselves when run in place.
 tests/t/
+tests/t-regen/
