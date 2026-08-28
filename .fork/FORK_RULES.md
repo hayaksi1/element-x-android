@@ -9,8 +9,10 @@ Read this before touching git. Longer explanation lives in `.fork/README.md`.
 upstream/develop ──► develop            pristine mirror. ff-only. Never a fork commit.
                        ├── feat/fork-tooling   .fork/ + workflows. Merged FIRST.
                        ├── feat/<slug>         fork-only work. REBASED each sync.
+                       │                       (.fork/features.txt)
                        └── fix/<n>-<slug>      head of an OPEN upstream PR.
                                                MERGED AS-IS. Never rebased.
+                                               (.fork/pr-branches.txt)
                              ↓
                           master        develop + every branch. Rebuilt from
                                         scratch each run. Disposable.
@@ -18,6 +20,11 @@ upstream/develop ──► develop            pristine mirror. ff-only. Never a 
 
 `master` is the branch you build and install. It is **the accumulated app** —
 the role `develop` used to play.
+
+**The manifest decides, never the name.** `fix/<n>-<slug>` is the usual *shape* of
+a PR branch, not the definition: 19 `fix/*` branches sit in `features.txt` today and
+are rebased like any other fork-only branch. What is never rebased is membership of
+`pr-branches.txt`. A rule phrased on the name prefix misfiles branches.
 
 ## Never commit to `develop`
 
@@ -68,6 +75,12 @@ leaves a manifest only under the retention rule below.
 
 ## Branch retention
 
+The old rule was that nothing is ever deleted. That was right while the cutover was
+in flight and nothing had been proven about where each branch's work had ended up.
+It is wrong now: upstream absorbs this fork's work continuously, so the manifests
+only grow, and an absorbed branch keeps paying rebase and rerere cost on every
+rebuild. The replacement is deliberately narrow.
+
 **A branch may be deleted only if it is provably merged.** Everything else stays:
 closed-but-unmerged PR branches, abandoned branches, experiments, and every branch
 in `.fork/unmanaged-branches.txt`. This is the *only* licence to shrink the branch
@@ -107,6 +120,12 @@ record that survives a fresh clone.
 **Then stop and ask.** Deleting a remote branch moves a remote ref, and that has
 always needed the owner's explicit approval. The sync script itself never deletes
 or renames a branch, and that stays true — retirement is reported, never performed.
+
+**Deleting the branch and removing its manifest line is one atomic act.** A manifest
+entry with no local ref is a hard failure: `integrate` calls
+`fail_add "$b" missing-branch` and the rebuild refuses (exit 3). `rebase_features`
+only warns and skips, so the two steps disagree and the warning is not the signal —
+the refusal comes later. Do both halves together, or the next sync will not build.
 
 ## Syncing is `.fork/sync-upstream.sh` and nothing else
 

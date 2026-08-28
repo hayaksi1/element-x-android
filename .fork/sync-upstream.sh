@@ -7,7 +7,10 @@
 #            (.fork/pr-branches.txt)
 #   master   develop + every branch, rebuilt from scratch. Disposable.
 #
-# This script never deletes or renames a branch.
+# This script never deletes or renames a branch. Retirement is reported, never
+# performed; deletion is a separate manual act and needs proof that the branch is
+# merged, an archive ref and the owner's approval -- "Branch retention" in
+# .fork/FORK_RULES.md.
 #
 # Exit codes:
 #   0  pushed -- or a rehearsal that deliberately did not push: --help,
