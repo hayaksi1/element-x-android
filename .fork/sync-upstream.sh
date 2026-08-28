@@ -306,60 +306,73 @@ integrate_branch() {
   fi
 
   if [[ $rc -ne 0 ]]; then
-    # What was conflicted before anything touched it. rerere.autoUpdate has
-    # already replayed whatever it recognised by this point, so a path that was
-    # conflicted and is now staged was resolved without a human this run.
     local was_conflicted
     was_conflicted="$(git status --porcelain | grep -E '^(UU|AA|UD|DU|DD) ' \
                       | cut -c4- | paste -sd, - || true)"
-    resolve_snapshot_conflicts
-    # Anything still conflicted is real code. Never auto-resolve it.
-    if git status --porcelain | grep -qE '^(UU|AA|UD|DU|DD) '; then
-      local paths
-      # cut, not awk: a path containing a space is truncated by $2.
-      paths="$(git status --porcelain | grep -E '^(UU|AA|UD|DU|DD) ' \
-               | cut -c4- | paste -sd, -)"
-      printf '%s\t%s\n' "$b" "$paths" >> "$REPORT.conflicts"
-      if [[ "$mode" == "cherry-pick" ]]; then
-        git cherry-pick --abort 2>/dev/null || true
-      else
-        git merge --abort 2>/dev/null || true
+
+    # A cherry-pick of a branch is a SEQUENCE, not one pick. Resolving the first
+    # conflict and calling --continue once is not enough: --continue commits the
+    # pick it was given and then walks on to the next one, which for these
+    # branches is usually a screenshot commit that conflicts on binary paths
+    # immediately. --continue then exits non-zero having done exactly the right
+    # thing, and reading that as "could not be concluded" abandons a branch whose
+    # work is already half committed. Drive the sequence to its end instead, and
+    # only then decide what to report.
+    local concluded=0 guard=0
+    while :; do
+      guard=$((guard + 1))
+      if [[ $guard -gt 60 ]]; then break; fi
+
+      resolve_snapshot_conflicts
+      # Anything still conflicted is real code. Never auto-resolve it.
+      if git status --porcelain | grep -qE '^(UU|AA|UD|DU|DD) '; then
+        local paths
+        paths="$(git status --porcelain | grep -E '^(UU|AA|UD|DU|DD) ' \
+                 | cut -c4- | paste -sd, -)"
+        printf '%s\t%s\n' "$b" "$paths" >> "$REPORT.conflicts"
+        if [[ "$mode" == "cherry-pick" ]]; then
+          git cherry-pick --abort 2>/dev/null || true
+        else
+          git merge --abort 2>/dev/null || true
+        fi
+        fail_add "$b" merge-conflict "$mode conflicted in: $paths"
+        return 0
       fi
-      fail_add "$b" merge-conflict "$mode conflicted in: $paths"
-      return 0
-    fi
-    # Concluding the operation MUST NOT be swallowed. `|| true` here was the
-    # single worst bug in this script: when a branch conflicted only in binary
-    # snapshot paths, resolve_snapshot_conflicts restored HEAD's copy of every
-    # one of them, the pick became empty, `--continue` refused, and the error
-    # was eaten. The branch contributed nothing, no row was recorded, and the
-    # run pushed a green master with that branch's work missing -- reached by
-    # the fork's own snapshot policy, on the most common branch shape here.
-    local concluded=0
-    if [[ "$mode" == "cherry-pick" ]]; then
-      git -c core.editor=true cherry-pick --continue >/dev/null 2>&1 && concluded=1
-    else
-      git commit --no-edit >/dev/null 2>&1 && concluded=1
-    fi
+
+      if [[ "$mode" == "merge" ]]; then
+        git commit --no-edit >/dev/null 2>&1 && concluded=1
+        break
+      fi
+
+      # An empty pick cannot be committed; skip it and let the sequence go on.
+      if git diff --cached --quiet HEAD 2>/dev/null; then
+        git -c core.editor=true cherry-pick --skip >/dev/null 2>&1 || true
+      else
+        git -c core.editor=true cherry-pick --continue >/dev/null 2>&1 || true
+      fi
+
+      # In progress means the sequence handed us another conflicted pick.
+      if [[ -e "$gitdir/CHERRY_PICK_HEAD" ]] || [[ -e "$gitdir/sequencer/todo" ]]; then
+        continue
+      fi
+      concluded=1
+      break
+    done
+
     if [[ $concluded -eq 0 ]]; then
       if git diff --cached --quiet HEAD 2>/dev/null; then
         git cherry-pick --skip >/dev/null 2>&1 || git cherry-pick --quit >/dev/null 2>&1 || true
         git merge --abort >/dev/null 2>&1 || true
-        fail_add "$b" empty-after-resolve \
-          "every conflicted path was binary, resolution kept ours, so the branch added nothing to $INTEGRATION"
+        if [[ "$(git rev-parse HEAD)" != "$before" ]]; then
+          printf '%s\t%s\n' "$b" "${was_conflicted:-?}" >> "$REPORT.autoresolved"
+        else
+          fail_add "$b" empty-after-resolve \
+            "every conflicted path was binary, resolution kept ours, so the branch added nothing to $INTEGRATION"
+        fi
       else
         git cherry-pick --abort >/dev/null 2>&1 || git cherry-pick --quit >/dev/null 2>&1 || true
         git merge --abort >/dev/null 2>&1 || true
         fail_add "$b" integrate-failed "$mode could not be concluded"
-      fi
-      # `cherry-pick --quit` forgets the operation but LEAVES the conflicted
-      # index in place, and --abort can fail outright on a half-resolved state.
-      # Anything unmerged left here is inherited: the next branch's merge is
-      # refused, and apply_patches dies with "Dirty index: cannot apply patches",
-      # which is where a real run of this actually stopped.
-      if [[ -n "$(git ls-files -u)" ]]; then
-        warn "clearing a conflicted index left behind by $b"
-        git reset -q --hard HEAD
       fi
       return 0
     fi
