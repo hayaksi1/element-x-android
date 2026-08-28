@@ -647,9 +647,15 @@ main() {
   # 87 replayable entries go inert. The fix is to re-audit afterwards, not to stop
   # staging -- so this refuses until that exists rather than pretending the
   # advisory covers it. An advisory is a line the run continues past.
+  # rr_reaudit_recorded now exists (.fork/lib/audit.sh): the ids are snapshotted
+  # before integration, diffed after, and exactly the newly recorded set is
+  # audited, with an individual failure quarantined rather than the cache
+  # cleared. The refusal that stood here until that was built is therefore gone,
+  # but the check itself stays: the guard is that the function is PRESENT, so a
+  # future edit that drops it cannot silently re-open the hole.
   if [[ "${FORK_SYNC_AUTOPUBLISH:-0}" == "1" ]]; then
     declare -F rr_reaudit_recorded >/dev/null 2>&1 || die \
-      "FORK_SYNC_AUTOPUBLISH=1 refused: rr_reaudit_recorded is not implemented. Entries rerere records during a run are never audited, and rerere.autoUpdate stages them unreviewed, so an unattended publish can push a resolution nobody checked. Implement the post-run re-audit first -- snapshot the rr-cache entry ids before integration, diff after, audit exactly the new set, quarantine an individual failure without clearing the cache."
+      "FORK_SYNC_AUTOPUBLISH=1 refused: rr_reaudit_recorded is missing from .fork/lib/audit.sh. Entries rerere records during a run would go un-re-audited, and rerere.autoUpdate stages them unreviewed, so an unattended publish could push a resolution nobody checked. Restore the post-run re-audit before enabling autopublish."
   fi
 
   incomplete_reset
@@ -670,6 +676,10 @@ main() {
   rr_cache_stage
   rr_cache_import
   audit_rerere_cache
+  # Taken after the import, so entries that arrive from the committed cache are
+  # part of the baseline and only what rerere RECORDS during this run shows up
+  # in the diff.
+  rr_reaudit_begin
   assert_enterprise_uninitialised
 
   fetch_remotes
@@ -727,6 +737,10 @@ main() {
   gate_rc=0
   verify || gate_rc=$?
 
+  # Before the export, so an entry recorded and rejected during this run is
+  # quarantined rather than offered to rr_cache_export -- which would refuse and
+  # abort the whole run over a resolution the re-audit can move aside on its own.
+  rr_reaudit_recorded
   rr_cache_export
   emit_report
 

@@ -111,6 +111,12 @@ assert_snapshot_attrs() {
 
 # --- defect 4: the rerere cache audit ---------------------------------------
 
+# Resolved from THIS file's own location, not $FORK_DIR: the test harness sources
+# the module from a scratch directory with FORK_DIR empty.
+_rr_semantic_py() {
+  printf '%s\n' "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/rr_semantic.py"
+}
+
 rr_cache_dir() {
   printf '%s\n' "$(_audit_gitdir)/rr-cache"
 }
@@ -213,6 +219,23 @@ _rr_entry_problems() {
     fi
   done
 
+  # The three rules above are syntactic, and NONE of them can see a resolution
+  # that is merely wrong. Entry f8cb8ae9ac balanced its braces, carried no
+  # marker and was not a pointer, while replaying a resolution that had lost a
+  # fast-path guard and glued a closing brace onto a `return`. rr_semantic.py
+  # asks the semantic questions; every rule in it was validated to fire zero
+  # times across all 4240 committed .kt files before being switched on.
+  local sem py
+  py="$(_rr_semantic_py)"
+  if [[ -f "$py" ]] && command -v python3 >/dev/null 2>&1; then
+    if ! sem="$(python3 "$py" "$dir" 2>/dev/null)"; then
+      if [[ -n "$sem" ]]; then
+        printf '%s\n' "$sem"
+        bad=1
+      fi
+    fi
+  fi
+
   return "$bad"
 }
 
@@ -255,6 +278,91 @@ audit_rerere_cache() {
 
   if [[ $quarantined -gt 0 ]]; then
     die "$quarantined rerere cache entry/entries failed the audit (first: $first). rerere would replay these unattended; delete them, or list the id in \$FORK_DIR/rr-cache-verified.txt if the LFS-pointer rule is the only one broken and you have re-verified it by hand."
+  fi
+  return 0
+}
+
+# Move ONE failing entry aside, with the reason that condemned it.
+#
+# Quarantine, never clear. The cache holds hundreds of resolutions that work;
+# clearing it to deal with a handful would re-ask every conflict already
+# answered once, and on --continue that is the difference between an operator's
+# resolution being replayed and being lost. The entry is moved, not deleted, so
+# a wrong quarantine is undone with a mv.
+rr_quarantine_entry() {
+  local id="$1" reason="$2" q d
+  d="$(rr_cache_dir)"
+  q="$(_audit_gitdir)/rr-cache-quarantine"
+  [[ -d "$d/$id" ]] || return 0
+  run mkdir -p -- "$q"
+  if [[ -e "$q/$id" ]]; then
+    run rm -rf -- "$q/$id"
+  fi
+  run mv -- "$d/$id" "$q/$id"
+  if [[ ${DRY_RUN:-0} -eq 0 && -d "$q/$id" ]]; then
+    printf '%s\n' "$reason" > "$q/$id/QUARANTINE_REASON.txt"
+  fi
+  warn "rr-cache QUARANTINED $id -> $q/$id ($reason)"
+  return 0
+}
+
+# The set of entry ids present in the live cache right now.
+rr_snapshot_ids() {
+  local d
+  d="$(rr_cache_dir)"
+  [[ -d "$d" ]] || return 0
+  find "$d" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' 2>/dev/null | sort
+}
+
+# Record the pre-integration snapshot so rr_reaudit_recorded can diff against it.
+rr_reaudit_begin() {
+  RR_SNAPSHOT_FILE="${STATE:-$(_audit_gitdir)/fork-sync}.rr-before"
+  rr_snapshot_ids > "$RR_SNAPSHOT_FILE" 2>/dev/null || : > "$RR_SNAPSHOT_FILE"
+  log "rerere cache: snapshotted $(wc -l < "$RR_SNAPSHOT_FILE" | tr -d '[:space:]') entry id(s) before integration"
+  return 0
+}
+
+# Audit ONLY what this run recorded.
+#
+# audit_rerere_cache runs over the cache as IMPORTED, before the first merge.
+# Every resolution recorded DURING the run is therefore never audited at all,
+# and rerere.autoUpdate -- which cannot be turned off, see sync-upstream.sh --
+# stages a replayed one automatically. That is the hole that made an unattended
+# publish unsafe: an answer nobody checked could reach $INTEGRATION and be
+# pushed. Diffing against the snapshot keeps the cost proportional to what
+# actually changed, and a failure quarantines that one entry rather than
+# stopping a run whose other 200 entries are fine.
+rr_reaudit_recorded() {
+  local before after id probs first='' n=0 bad=0
+  before="${RR_SNAPSHOT_FILE:-${STATE:-$(_audit_gitdir)/fork-sync}.rr-before}"
+  if [[ ! -f "$before" ]]; then
+    warn "no pre-integration rerere snapshot at $before; re-auditing the WHOLE cache instead"
+    : > "$before"
+  fi
+  after="$(mktemp)"
+  rr_snapshot_ids > "$after"
+
+  while IFS= read -r id; do
+    [[ -n "$id" ]] || continue
+    n=$((n + 1))
+    if ! probs="$(_rr_entry_problems "$(rr_cache_dir)/$id")"; then
+      bad=$((bad + 1))
+      local reason
+      reason="$(printf '%s\n' "$probs" | head -1 | cut -f2,3 | tr '\t' ' ')"
+      [[ -z "$first" ]] && first="$id ($reason)"
+      while IFS=$'\t' read -r v rule detail; do
+        [[ -z "$rule" ]] && continue
+        warn "rr-cache RECORDED-AND-REJECTED $id variant=$v rule=$rule: $detail"
+      done <<< "$probs"
+      rr_quarantine_entry "$id" "recorded during sync $(date -u +%Y-%m-%dT%H:%M:%SZ): $reason"
+    fi
+  done < <(comm -13 "$before" "$after")
+  rm -f -- "$after"
+
+  log "rerere re-audit: $n entry/entries recorded during this run, $bad quarantined"
+  if [[ $bad -gt 0 ]]; then
+    warn "The quarantined resolution(s) were staged by rerere.autoUpdate during this run and are now moved aside (first: $first)."
+    warn "They are still in the tree that was built. Re-resolve those paths by hand and re-run with --continue."
   fi
   return 0
 }
@@ -331,10 +439,16 @@ rr_cache_stage() {
 }
 
 # Copy entries back into $FORK_DIR/rr-cache/ so a human can review and commit
-# them. Never deletes on either side, and never exports an entry that fails the
-# audit -- exporting a bad resolution would make it permanent and shared.
+# them. Never deletes on either side, and REFUSES -- does not warn -- when an
+# entry fails the audit.
+#
+# The old behaviour skipped the bad entry and carried on. A warning is a line
+# the run continues past: the export "succeeded", the operator committed what
+# landed, and the entry that failed stayed in the LIVE cache replaying anyway.
+# Exporting a wrong resolution is what makes it permanent and shared, so a
+# failure here has to stop the run and name the entry.
 rr_cache_export() {
-  local src dest dir id exported=0 skipped=0
+  local src dest dir id probs exported=0 skipped=0 first_bad=''
   src="$(rr_cache_dir)"
 
   if [[ -z "${FORK_DIR:-}" ]]; then
@@ -356,9 +470,13 @@ rr_cache_export() {
   while IFS= read -r dir; do
     [[ -z "$dir" ]] && continue
     id="${dir##*/}"
-    if ! _rr_entry_problems "$dir" >/dev/null; then
-      warn "rr-cache export SKIPPED $id: it fails the cache audit"
+    if ! probs="$(_rr_entry_problems "$dir")"; then
+      while IFS=$'\t' read -r v rule detail; do
+        [[ -z "$rule" ]] && continue
+        warn "rr-cache export REFUSED $id variant=$v rule=$rule: $detail"
+      done <<< "$probs"
       skipped=$((skipped + 1))
+      [[ -z "$first_bad" ]] && first_bad="$id"
       continue
     fi
     run mkdir -p -- "$dest/$id"
@@ -366,7 +484,11 @@ rr_cache_export() {
     exported=$((exported + 1))
   done < <(find "$src" -mindepth 1 -maxdepth 1 -type d | sort)
 
-  log "rerere cache export: $exported entry/entries copied to $dest, $skipped skipped as unsafe"
+  log "rerere cache export: $exported entry/entries copied to $dest, $skipped rejected"
+
+  if [[ $skipped -gt 0 ]]; then
+    die "rerere cache export refused: $skipped entry/entries in $src fail the cache audit (first: $first_bad). They were NOT exported, and they are still live -- rerere will replay them on the next run. Quarantine each one (rr_quarantine_entry <id> <reason>, or mv it to $(_audit_gitdir)/rr-cache-quarantine/) or re-resolve it by hand, then re-run."
+  fi
 
   # .fork/.gitignore carries `rr-cache/*` with `!rr-cache/.gitkeep`, so a plain
   # `git add .fork/rr-cache` stages NOTHING and the export looks like it worked.
