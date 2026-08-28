@@ -590,6 +590,8 @@ main() {
   mkdir -p "$FORK_DIR"
   incomplete_reset
   trap 'on_exit $?' EXIT
+  trap 'finish 130' INT
+  trap 'finish 143' TERM
 
   preflight
 
