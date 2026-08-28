@@ -487,16 +487,15 @@ done
 eq "the resolution is in NO non-merge commit, so --no-merges cannot replay it" 0 "$seen"
 eq "...yet it IS in the branch tip" 1 "$(git show feat/evil:f.txt | grep -c RESOLVED-IN-THE-MERGE-ONLY)"
 
-# Why the loose test is not usable: BOTH merges have a non-empty combined diff.
-eq "the evil merge's combined diff names f.txt"       "f.txt" \
-   "$(git diff-tree --cc --no-commit-id --name-only -r "$EVIL")"
-eq "the INTERLEAVED merge's combined diff names it too -- the loose test cannot tell them apart" "f.txt" \
-   "$(git diff-tree --cc --no-commit-id --name-only -r "$ILV")"
-# Without this the interleave fixture can degenerate into a clean auto-merge,
-# whose --cc TEXT is empty -- and then the false-positive control below passes
-# against a loose byte-count predicate too, proving nothing. fix/2914 has 6272
-# such bytes and zero all-parent lines; the fixture must have the same shape.
-eq "the interleave really does emit combined-diff TEXT (as fix/2914 does)" 1 \
+# Why "the combined diff is non-empty" is not usable: BOTH merges emit combined
+# diff text, so a byte count cannot tell them apart. The second half also pins
+# the fixture's shape -- a clean auto-merge emits NO --cc text, and an interleave
+# fixture that degenerated into one would let the false-positive control below
+# pass against the loose predicate too, proving nothing. fix/2914 emits 6272 such
+# bytes with zero all-parent lines; the fixture must have that shape.
+eq "the evil merge emits combined-diff text" 1 \
+   "$( [ "$(git show --cc --format="" "$EVIL" | wc -c)" -gt 0 ] && echo 1 || echo 0 )"
+eq "the INTERLEAVE emits it too (as fix/2914 does), so a byte count cannot discriminate" 1 \
    "$( [ "$(git show --cc --format="" "$ILV" | wc -c)" -gt 0 ] && echo 1 || echo 0 )"
 
 # A plain rebase is NOT a safe remedy: it replays --no-merges as well, so it
