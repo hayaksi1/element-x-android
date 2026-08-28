@@ -200,16 +200,25 @@ jobs:
             echo "<!-- fork-sync-state: $hash -->"
           } > body.md
 
+          # Gate on "is there anything to say", not on the conflict count. A new
+          # unmanaged branch is never merged into master and nothing else reports
+          # it, so gating on $n alone means the one signal that a branch is being
+          # silently skipped produces no issue at all.
+          u='${{ steps.screen.outputs.unmanaged }}'
           if [ -z "$num" ]; then
-            [ "$n" -gt 0 ] && gh issue create --title "$ISSUE_TITLE" --body-file body.md --label "$ISSUE_LABEL"
+            if [ "$n" -gt 0 ] || [ "$u" -gt 0 ]; then
+              gh issue create --title "$ISSUE_TITLE" --body-file body.md --label "$ISSUE_LABEL"
+            fi
           else
             gh issue edit "$num" --body-file body.md
             if [ "$n" -gt 0 ] && [ "$state" = "CLOSED" ]; then gh issue reopen "$num"; fi
             if [ "$n" -gt 0 ] && [ "$hash" != "$prev" ]; then
               gh issue comment "$num" --body "Conflict set changed. Now $n branch(es); see the issue body."
             fi
-            if [ "$n" -eq 0 ] && [ "$state" = "OPEN" ]; then
+            # Closing needs BOTH clear: an issue closed while unmanaged branches
+            # remain would retract the only report of them.
+            if [ "$n" -eq 0 ] && [ "$u" -eq 0 ] && [ "$state" = "OPEN" ]; then
               gh issue close "$num" --reason completed \
-                --comment "All fork branches merge cleanly as of \`$(git rev-parse --short upstream/develop)\`."
+                --comment "All fork branches merge cleanly as of \`$(git rev-parse --short upstream/develop)\`, and none is unmanaged."
             fi
           fi
