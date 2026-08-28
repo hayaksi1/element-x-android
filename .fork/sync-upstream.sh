@@ -10,7 +10,8 @@
 # This script never deletes or renames a branch.
 #
 # Exit codes:
-#   0  pushed
+#   0  pushed -- or a rehearsal that deliberately did not push: --help,
+#      --no-push, --dry-run
 #   1  hard error
 #   2  bad flag
 #   3  integration incomplete -- a branch did not make it in. NOT pushed.
@@ -101,7 +102,10 @@ for __lib in integrity publish audit envcheck; do
 done
 unset __lib __f
 
-# --- LAST_RUN.md is written on every path, including the clean one ----------
+# --- LAST_RUN.md, written on every path the trap in main() covers -----------
+# That is everything from preflight onward, including the clean one. The paths
+# that run BEFORE the trap is installed -- --help, a bad flag, a missing
+# module, not a git repository -- describe no run and write no file.
 LAST_RUN_WRITTEN=0
 write_last_run_once() {
   [[ $LAST_RUN_WRITTEN -eq 1 ]] && return 0
