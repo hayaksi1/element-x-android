@@ -114,7 +114,7 @@ class ForwardMessagesPresenterTest {
             presenter.onRoomSelected(listOf(aRoomSummary().roomId))
             val forwardingState = awaitItem()
             assertThat(forwardingState.forwardAction.isLoading()).isTrue()
-            forwardingState.eventSink(ForwardMessagesEvents.Cancel)
+            forwardingState.eventSink(ForwardMessagesEvent.Cancel)
             assertThat(awaitItem().forwardAction.isUninitialized()).isTrue()
             // A timeline becoming available must not resurrect the cancelled forward
             activeTimeline.value = timeline
