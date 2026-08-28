@@ -411,6 +411,135 @@ case "$err" in
   *) bad "...error text does not name the cause" ;;
 esac
 
+# --- 13: check_merge_only_content -------------------------------------------
+section "13  check_merge_only_content refuses a branch the cherry-pick cannot replay"
+# A branch whose base predates the mirror is integrated by cherry-pick, and that
+# pick list is --no-merges. A merge that carries content of its own -- a conflict
+# resolution, present in neither parent -- is therefore dropped: it is in no
+# non-merge commit, so nothing replays it, nothing is recorded, every gate passes
+# and master publishes without it. This repo reproduces that shape exactly
+# (feature/search-index-button @ 3e79bd6a61 is the live one, 43844 bytes).
+MR="$T/mergeonly"
+git init -q "$MR"
+(
+  cd "$MR"
+  git config user.email t@example.invalid
+  git config user.name  "merge-only test"
+  git config commit.gpgsign false
+
+  printf 'shared\n' > f.txt
+  git add f.txt; git commit -qm base
+  BASE="$(git rev-parse HEAD)"
+
+  printf 'shared\nupstream\n' > f.txt
+  git add f.txt; git commit -qm u1
+  git branch develop
+
+  # Off the OLD base, merges the mirror, RESOLVES the conflict into something
+  # that is in neither parent.
+  git checkout -q -b feat/evil "$BASE"
+  printf 'shared\nfeature\n' > f.txt
+  git add f.txt; git commit -qm f1
+  git merge -q --no-edit develop >/dev/null 2>&1 || true
+  printf 'shared\nupstream\nfeature\nRESOLVED-IN-THE-MERGE-ONLY\n' > f.txt
+  git add f.txt; git commit -qm "Merge develop into feat/evil" >/dev/null
+
+  # An ORDINARY merge: nothing of its own, so the pick list loses nothing.
+  git checkout -q -b feat/plain "$BASE"
+  printf 'plain\n' > g.txt
+  git add g.txt; git commit -qm g1
+  git merge -q --no-edit develop >/dev/null
+
+  # No merge at all.
+  git checkout -q -b feat/linear "$BASE"
+  printf 'linear\n' > h.txt
+  git add h.txt; git commit -qm h1
+
+  # The mirror moves on, so all three now have a base predating it and would be
+  # integrated by cherry-pick rather than merged.
+  git checkout -q develop
+  printf 'shared\nupstream\nlater\n' > f.txt
+  git add f.txt; git commit -qm u2
+  git checkout -q feat/linear
+)
+cd "$MR"
+
+# The harm itself, stated in git terms and independent of any module version.
+EVIL="$(git rev-list --merges develop..feat/evil)"
+seen_in_pick=0
+for c in $(git rev-list --no-merges develop..feat/evil); do
+  if git show "$c:f.txt" 2>/dev/null | grep -q RESOLVED-IN-THE-MERGE-ONLY; then seen_in_pick=1; fi
+done
+eq "the resolution is in NO non-merge commit, so --no-merges cannot replay it" 0 "$seen_in_pick"
+eq "...yet it IS in the branch tip"  1 "$(git show feat/evil:f.txt | grep -c RESOLVED-IN-THE-MERGE-ONLY)"
+eq "...and the merge's combined diff is non-empty, which is the detector" "f.txt" \
+   "$(git diff-tree --cc --no-commit-id --name-only -r "$EVIL")"
+eq "the ordinary merge's combined diff is EMPTY" "" \
+   "$(git diff-tree --cc --no-commit-id --name-only -r "$(git rev-list --merges develop..feat/plain)")"
+
+# Everything below needs the guard itself. Reported as a failure rather than
+# left to kill the harness, so a run against a module that lacks it says so.
+if ! declare -F check_merge_only_content >/dev/null 2>&1; then
+  bad "check_merge_only_content is not defined -- the cherry-pick loss site is unguarded, a branch whose only unique content is in a merge integrates silently and master publishes without it"
+else
+  incomplete_reset
+  rc=0; check_merge_only_content develop feat/evil 2>/dev/null || rc=$?
+  eq "fires on a merge carrying its own content (returns 1)" 1 "$rc"
+  eq "records exactly one row"                               1 "$(incomplete_count)"
+  eq "the row's kind is merge-only-content"                  1 "$(kind_rows merge-only-content)"
+  have "the row names the branch"        "^feat/evil	merge-only-content" "$REPORT.incomplete"
+  have "the detail names the file"       "f.txt"                                  "$REPORT.incomplete"
+  have "the detail names the merge sha"  "$(git rev-parse --short "$EVIL")"       "$REPORT.incomplete"
+  have "the detail says why it cannot be replayed" "cannot be replayed"           "$REPORT.incomplete"
+
+  incomplete_reset
+  rc=0; check_merge_only_content develop feat/plain 2>/dev/null || rc=$?
+  eq "an ordinary merge is NOT flagged (returns 0)" 0 "$rc"
+  eq "...and records nothing"                       0 "$(incomplete_count)"
+
+  incomplete_reset
+  rc=0; check_merge_only_content develop feat/linear 2>/dev/null || rc=$?
+  eq "a branch with no merges is NOT flagged (returns 0)" 0 "$rc"
+  eq "...and records nothing"                             0 "$(incomplete_count)"
+
+  if _fork_kinds | grep -qx merge-only-content; then
+    ok "merge-only-content is registered in _fork_kinds"
+  else
+    bad "merge-only-content is NOT registered in _fork_kinds"
+  fi
+  ADV="$(_fork_kind_advice merge-only-content)"
+  case "$ADV" in
+    *"Unknown kind"*) bad "no advice registered for merge-only-content" ;;
+    *)                ok  "advice is registered for merge-only-content" ;;
+  esac
+  # The remedy differs by branch class: features.txt rebases, pr-branches.txt
+  # may never be rebased and needs an integration patch instead. Advice that
+  # says only "rebase it" would be wrong for half the branches it can fire on --
+  # and one of the two live instances, fix/2914-phone-word-boundary, is a PR one.
+  case "$ADV" in
+    *pr-branches.txt*) ok  "advice covers the branch class that may never be rebased" ;;
+    *)                 bad "advice does not say what to do for a pr-branches.txt branch" ;;
+  esac
+fi
+
+# Wiring: the guard has to be CALLED at the loss site, and before the pick list
+# is built -- a range holding only such a merge would otherwise leave through
+# the "nothing unique to pick" return in silence.
+cd "$REPO_ROOT"
+if [[ -r "$SYNC" ]]; then
+  CALL_LN="$(grep -nF 'check_merge_only_content "$MIRROR" "$b"' "$SYNC" | head -n1 | cut -d: -f1)"
+  PICK_LN="$(grep -nF 'picks="$(git rev-list --reverse --no-merges' "$SYNC" | head -n1 | cut -d: -f1)"
+  if [[ -n "$CALL_LN" ]]; then ok "sync-upstream.sh calls the guard at the cherry-pick site"
+  else bad "sync-upstream.sh never calls check_merge_only_content -- the guard is dead code"; fi
+  if [[ -n "$CALL_LN" && -n "$PICK_LN" && "$CALL_LN" -lt "$PICK_LN" ]]; then
+    ok "the guard runs BEFORE the --no-merges pick list is built"
+  else
+    bad "guard call (line ${CALL_LN:-none}) does not precede the pick list (line ${PICK_LN:-none})"
+  fi
+else
+  bad "cannot read $SYNC to check the guard is wired in"
+fi
+
 # --- result -----------------------------------------------------------------
 printf '\n=====================================\n'
 printf '%s passed, %s failed\n' "$PASSED" "$FAILED"
