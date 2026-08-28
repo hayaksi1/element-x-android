@@ -265,22 +265,30 @@ check_pr_drift 2>/dev/null
 fail_add "feat/gone"     missing-branch   "listed in features.txt but no local ref" 2>/dev/null
 fail_add "feat/stubborn" rebase-failed    "3 files conflicted during rebase"        2>/dev/null
 fail_add "chore/stray"   unmanaged-branch "in neither manifest"                     2>/dev/null
+fail_add "fix/1-gamma"   merge-conflict   "cherry-pick conflicted in: app/src/Alpha.kt" 2>/dev/null
 rm -f "$FORK_DIR/LAST_RUN.md"
 write_last_run 3 "$C4" "$C4" "$X1"
 have "says INCOMPLETE"        "^\*\*Result:\*\* INCOMPLETE" "$FORK_DIR/LAST_RUN.md"
+# The merge-conflict advice must not tell an operator to merge a branch the run
+# integrates by cherry-pick: emit_report was corrected for this and LAST_RUN.md
+# is the artifact the nightly job actually surfaces.
+have "merge-conflict advice names cherry-pick for a stale base" \
+     "git cherry-pick" "$FORK_DIR/LAST_RUN.md"
+have "merge-conflict advice says --continue rebuilds the branch" \
+     "REBUILDS master" "$FORK_DIR/LAST_RUN.md"
 have "carries exit code 3"    "| exit code | 3 |"           "$FORK_DIR/LAST_RUN.md"
-for b in fix/2-behind fix/3-ahead fix/4-diverged fix/5-no-remote feat/gone feat/stubborn chore/stray; do
+for b in fix/2-behind fix/3-ahead fix/4-diverged fix/5-no-remote feat/gone feat/stubborn chore/stray fix/1-gamma; do
   have "names branch $b" "\`$b\`" "$FORK_DIR/LAST_RUN.md"
 done
 for k in pr-drift-behind pr-drift-ahead pr-drift-diverged pr-no-remote \
-         missing-branch rebase-failed unmanaged-branch; do
+         missing-branch rebase-failed unmanaged-branch merge-conflict; do
   have "groups under kind $k" "^## $k$" "$FORK_DIR/LAST_RUN.md"
 done
-eq "one 'What to do' line per kind present" 7 \
+eq "one 'What to do' line per kind present" 8 \
    "$(grep -c '^\*\*What to do:\*\*' "$FORK_DIR/LAST_RUN.md")"
 hasnt "no kind heading for a kind with no rows" "^## stale-base$" "$FORK_DIR/LAST_RUN.md"
 last_run_issue_body > "$T/issue.md"
-have "issue body counts the failures" "^7 outstanding integration failure(s):" "$T/issue.md"
+have "issue body counts the failures" "^8 outstanding integration failure(s):" "$T/issue.md"
 have "issue body names a branch"      "\`fix/2-behind\`"                       "$T/issue.md"
 
 # --- result -----------------------------------------------------------------

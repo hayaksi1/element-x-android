@@ -470,6 +470,26 @@ verify() {
   return "$failed"
 }
 
+# One refs/fork/pre-rebuild/<ts> per run, each pinning a whole tree, is ~365 gc
+# roots a year in a 17 GB repository. Drop only the ones that are provably
+# redundant: an ancestor of what was just published holds nothing that is not
+# already in master, so nothing can be lost by letting it go. A rescue ref that
+# is NOT an ancestor is exactly the one somebody may still need, and is kept
+# regardless of age.
+prune_rescue_refs() {
+  local r keep_after n=0
+  keep_after="$(date -u -d '30 days ago' +%s 2>/dev/null || echo 0)"
+  [[ "$keep_after" == "0" ]] && return 0
+  while IFS= read -r r; do
+    [[ -n "$r" ]] || continue
+    git merge-base --is-ancestor "$r" "refs/heads/$INTEGRATION" 2>/dev/null || continue
+    [[ "$(git log -1 --format=%ct "$r" 2>/dev/null || echo 0)" -lt "$keep_after" ]] || continue
+    git update-ref -d "$r" && n=$((n + 1))
+  done < <(git for-each-ref --format='%(refname)' refs/fork/pre-rebuild)
+  [[ $n -gt 0 ]] && log "pruned $n redundant pre-rebuild ref(s) (ancestors of $INTEGRATION, older than 30 days)"
+  return 0
+}
+
 # --- report -----------------------------------------------------------------
 emit_report() {
   echo
@@ -502,6 +522,18 @@ emit_report() {
     echo "  already integrated, which is what the cherry-pick path exists to"
     echo "  prevent. Use instead:"
     echo "    git cherry-pick \$(git rev-list --reverse --no-merges $MIRROR..<branch>)"
+    echo
+    echo "  If rerere cannot replay your resolution, re-resolving by hand loops"
+    echo "  forever: same conflict, same exit 3, every run. The way out is an"
+    echo "  integration patch, which apply_patches replays after every rebuild."
+    echo "  The rescued tip is a MERGE commit, so format-patch on it emits"
+    echo "  nothing at all -- silently, exit 0 -- and git am takes neither a"
+    echo "  merge nor a bare diff. Go through a normal commit:"
+    echo "    RESCUE=refs/fork/pre-rebuild/<timestamp>"
+    echo "    git diff $INTEGRATION..\$RESCUE > /tmp/fix.diff"
+    echo "    git apply /tmp/fix.diff && git add -A && git commit -m '<what it fixes>'"
+    echo "    git format-patch -1 --stdout > .fork/integration-patches/00NN-<slug>.patch"
+    echo "    # commit that patch to $TOOLING, or the next rebuild deletes it"
   else
     echo "  no conflicts"
   fi
@@ -633,6 +665,8 @@ main() {
   graft_integration "$prev_tip" "$SYNC_TS"
   tag_sync "$SYNC_TS"
   publish_ff "$SYNC_TS"
+
+  prune_rescue_refs
 
   if [[ "$(git symbolic-ref -q --short HEAD || true)" == "$MIRROR" ]]; then
     warn "HEAD ended on $MIRROR; moving off so nothing can commit to the mirror"
