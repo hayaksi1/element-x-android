@@ -8,6 +8,13 @@
 #   master   develop + every branch, rebuilt from scratch. Disposable.
 #
 # This script never deletes or renames a branch.
+#
+# Exit codes:
+#   0  pushed
+#   1  hard error
+#   2  bad flag
+#   3  integration incomplete -- a branch did not make it in. NOT pushed.
+#   4  a gate failed. NOT pushed.
 
 # Re-exec from a temp copy: we switch branches while running and bash reads
 # scripts incrementally, so editing the tree under ourselves would corrupt it.
@@ -32,6 +39,9 @@ TOOLING="feat/fork-tooling"
 STATE="$FORK_DIR/.state"
 REPORT="$FORK_DIR/.report"
 
+EXIT_INCOMPLETE=3
+EXIT_GATE=4
+
 DRY_RUN=0; NO_PUSH=0; CONTINUE=0; SKIP_VERIFY=0; ONLY_FEATURES=""
 
 for arg in "$@"; do
@@ -42,7 +52,7 @@ for arg in "$@"; do
     --skip-verify)  SKIP_VERIFY=1 ;;
     --features=*)   ONLY_FEATURES="${arg#--features=}" ;;
     -h|--help)
-      sed -n '2,12p' "$0"; exit 0 ;;
+      sed -n '2,20p' "$0"; exit 0 ;;
     *) echo "unknown flag: $arg" >&2; exit 2 ;;
   esac
 done
@@ -71,6 +81,37 @@ read_manifest() {
   fi
   printf '%s\n' "$raw" | sed -e 's/#.*//' -e 's/[[:space:]]*$//' | grep -v '^$' || true
 }
+
+# --- modules ----------------------------------------------------------------
+# The guards live in sourced modules so each one has its own test harness. They
+# are read into memory HERE, before any checkout: rebuild_integration resets the
+# worktree to develop, which has no .fork/ directory at all, so a module read
+# later would not be on disk.
+for __lib in integrity publish audit envcheck; do
+  __f="$FORK_DIR/lib/$__lib.sh"
+  if [[ ! -f "$__f" ]]; then
+    __f="$(mktemp)"
+    git show "$TOOLING:.fork/lib/$__lib.sh" > "$__f" 2>/dev/null \
+      || die "missing module: .fork/lib/$__lib.sh (not in the worktree, not on $TOOLING)"
+  fi
+  # shellcheck source=/dev/null
+  . "$__f"
+  [[ "$__f" == "$FORK_DIR/lib/$__lib.sh" ]] || rm -f "$__f"
+done
+unset __lib __f
+
+# --- LAST_RUN.md is written on every path, including the clean one ----------
+LAST_RUN_WRITTEN=0
+write_last_run_once() {
+  [[ $LAST_RUN_WRITTEN -eq 1 ]] && return 0
+  LAST_RUN_WRITTEN=1
+  write_last_run "$1" \
+    "$(git rev-parse --short "$UPSTREAM_REF" 2>/dev/null || echo '?')" \
+    "$(git rev-parse --short "$MIRROR"       2>/dev/null || echo '?')" \
+    "$(git rev-parse --short "$INTEGRATION"  2>/dev/null || echo '?')"
+}
+on_exit() { write_last_run_once "${1:-1}"; }
+finish()  { write_last_run_once "$1"; exit "$1"; }
 
 # --- preflight --------------------------------------------------------------
 preflight() {
@@ -104,24 +145,6 @@ preflight() {
   log "manifests ok: $(echo "$feats" | grep -c . ) fork-only, $(echo "$prs" | grep -c . ) pr-backed"
 }
 
-# --- snapshot merge policy --------------------------------------------------
-# .gitattributes declares merge=lfs, but no such driver exists at any scope, so
-# git falls back to a TEXT merge of the LFS pointer. `git add` then re-encodes
-# the conflict markers into a structurally valid pointer whose payload is text.
-# git lfs fsck passes; nothing notices until a PNG fails to decode.
-# One line in .git/info/attributes (never the committed .gitattributes) makes
-# these conflict as binary instead: no markers, no corruptible object, and
-# rerere skips them automatically.
-ensure_snapshot_attrs() {
-  local f
-  f="$(git rev-parse --git-common-dir)/info/attributes"
-  mkdir -p "$(dirname "$f")"
-  if ! grep -qs 'snapshots/\*\*/\*\.png' "$f" 2>/dev/null; then
-    log "installing snapshot merge policy into .git/info/attributes"
-    run bash -c "printf '%s\n' '**/snapshots/**/*.png merge=binary' 'screenshots/**/*.png merge=binary' >> '$f'"
-  fi
-}
-
 # Resolve snapshot conflicts deterministically. Branches on the status code:
 # DU (deleted on our side) needs `git rm`; checkout --ours errors there.
 resolve_snapshot_conflicts() {
@@ -129,26 +152,35 @@ resolve_snapshot_conflicts() {
   while IFS= read -r line; do
     [[ -z "$line" ]] && continue
     code="${line:0:2}"; path="${line:3}"
-    case "$path" in
-      *snapshots/*.png|screenshots/*.png) ;;
-      *) continue ;;
-    esac
+    # Key off the merge ATTRIBUTE, not the path shape. The policy installed by
+    # ensure_snapshot_attrs is what this resolver actually means, and the three
+    # rules share no spellable prefix: `libraries/compound/screenshots/**`
+    # neither begins with `screenshots/` nor contains the substring
+    # "snapshots", so both of the old globs missed it -- and it covers assets
+    # that are not .png, so a *.png filter would have missed it too. Those
+    # paths would have fallen through to "anything still conflicted is real
+    # code" and aborted the branch.
+    [[ "$(git check-attr merge -- "$path" | sed 's/.*: //')" == "binary" ]] || continue
     case "$code" in
       DU) run git rm -q --  "$path" ;;
       *)  run git checkout --ours -- "$path"; run git add -- "$path" ;;
     esac
     resolved=$((resolved + 1))
   done < <(git status --porcelain | grep -E '^(UU|AA|UD|DU|DD) ' || true)
-  [[ $resolved -gt 0 ]] && log "auto-resolved $resolved snapshot path(s); these need re-recording"
-  echo "$resolved"
+  if [[ $resolved -gt 0 ]]; then
+    log "auto-resolved $resolved binary/snapshot path(s); these need re-recording"
+  fi
+}
+
+# --- step 0: fetch ----------------------------------------------------------
+fetch_remotes() {
+  log "fetching upstream and origin"
+  run git fetch upstream --prune --tags
+  run git fetch origin --prune
 }
 
 # --- step 1: fast-forward the mirror ---------------------------------------
 sync_mirror() {
-  log "fetching upstream"
-  run git fetch upstream --prune --tags
-  run git fetch origin --prune
-
   log "fast-forwarding $MIRROR to $UPSTREAM_REF"
   if [[ $DRY_RUN -eq 0 ]]; then
     # Never check the mirror out: a branch nobody has checked out cannot be
@@ -187,8 +219,10 @@ rebase_features() {
     if [[ $DRY_RUN -eq 1 ]]; then continue; fi
     if ! git rebase --onto "$MIRROR" "$(git merge-base "$b" "$MIRROR")" "$b" >/dev/null 2>&1; then
       git rebase --abort 2>/dev/null || true
-      warn "rebase conflict on $b -- left unrebased, will merge as-is"
-      echo "$b" >> "$REPORT.rebase-failed"
+      # The branch stays on its old base. It is integrated by cherry-pick below
+      # rather than merged, but a human still has to rebase it, so the run is
+      # incomplete and must not push.
+      fail_add "$b" rebase-failed "rebase onto $MIRROR conflicted; branch left on its old base"
     fi
   done
   # Never leave the mirror checked out: a branch nobody has checked out cannot
@@ -200,6 +234,69 @@ rebase_features() {
 }
 
 # --- step 3: rebuild the integration branch --------------------------------
+integrate_branch() {
+  local b="$1"
+  local mode rc=0 picks before after
+
+  before="$(git rev-parse HEAD)"
+
+  # A branch whose base predates the mirror cannot be MERGED: the merge drags
+  # its stale base across everything already integrated and conflicts in files
+  # the branch never touched. Integrate its unique commits by cherry-pick, which
+  # touches only the integration branch.
+  #
+  # This applies to BOTH branch classes. A PR branch must never be rebased
+  # (maintainers push onto it). A feat/* branch whose rebase failed above is in
+  # exactly the same position -- and this test was previously gated on PR
+  # membership, so the feat/* case fell through to the very merge the guard
+  # exists to prevent.
+  if ! git merge-base --is-ancestor "$MIRROR" "$b"; then
+    mode="cherry-pick"
+    picks="$(git rev-list --reverse --no-merges "$MIRROR..$b")"
+    if [[ -z "$picks" ]]; then
+      log "nothing unique to pick: $b"
+      return 0
+    fi
+    # shellcheck disable=SC2086
+    git cherry-pick --keep-redundant-commits $picks >/dev/null 2>&1 || rc=$?
+  else
+    mode="merge"
+    git merge --no-ff --no-edit "$b" >/dev/null 2>&1 || rc=$?
+  fi
+
+  if [[ $rc -ne 0 ]]; then
+    resolve_snapshot_conflicts
+    # Anything still conflicted is real code. Never auto-resolve it.
+    if git status --porcelain | grep -qE '^(UU|AA|UD|DU|DD) '; then
+      local paths
+      paths="$(git status --porcelain | grep -E '^(UU|AA|UD|DU|DD) ' \
+               | awk '{print $2}' | paste -sd, -)"
+      printf '%s\t%s\n' "$b" "$paths" >> "$REPORT.conflicts"
+      if [[ "$mode" == "cherry-pick" ]]; then
+        git cherry-pick --abort 2>/dev/null || true
+      else
+        git merge --abort 2>/dev/null || true
+      fi
+      fail_add "$b" merge-conflict "$mode conflicted in: $paths"
+      return 0
+    fi
+    if [[ "$mode" == "cherry-pick" ]]; then
+      git -c core.editor=true cherry-pick --continue >/dev/null 2>&1 || true
+    else
+      git commit --no-edit >/dev/null 2>&1 || true
+    fi
+  fi
+
+  after="$(git rev-parse HEAD)"
+  # Retirement is ADVISORY ONLY and valid only when the merge was clean.
+  # A conflicted-then-resolved merge proves nothing: the resolution policy
+  # chose the outcome, not the content.
+  if [[ $rc -eq 0 ]] && git diff --quiet "$before" "$after"; then
+    echo "$b" >> "$REPORT.retire"
+  fi
+  return 0
+}
+
 rebuild_integration() {
   log "rebuilding $INTEGRATION from $MIRROR"
   run git checkout -B "$INTEGRATION" "$MIRROR"
@@ -207,71 +304,18 @@ rebuild_integration() {
   : > "$REPORT.conflicts"
   : > "$REPORT.retire"
 
-  local ordered=() b before after rc n mode
+  local ordered=() b
   ordered+=("$TOOLING")
   mapfile -t -O "${#ordered[@]}" ordered < <(read_manifest "$FORK_DIR/features.txt")
   mapfile -t -O "${#ordered[@]}" ordered < <(read_manifest "$FORK_DIR/pr-branches.txt")
 
-  local prset
-  prset=" $(read_manifest "$FORK_DIR/pr-branches.txt" | tr '\n' ' ') "
-
   for b in "${ordered[@]}"; do
-    git show-ref --verify --quiet "refs/heads/$b" || { warn "missing branch, skipping: $b"; continue; }
+    if ! git show-ref --verify --quiet "refs/heads/$b"; then
+      fail_add "$b" missing-branch "listed in a manifest but there is no local ref"
+      continue
+    fi
     if [[ $DRY_RUN -eq 1 ]]; then printf '    [dry-run] integrate %s\n' "$b"; continue; fi
-
-    before="$(git rev-parse HEAD)"
-    rc=0
-
-    # A branch whose base predates the mirror cannot be MERGED: the merge would
-    # drag its stale base across everything already integrated and conflict in
-    # files the branch never touched. PR branches must not be rebased (upstream
-    # maintainers push onto them), so integrate their unique commits by
-    # cherry-pick instead -- that touches only the integration branch.
-    if [[ "$prset" == *" $b "* ]] && ! git merge-base --is-ancestor "$MIRROR" "$b"; then
-      mode="cherry-pick"
-      local picks
-      picks="$(git rev-list --reverse --no-merges "$MIRROR..$b")"
-      if [[ -z "$picks" ]]; then
-        log "nothing unique to pick: $b"
-        continue
-      fi
-      # shellcheck disable=SC2086
-      git cherry-pick --keep-redundant-commits $picks >/dev/null 2>&1 || rc=$?
-    else
-      mode="merge"
-      git merge --no-ff --no-edit "$b" >/dev/null 2>&1 || rc=$?
-    fi
-
-    if [[ $rc -ne 0 ]]; then
-      n="$(resolve_snapshot_conflicts)"
-      # Anything still conflicted is real code. Never auto-resolve it.
-      if git status --porcelain | grep -qE '^(UU|AA|UD|DU|DD) '; then
-        {
-          printf '%s\t%s\n' "$b" "$(git status --porcelain \
-            | grep -E '^(UU|AA|UD|DU|DD) ' | awk '{print $2}' | paste -sd, -)"
-        } >> "$REPORT.conflicts"
-        warn "CONFLICT integrating $b ($mode)"
-        if [[ "$mode" == "cherry-pick" ]]; then
-          git cherry-pick --abort 2>/dev/null || true
-        else
-          git merge --abort 2>/dev/null || true
-        fi
-        continue
-      fi
-      if [[ "$mode" == "cherry-pick" ]]; then
-        git -c core.editor=true cherry-pick --continue >/dev/null 2>&1 || true
-      else
-        git commit --no-edit >/dev/null 2>&1 || true
-      fi
-    fi
-
-    after="$(git rev-parse HEAD)"
-    # Retirement is ADVISORY ONLY and valid only when the merge was clean.
-    # A conflicted-then-resolved merge proves nothing: the resolution policy
-    # chose the outcome, not the content.
-    if [[ $rc -eq 0 ]] && git diff --quiet "$before" "$after"; then
-      echo "$b" >> "$REPORT.retire"
-    fi
+    integrate_branch "$b"
   done
 }
 
@@ -300,22 +344,17 @@ verify() {
     return 0
   fi
 
-  # The project needs a JDK 21 with a compiler. A JRE-only installation on the
-  # toolchain path fails deep inside Gradle with "does not provide the required
-  # capabilities: [JAVA_COMPILER]", which reads like a project fault.
-  if [[ -z "${JAVA_HOME:-}" || ! -x "${JAVA_HOME}/bin/javac" ]]; then
-    local found=""
-    local cand
-    for cand in /usr/lib/jvm/java-21-openjdk /usr/lib/jvm/java-21 "$JAVA_HOME"; do
-      [[ -n "$cand" && -x "$cand/bin/javac" ]] && { found="$cand"; break; }
-    done
-    if [[ -z "$found" ]]; then
-      die "no JDK 21 with a compiler found. Set JAVA_HOME to a full JDK 21 (not a JRE)."
-    fi
-    export JAVA_HOME="$found"
-    log "JAVA_HOME=$JAVA_HOME"
-  fi
-  local failed=0
+  assert_jdk21_with_compiler
+  assert_enterprise_uninitialised
+
+  local failed=0 g started assemble_ok=0 first=1
+
+  # A previous release build that was OOM-killed leaves stale APKs behind with
+  # no BUILD FAILED line. Clearing the directory first is what makes the mtime
+  # assertion below meaningful.
+  clean_build_outputs
+  started="$(build_start_stamp)"
+
   local -a gates=(
     ":app:assembleGplayDebug app:assembleFDroidDebug -PallWarningsAsErrors=true"
     ":app:testGplayDebugUnitTest testDebugUnitTest -x :tests:konsist:testDebugUnitTest"
@@ -323,28 +362,30 @@ verify() {
     ":tests:uitests:verifyPaparazziDebug"
     "detekt ktlintCheck :app:lintGplayDebug --continue"
   )
-  local g
   for g in "${gates[@]}"; do
     log "gate: ./gradlew $g"
-    if [[ $DRY_RUN -eq 1 ]]; then continue; fi
+    if [[ $DRY_RUN -eq 1 ]]; then first=0; continue; fi
     # shellcheck disable=SC2086
     if ./gradlew $g --no-configuration-cache; then
       log "  PASS"
+      [[ $first -eq 1 ]] && assemble_ok=1
     else
       warn "  FAIL: $g"
       failed=$((failed + 1))
     fi
+    first=0
   done
-  return "$failed"
-}
 
-# --- step 6: push -----------------------------------------------------------
-publish() {
-  if [[ $NO_PUSH -eq 1 || $DRY_RUN -eq 1 ]]; then log "push skipped"; return 0; fi
-  if [[ $SKIP_VERIFY -eq 1 ]]; then die "refusing to push: verification was skipped"; fi
-  log "pushing $MIRROR and $INTEGRATION"
-  git push --force-with-lease origin "$MIRROR:$MIRROR"
-  git push --force-with-lease origin "$INTEGRATION:$INTEGRATION"
+  # Only meaningful if the assemble actually claimed success. A pass with no new
+  # APK, or with one older than the build, is the OOM signature.
+  # Subshell: assert_artifacts_fresh dies, and die is exit 1, which would unwind
+  # the whole script past rr_cache_export and emit_report. A stale artifact is a
+  # failed gate, so it must be counted like one and exit 4.
+  if [[ $DRY_RUN -eq 0 && $assemble_ok -eq 1 ]]; then
+    ( assert_artifacts_fresh "$started" ) || failed=$((failed + 1))
+  fi
+
+  return "$failed"
 }
 
 # --- report -----------------------------------------------------------------
@@ -372,46 +413,93 @@ emit_report() {
     sed 's/^/    /' "$REPORT.retire"
     echo "    (nothing is deleted; review and remove from the manifest by hand if you agree)"
   fi
+  if [[ -s "$REPORT.incomplete" ]]; then
+    echo
+    printf '  INCOMPLETE -- %s branch(es) are not fully represented in %s:\n' \
+      "$(incomplete_count)" "$INTEGRATION"
+    while IFS=$'\t' read -r b kind detail; do
+      printf '    %-46s %-20s %s\n' "$b" "$kind" "$detail"
+    done < "$REPORT.incomplete"
+    echo
+    echo "  The run will NOT push. See .fork/LAST_RUN.md."
+  fi
 }
 
 # --- main -------------------------------------------------------------------
 main() {
   mkdir -p "$FORK_DIR"
+  incomplete_reset
+  trap 'on_exit $?' EXIT
+
   preflight
+
+  # Local git policy. All of this must be in place BEFORE the first merge.
   ensure_snapshot_attrs
+  assert_snapshot_attrs
   git config rerere.enabled true
   git config rerere.autoUpdate true
-  git config submodule.recurse false
+  # submodule.recurse is NOT set here. assert_enterprise_uninitialised sets it
+  # when unset and refuses when an operator set it to true; setting it first
+  # would overwrite the very value the assert exists to catch.
+  rr_cache_stage
+  audit_rerere_cache
+  assert_enterprise_uninitialised
+
+  fetch_remotes
+
+  # Drift and manifest coverage need the fetch to have happened.
+  check_pr_drift
+  check_unmanaged_branches
+
+  local sync_ts prev_tip rebuild_sha gate_rc n
+  sync_ts="$(sync_timestamp)"
 
   if [[ $CONTINUE -eq 0 ]]; then
     sync_mirror
     rebase_features
+    # Captured BEFORE rebuild_integration: `git checkout -B master develop`
+    # destroys the old tip, and that tip is what master has to fast-forward from.
+    prev_tip="$(capture_prev_integration)"
+    printf '%s\n' "$prev_tip" > "$STATE.prev-integration"
   else
     log "--continue: skipping mirror sync and rebases"
+    prev_tip="$(cat "$STATE.prev-integration" 2>/dev/null || true)"
   fi
 
   rebuild_integration
   apply_patches
+  # The pre-graft tip. Captured here rather than after verify(): nothing in the
+  # gates moves HEAD today, but this value's whole job is to be the tree the
+  # graft publishes, and here it provably is.
+  rebuild_sha="$(git rev-parse HEAD)"
 
-  local gate_rc=0
+  gate_rc=0
   verify || gate_rc=$?
 
+  rr_cache_export
   emit_report
 
-  if [[ -s "$REPORT.conflicts" ]]; then
-    warn "conflicts present -- not pushing"
-    exit 0   # conflicts are the expected output, not a job failure
+  n="$(incomplete_count)"
+  if [[ "$n" -gt 0 ]]; then
+    warn "$n branch(es) did not make it into $INTEGRATION."
+    warn "Refusing to publish a $INTEGRATION that is missing a branch's work."
+    finish "$EXIT_INCOMPLETE"
   fi
   if [[ $gate_rc -ne 0 ]]; then
-    die "$gate_rc gate(s) failed -- not pushing"
+    warn "$gate_rc gate(s) failed -- not pushing"
+    finish "$EXIT_GATE"
   fi
-  publish
+
+  graft_integration "$prev_tip" "$sync_ts"
+  tag_sync "$sync_ts"
+  publish_ff "$sync_ts"
 
   if [[ "$(git symbolic-ref -q --short HEAD || true)" == "$MIRROR" ]]; then
     warn "HEAD ended on $MIRROR; moving off so nothing can commit to the mirror"
     git checkout --quiet "$INTEGRATION" 2>/dev/null || true
   fi
-  log "done"
+  log "done (rebuild $(git rev-parse --short "$rebuild_sha"), published as $(git rev-parse --short "$INTEGRATION"))"
+  finish 0
 }
 
 main "$@"
