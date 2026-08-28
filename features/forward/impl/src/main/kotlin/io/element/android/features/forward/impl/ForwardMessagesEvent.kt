@@ -12,4 +12,3 @@ sealed interface ForwardMessagesEvent {
     data object ClearError : ForwardMessagesEvent
     data object Cancel : ForwardMessagesEvent
 }
-
