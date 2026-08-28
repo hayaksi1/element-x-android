@@ -106,6 +106,41 @@ case, so a `&&` chain or `set -e` inverts the answer.
 *reverted* upstream reads `MERGED` forever. If GitHub says merged and both proofs
 fail, the branch is **not** prunable — report it and leave it.
 
+**Proof B cannot see a squash-merge of a multi-commit branch.** A one-commit branch
+squashes to an identical patch-id, so B reports 0. A two-commit branch squashes into a
+single upstream commit whose patch-id matches neither of them, so B reports 2 on a branch
+that is *fully* absorbed. Measured on this fork: every branch that passes A or B is either a
+literal ancestor or exactly one commit ahead, and every branch that GitHub calls `MERGED`
+while failing both proofs is two or more commits ahead. That is the whole explanation — it is
+a limitation of patch-id matching, not evidence about the branch.
+
+For those, a third checkout-free proof settles most cases:
+
+```bash
+git merge-tree --write-tree upstream/develop "origin/$b"   # compare to upstream/develop^{tree}
+```
+
+An identical tree proves the branch contributes nothing. A **non-zero exit means the merge
+conflicts, which is inconclusive** — it fires on a branch that is merely stale against later
+upstream churn — so it is never a disproof.
+
+**A reverted merge passes every one of these proofs.** This is the hole none of them close,
+and it is not hypothetical. `fix/6853-remember-revealed-images` (PR #7378) reads `MERGED`, is
+a literal ancestor of `upstream/develop`, has zero unabsorbed patches, and merges to an
+identical tree — while upstream reverted it wholesale in #7424, branch
+`revert-7378-fix/6853-remember-revealed-images`. No content proof can see this: once a branch
+is an ancestor, re-merging it really does add nothing, and what removed the work was a *later*
+upstream commit. So check before deleting:
+
+```bash
+git log upstream/develop --oneline -i --grep="revert-$pr-"
+```
+
+A hit means the branch is **not** prunable, and it is emphatically not a near-miss: a branch
+carrying work upstream decided against is exactly what this fork exists to keep. A sweep of
+all 137 origin branches on 2026-08-28 found one such case among 62 otherwise-prunable
+branches.
+
 Before anything is deleted, make it recoverable and make the record durable:
 
 ```bash
