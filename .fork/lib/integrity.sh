@@ -70,6 +70,16 @@ fail_add() {
   warn "INCOMPLETE [$kind] $branch: $detail"
 }
 
+# assert_patch_landed <patch> <head_before_am>
+# `git am` on a patch with no commit in it -- what `git format-patch -1` emits
+# for a MERGE commit -- exits 0 having done nothing.
+assert_patch_landed() {
+  local p="$1" before="$2"
+  if [[ "$(git rev-parse HEAD)" == "$before" ]]; then
+    die "integration patch applied nothing: $p -- git am exited 0 without creating a commit, so the fix it carries is NOT in $INTEGRATION and every rebuild drops it silently. Re-export it from a normal commit; format-patch on a merge (a refs/fork/pre-rebuild/<ts> tip) produces an empty patch."
+  fi
+}
+
 incomplete_count() {
   if [[ -f "$REPORT.incomplete" ]]; then
     grep -c '' -- "$REPORT.incomplete" || true
