@@ -11,7 +11,7 @@ _fork_kinds() {
   printf '%s\n' \
     rebase-failed stale-base merge-conflict missing-branch \
     pr-drift-behind pr-drift-ahead pr-drift-diverged pr-no-remote \
-    unmanaged-branch empty-after-resolve integrate-failed
+    unmanaged-branch empty-after-resolve integrate-failed merge-only-content
 }
 
 _fork_kind_advice() {
@@ -28,6 +28,8 @@ _fork_kind_advice() {
       echo "Every conflicted path was binary, so resolution kept ours and the branch added nothing. Re-record the snapshots on that branch, then re-run." ;;
     integrate-failed)
       echo "The cherry-pick or merge could not be concluded. Reproduce it by hand on $INTEGRATION and see what git says." ;;
+    merge-only-content)
+      echo "A merge on that branch carries content that is in NEITHER of its parents -- a conflict resolution. Its base predates $MIRROR, so it is integrated by CHERRY-PICK, and the pick list is --no-merges: that content is in no non-merge commit and cannot be replayed, so it would be silently missing from $INTEGRATION. For a branch in features.txt, rebase it onto $MIRROR -- a plain rebase flattens the merge and replays its unique content -- then re-run. For a branch in pr-branches.txt, which may NEVER be rebased, export the merge's own content (git show --cc <sha> names the files) as an integration patch under .fork/integration-patches/ and commit it to $TOOLING." ;;
     pr-drift-behind)
       echo "A maintainer pushed to the PR: fast-forward the local ref from origin. Never rebase a fix/* branch." ;;
     pr-drift-ahead)
@@ -143,6 +145,49 @@ check_unmanaged_branches() {
     fail_add "$b" unmanaged-branch \
       "origin/$b is in neither manifest and not in .fork/unmanaged-branches.txt -- its work is not in $INTEGRATION"
   done < <(git for-each-ref --format='%(refname:short)' refs/remotes/origin)
+}
+
+# check_merge_only_content <base> <branch>
+#
+# The cherry-pick path in integrate_branch builds its pick list with
+# `git rev-list --reverse --no-merges`, so no merge commit in the range is ever
+# replayed. For an ordinary merge that is correct: its content lives in its
+# parents, and the parents' own commits ARE in the pick list. It is wrong for a
+# merge that carries content of its OWN. A conflict resolution exists in neither
+# parent, so it appears in no non-merge commit, so that pick list provably cannot
+# reproduce it. The branch was integrated, nothing was recorded, every gate
+# passed, and $INTEGRATION was published with the resolution missing.
+#
+# `git diff-tree --cc` prints exactly that content and nothing else -- it drops
+# any file whose result matches a parent -- so non-empty output IS the proof of
+# loss. --name-only keeps it cheap: the whole 75-branch manifest sweeps in under
+# half a second.
+#
+# Checked HERE, at the loss site, and not where the stale base comes from,
+# because a branch reaches the cherry-pick path by more than one route: a rebase
+# that failed on an earlier run (--continue truncates the ledger, so that row is
+# gone and never regenerated), a branch that --features left unselected, and
+# every pr-branches.txt branch, which rebase_features never touches at all. The
+# loss site is the only thing all of them have in common.
+#
+# Returns 1 when it recorded a failure, so the caller can skip the branch. The
+# run is then INCOMPLETE and will not push -- a warning it continued past would
+# publish the same broken $INTEGRATION, just noisily.
+check_merge_only_content() {
+  local base="$1" b="$2" m names carriers=""
+
+  while IFS= read -r m; do
+    [[ -n "$m" ]] || continue
+    names="$(git diff-tree --cc --no-commit-id --name-only -r "$m" 2>/dev/null || true)"
+    [[ -n "$names" ]] || continue
+    carriers+="${carriers:+; }$(git rev-parse --short "$m") ($(printf '%s' "$names" | paste -sd, -))"
+  done < <(git rev-list --merges "$base..$b" 2>/dev/null || true)
+
+  [[ -n "$carriers" ]] || return 0
+
+  fail_add "$b" merge-only-content \
+    "its base predates $base so it is integrated by cherry-pick, which is --no-merges, but these merge(s) carry content present in neither parent -- it is in no non-merge commit and cannot be replayed: $carriers"
+  return 1
 }
 
 # Tripwire. Only develop and master may ever be pushed. A future edit that adds
