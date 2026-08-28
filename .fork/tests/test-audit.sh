@@ -353,7 +353,9 @@ mkdir -p "$RR/ccc0000000000000000000000000000000000003"
 conflict_text > "$RR/ccc0000000000000000000000000000000000003/preimage"
 conflict_text > "$RR/ccc0000000000000000000000000000000000003/postimage"   # marker-bearing: unsafe
 
-in_repo "$E" rr_cache_export 2>&1 | sed -e 's/^/       | /'
+# It refuses, but only AFTER copying the entries that pass: the good work is
+# saved, and the run stops rather than continuing past a line nobody reads.
+expect_die "export REFUSES while one entry fails the audit" in_repo "$E" rr_cache_export
 expect_true "$([[ -f "$FORK_DIR/rr-cache/ccc0000000000000000000000000000000000001/postimage" ]] && echo 0 || echo 1)" \
   "the good entry was exported"
 expect_true "$([[ -f "$FORK_DIR/rr-cache/ccc0000000000000000000000000000000000002/preimage" ]] && echo 0 || echo 1)" \
@@ -363,7 +365,10 @@ expect_true "$([[ ! -e "$FORK_DIR/rr-cache/ccc0000000000000000000000000000000000
 expect_eq "$(find "$RR" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')" "3" "nothing was deleted from the source cache"
 
 # .fork/.gitignore really does carry `rr-cache/*`, so an export that says
-# nothing would leave the operator staging an empty set.
+# nothing would leave the operator staging an empty set. The unsafe entry goes
+# first: the export refuses while it is present, and would never reach the
+# ignore probe.
+drop ccc0000000000000000000000000000000000003
 printf '%s\n' 'rr-cache/*' '!rr-cache/.gitkeep' > "$FORK_DIR/.gitignore"
 git -C "$E" add -f -- .fork/.gitignore >/dev/null 2>&1
 rm -rf "${FORK_DIR:?}/rr-cache"
@@ -374,6 +379,180 @@ if printf '%s' "$IGN" | grep -q 'git add -f'; then
 else
   fail "export did NOT warn about .fork/.gitignore hiding what it just wrote"
 fi
+
+###############################################################################
+banner "10 -- the semantic rules: each one silent on sound code, firing on broken"
+###############################################################################
+# Every rule below was validated to fire ZERO times across all 4240 committed
+# .kt files in this repository. A rule that only ever fires is not a check, so
+# each case ships BOTH halves: a sound fixture that must pass and a broken one
+# that must not.
+S="$T/sem"; mkdir -p "$S"
+SEM="$FORK_LIB/rr_semantic.py"
+
+# kt <dir> <preimage-body> <postimage-body>
+mk_sem() {
+  local d="$S/$1"; shift
+  rm -rf "$d"; mkdir -p "$d"
+  printf '%s' "$1" > "$d/preimage"
+  printf '%s' "$2" > "$d/postimage"
+  printf '%s\n' "$d"
+}
+
+sem_clean() { # desc dir
+  if python3 "$SEM" "$2" >/dev/null 2>&1; then pass "$1"; else
+    fail "$1 -- rule fired on sound input: $(python3 "$SEM" "$2" 2>&1 | head -2 | tr '\n' ' ')"; fi
+}
+sem_fires() { # desc dir wanted-rule
+  local out rc=0
+  # `out=$(cmd)` on its own would trip `set -e` the moment the rule fires, which
+  # is the case this helper exists to assert.
+  out="$(python3 "$SEM" "$2" 2>&1)" || rc=$?
+  if [[ $rc -ne 0 ]] && printf '%s' "$out" | grep -q "$3"; then pass "$1"
+  else fail "$1 -- wanted rule '$3', got rc=$rc: $(printf '%s' "$out" | head -2 | tr '\n' ' ')"; fi
+}
+
+PRE_MIN=$'package p\n<<<<<<<\nval a = 1\n=======\nval b = 2\n>>>>>>>\nfun z() {}\n'
+
+sem_clean "unreachable-code: silent on a multi-line return" \
+  "$(mk_sem un_ok "$PRE_MIN" $'package p\nfun f(): Int {\n    return g(\n        a = 1,\n    )\n}\n')"
+sem_fires "unreachable-code: fires on a statement after a return" \
+  "$(mk_sem un_bad "$PRE_MIN" $'package p\nfun f(): Int {\n    return g(a)\n    log(a)\n}\n')" unreachable-code
+
+sem_clean "redeclared: silent on the same name in two sibling scopes" \
+  "$(mk_sem rd_ok "$PRE_MIN" $'package p\nclass C {\n    fun f() { val x = 1 }\n    fun g() { val x = 2 }\n}\n')"
+sem_fires "redeclared: fires on two vals of one name in one scope" \
+  "$(mk_sem rd_bad "$PRE_MIN" $'package p\nclass C {\n    fun f() {\n        val x = 1\n        val x = 2\n    }\n}\n')" redeclared
+
+sem_clean "redeclared: silent on two genuine overloads" \
+  "$(mk_sem ov_ok "$PRE_MIN" $'package p\nclass C {\n    fun g(x: Int) {}\n    fun g(x: String) {}\n}\n')"
+sem_fires "redeclared: fires on a repeated type name" \
+  "$(mk_sem ov_bad "$PRE_MIN" $'package p\nclass C {\n}\nclass C {\n}\nfun z() {}\n')" redeclared
+
+sem_clean "duplicate-named-arg: silent on the same label in two different calls" \
+  "$(mk_sem na_ok "$PRE_MIN" $'package p\nfun f() {\n    g(\n        mimeType = a,\n    )\n    h(\n        mimeType = b,\n    )\n}\n')"
+sem_fires "duplicate-named-arg: fires on one label twice in one call" \
+  "$(mk_sem na_bad "$PRE_MIN" $'package p\nfun f() {\n    g(\n        mimeType = a.old(),\n        mimeType = a.new(),\n    )\n}\n')" duplicate-named-arg
+
+sem_clean "orphan-kdoc: silent on a well-formed KDoc block" \
+  "$(mk_sem kd_ok "$PRE_MIN" $'package p\n/**\n * @param a x\n */\nfun f(a: Int) {}\n')"
+sem_fires "orphan-kdoc: fires on a KDoc body whose /** opener was spliced away" \
+  "$(mk_sem kd_bad "$PRE_MIN" $'package p\nfun f(a: Int) {}\n * @param b y\n */\nfun g(b: Int) {}\n')" orphan-kdoc
+
+sem_clean "empty-when: silent on a populated when" \
+  "$(mk_sem ew_ok "$PRE_MIN" $'package p\nfun f(x: Int): String = when {\n    x > 0 -> "a"\n    else -> "b"\n}\n')"
+sem_fires "empty-when: fires on a when a rename splice emptied" \
+  "$(mk_sem ew_bad "$PRE_MIN" $'package p\nfun f(x: Int): String = when {\n}\n')" empty-when
+
+sem_clean "empty-body-sibling: silent on two populated overloads" \
+  "$(mk_sem eb_ok "$PRE_MIN" $'package p\nclass C {\n    fun handle(e: A) {\n        go()\n    }\n    fun handle(e: B) {\n        go()\n    }\n}\n')"
+sem_fires "empty-body-sibling: fires on an empty copy beside a populated one" \
+  "$(mk_sem eb_bad "$PRE_MIN" $'package p\nclass C {\n    fun handle(e: A) {\n    }\n    fun handle(e: B) {\n        go()\n    }\n}\n')" empty-body-sibling
+
+sem_clean "delimiter-imbalance: silent on a balanced file" \
+  "$(mk_sem db_ok "$PRE_MIN" $'package p\nfun f() {\n    g(a)\n}\n')"
+sem_fires "delimiter-imbalance: fires on a call a splice never closed" \
+  "$(mk_sem db_bad "$PRE_MIN" $'package p\nfun f() {\n    g(\n        a = 1,\n}\n')" delimiter-imbalance
+
+# A string holding `/*` used to open a block comment that swallowed the rest of
+# the file, so a balanced test class came back as 4 open braces and 2 close.
+sem_clean "the lexer does not read \"text/*\" as a block comment" \
+  "$(mk_sem lx_ok "$PRE_MIN" $'package p\nfun f() {\n    assertThat("text/*".x()).isEqualTo(y)\n}\n')"
+# ...and a brace inside a backticked test name must not unbalance it either.
+sem_clean "the lexer does not count braces inside a backticked name" \
+  "$(mk_sem lx_tick "$PRE_MIN" $'package p\nclass C {\n    fun `a name with { a brace }`() {\n        go()\n    }\n}\n')"
+
+PRE_ANN=$'package p\nclass C {\n    @Test\n<<<<<<<\n    fun `one`() {\n        a()\n    }\n=======\n    fun `two`() {\n        b()\n    }\n>>>>>>>\n}\n'
+sem_clean "dropped-annotation: silent when the kept test keeps its @Test" \
+  "$(mk_sem an_ok "$PRE_ANN" $'package p\nclass C {\n    @Test\n    fun `one`() {\n        a()\n    }\n}\n')"
+# The single @Test above the hunk belongs to whichever side comes first, so
+# concatenating both sides silently disables the second group's first test.
+sem_fires "dropped-annotation: fires when a concatenation eats the shared @Test" \
+  "$(mk_sem an_bad "$PRE_ANN" $'package p\nclass C {\n    @Test\n    fun `one`() {\n        a()\n    }\n    fun `two`() {\n        b()\n    }\n}\n')" dropped-annotation
+
+PRE_REN=$'package p\n<<<<<<<\nsealed interface XEvent {\n}\n=======\nsealed interface XEvents {\n}\n>>>>>>>\nfun z() {}\n'
+sem_clean "rename-splice: silent when the resolution picks one spelling" \
+  "$(mk_sem rn_ok "$PRE_REN" $'package p\nsealed interface XEvents {\n}\nfun z() {}\n')"
+sem_fires "rename-splice: fires when both spellings of a renamed type are kept" \
+  "$(mk_sem rn_bad "$PRE_REN" $'package p\nsealed interface XEvent {\n}\nsealed interface XEvents {\n}\nfun z() {}\n')" rename-splice
+
+###############################################################################
+banner "11 -- the entry that motivated all of this, and its sound sibling"
+###############################################################################
+# Both are the REAL recorded images, not hand-written approximations:
+# .fork/tests/fixtures/rr-glued-brace is f8cb8ae9ac, recovered from the
+# pre-purge backup, and rr-sound-sibling is ff722e81, the correct resolution of
+# the same conflict in the same file. See fixtures/README.md.
+FIX="$HERE/fixtures"
+sem_fires "the purged entry f8cb8ae9ac is caught" "$FIX/rr-glued-brace" glued-line
+sem_clean "the sound resolution of the SAME conflict still passes" "$FIX/rr-sound-sibling"
+
+# ...and through the audit that actually runs, not just the module.
+RRF="$T/fixrepo"; mkrepo "$RRF"; REPO_ROOT="$RRF"; FORK_DIR="$RRF/.fork"; mkdir -p "$FORK_DIR"
+mkdir -p "$RRF/.git/rr-cache/f8cb8ae9ac82a7eae4becc1b969f835425763750"
+cp "$FIX/rr-glued-brace/preimage" "$FIX/rr-glued-brace/postimage" \
+   "$RRF/.git/rr-cache/f8cb8ae9ac82a7eae4becc1b969f835425763750/"
+expect_die "audit_rerere_cache dies on the f8cb8ae9ac fixture" in_repo "$RRF" audit_rerere_cache
+rm -rf "$RRF/.git/rr-cache/f8cb8ae9ac82a7eae4becc1b969f835425763750"
+mkdir -p "$RRF/.git/rr-cache/ff722e81b25db186e7cde861d6becd22b958ab11"
+cp "$FIX/rr-sound-sibling/preimage" "$FIX/rr-sound-sibling/postimage" \
+   "$RRF/.git/rr-cache/ff722e81b25db186e7cde861d6becd22b958ab11/"
+expect_live "audit_rerere_cache passes the sound sibling" in_repo "$RRF" audit_rerere_cache
+
+###############################################################################
+banner "12 -- rr_reaudit_recorded audits ONLY what the run recorded"
+###############################################################################
+# audit_rerere_cache runs over the cache as imported, before the first merge, so
+# a resolution recorded DURING the run was never audited by anything. That is
+# the hole; this closes it without re-auditing 200 entries that have not moved.
+A="$T/reaudit"; mkrepo "$A"; REPO_ROOT="$A"; FORK_DIR="$A/.fork"; mkdir -p "$FORK_DIR"
+RR="$A/.git/rr-cache"; mkdir -p "$RR"
+STATE="$A/.git/fork-sync"
+
+# A bad entry that was ALREADY there is not this function's business: it is
+# audit_rerere_cache's, and re-reporting it would make every run look dirty.
+mkdir -p "$RR/old0000000000000000000000000000000000001"
+cp "$FIX/rr-glued-brace/preimage" "$FIX/rr-glued-brace/postimage" \
+   "$RR/old0000000000000000000000000000000000001/"
+in_repo "$A" rr_reaudit_begin >/dev/null 2>&1
+in_repo "$A" rr_reaudit_recorded >/dev/null 2>&1
+expect_true "$([[ -d "$RR/old0000000000000000000000000000000000001" ]] && echo 0 || echo 1)" \
+  "a pre-existing bad entry is left alone -- it is not what this run recorded"
+
+# Now record one good and one bad entry, as rerere would mid-run.
+mk_good new0000000000000000000000000000000000001
+mkdir -p "$RR/new0000000000000000000000000000000000002"
+cp "$FIX/rr-glued-brace/preimage" "$FIX/rr-glued-brace/postimage" \
+   "$RR/new0000000000000000000000000000000000002/"
+OUT="$(in_repo "$A" rr_reaudit_recorded 2>&1 || true)"
+printf '%s\n' "$OUT" | sed -e 's/^/       | /'
+expect_true "$([[ -d "$RR/new0000000000000000000000000000000000001" ]] && echo 0 || echo 1)" \
+  "the good entry recorded this run is kept"
+expect_true "$([[ ! -e "$RR/new0000000000000000000000000000000000002" ]] && echo 0 || echo 1)" \
+  "the bad entry recorded this run is quarantined"
+expect_true "$([[ -f "$A/.git/rr-cache-quarantine/new0000000000000000000000000000000000002/QUARANTINE_REASON.txt" ]] && echo 0 || echo 1)" \
+  "quarantine is a move with its reason beside it, never a delete"
+expect_eq "$(find "$RR" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')" "2" \
+  "the rest of the cache is untouched -- one entry moved aside, not a clear"
+
+###############################################################################
+banner "13 -- rr_cache_export REFUSES a bad entry instead of warning past it"
+###############################################################################
+# A warning is a line the run continues past: the export looked like it worked,
+# the operator committed what landed, and the entry that failed stayed live and
+# kept replaying.
+X="$T/refuse"; mkrepo "$X"; REPO_ROOT="$X"; FORK_DIR="$X/.fork"; mkdir -p "$FORK_DIR"
+RR="$X/.git/rr-cache"; mkdir -p "$RR"
+mk_good ddd0000000000000000000000000000000000001
+expect_live "export succeeds when every entry passes" in_repo "$X" rr_cache_export
+mkdir -p "$RR/ddd0000000000000000000000000000000000002"
+cp "$FIX/rr-glued-brace/preimage" "$FIX/rr-glued-brace/postimage" \
+   "$RR/ddd0000000000000000000000000000000000002/"
+expect_die "export REFUSES once one entry fails the audit" in_repo "$X" rr_cache_export
+expect_true "$([[ ! -e "$FORK_DIR/rr-cache/ddd0000000000000000000000000000000000002" ]] && echo 0 || echo 1)" \
+  "the failing entry was not exported"
+expect_true "$([[ -d "$RR/ddd0000000000000000000000000000000000002" ]] && echo 0 || echo 1)" \
+  "and it was not deleted either -- the operator decides"
 
 ###############################################################################
 printf '\n'
