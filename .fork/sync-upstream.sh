@@ -273,6 +273,14 @@ integrate_branch() {
   # exists to prevent.
   if ! git merge-base --is-ancestor "$MIRROR" "$b"; then
     mode="cherry-pick"
+    # The pick list below is --no-merges, so a merge carrying content of its own
+    # -- a conflict resolution, present in neither parent -- is dropped with
+    # nothing recorded. Refuse the branch BEFORE picking anything, and before the
+    # "nothing unique to pick" return below, which a range holding only such a
+    # merge would otherwise exit through in silence.
+    if ! check_merge_only_content "$MIRROR" "$b"; then
+      return 0
+    fi
     picks="$(git rev-list --reverse --no-merges "$MIRROR..$b")"
     if [[ -z "$picks" ]]; then
       log "nothing unique to pick: $b"
