@@ -550,6 +550,45 @@ else
   eq "merge_only_carriers names the evil merge"        1  \
      "$(merge_only_carriers develop feat/evil | grep -c "$(git rev-parse --short "$EVIL")")"
 
+  # The escape. Without it a pr-branches.txt branch wedges the tool outright:
+  # the guard fails the run, a failed run SKIPS apply_patches, so the integration
+  # patch that would carry the content never applies -- exit 3 forever, with
+  # rebase forbidden by fork rule and `git merge --no-ff` unavailable once the
+  # mirror is no longer an ancestor. fix/developer-options-switch is the live
+  # instance: merge 8338fec20c, 6 lines, in pr-branches.txt.
+  CM="$FORK_DIR/carried-merges.txt"
+  incomplete_reset
+  printf '# carried by an integration patch\n%s\n' "$EVIL" > "$CM"
+  rc=0; check_merge_only_content develop feat/evil 2>/dev/null || rc=$?
+  eq "an acknowledged merge does NOT fire (returns 0)" 0 "$rc"
+  eq "...and records nothing"                          0 "$(incomplete_count)"
+
+  incomplete_reset
+  printf '%s\n' "$(git rev-parse --short "$EVIL")" > "$CM"
+  rc=0; check_merge_only_content develop feat/evil 2>/dev/null || rc=$?
+  eq "a SHORT sha acknowledges it too" 0 "$rc"
+
+  # An acknowledgement must never cover a merge it was not shown. This is the
+  # whole reason the file is keyed on the sha and not on the branch name.
+  incomplete_reset
+  printf '%s\n' "$ILV" > "$CM"
+  rc=0; check_merge_only_content develop feat/evil 2>/dev/null || rc=$?
+  eq "acknowledging a DIFFERENT merge still fires (returns 1)" 1 "$rc"
+  eq "...and records the row"                                  1 "$(incomplete_count)"
+
+  # A sha that no longer resolves is ignored, not trusted: the guard fires again.
+  incomplete_reset
+  printf 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef\n' > "$CM"
+  rc=0; check_merge_only_content develop feat/evil 2>/dev/null || rc=$?
+  eq "an unresolvable acknowledgement fails CLOSED (returns 1)" 1 "$rc"
+
+  incomplete_reset
+  : > "$CM"
+  rc=0; check_merge_only_content develop feat/evil 2>/dev/null || rc=$?
+  eq "an empty acknowledgement file changes nothing (returns 1)" 1 "$rc"
+  rm -f "$CM"
+  incomplete_reset
+
   if _fork_kinds | grep -qx merge-only-content; then
     ok "merge-only-content is registered in _fork_kinds"
   else
