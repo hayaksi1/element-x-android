@@ -407,7 +407,7 @@ rebuild_integration() {
 
 # --- step 4: integration patches -------------------------------------------
 apply_patches() {
-  local p count=0
+  local p before count=0
   if [[ -n "$(git ls-files -u 2>/dev/null)" ]]; then
     warn "index still has unmerged paths before applying patches; resetting to HEAD"
     git reset -q --hard HEAD
@@ -416,12 +416,14 @@ apply_patches() {
   for p in "$FORK_DIR"/integration-patches/*.patch; do
     log "applying integration patch $(basename "$p")"
     if [[ $DRY_RUN -eq 0 ]]; then
+      before="$(git rev-parse HEAD)"
       if ! git am --3way < "$p"; then
         # Leaving .git/rebase-apply behind makes the NEXT run's preflight say
         # "commit or stash first", which is the wrong remedy entirely.
         git am --abort >/dev/null 2>&1 || true
         die "integration patch failed: $p (the am was aborted; the tree is clean)"
       fi
+      assert_patch_landed "$p" "$before"
     fi
     count=$((count + 1))
   done
