@@ -1,0 +1,61 @@
+# Every rerere resolution this fork has moved aside, and why.
+#
+# A recorded resolution is not a one-time mistake: rerere replays it on every
+# rebuild and reports the merge clean, so a wrong entry is an institutionalised
+# one. These failed the semantic audit in .fork/lib/rr_semantic.py.
+#
+# QUARANTINED, NOT DELETED. The live copy is at
+# $(git rev-parse --git-common-dir)/rr-cache-quarantine/<id>/ with a
+# QUARANTINE_REASON.txt beside it, and the pre-quarantine cache is archived at
+# /home/jack/element-x-android-backups/20260828-wpi/. Restoring one is a mv.
+#
+# Removing an entry does NOT stop it replaying: rr_cache_import never overwrites
+# a live entry, so the committed cache and $GITDIR/rr-cache have to be cleaned
+# SEPARATELY. Both were, here.
+#
+# corroboration: whether an independent reading pass reached the same verdict,
+# or the rule fired alone.
+#
+# id	rules	corroboration	detail	date
+00898f62281571821b8f5dbdff8deda217f1c586	empty-body-sibling	reading-confirmed	'handleEvent' has an empty-bodied copy beside a populated one, at lines [111, 131]	2026-08-28
+029be22488f4bbdf3900cdc153c2658c6b5c70f5	duplicate-named-arg	reading-confirmed	named argument 'contentScanner' passed 2 times in one call, at lines [157, 158]	2026-08-28
+02a8e4ca14cec3d58dccd327c0bd2f85e148a03f	rename-splice	reading-confirmed	both spellings of a renamed type kept: 'DeveloperSettingsEvent' and 'DeveloperSettingsEvents'	2026-08-28
+03a0a18e732a920d8689ac20302a01a2e364ef2a	empty-when	reading-confirmed	empty `when` with no branches: when {     }	2026-08-28
+07f50aec4f5c84c7a7cadfbf532d3e1c57de5a6a	rename-splice	reading-confirmed	both spellings of a renamed type kept: 'ForwardMessagesEvent' and 'ForwardMessagesEvents'	2026-08-28
+118ecadb44e0a14a7b5a9a9cc17dcecb249f55e4	delimiter-imbalance,dropped-annotation	reading-confirmed	paren balance 220 open 218 close	2026-08-28
+1aa7fdef89717960b522b44a078d62f646ba5e32	empty-body-sibling,redeclared,unreachable-code	reading-confirmed	line 186 unreachable after the return above: return options.outMimeType?.takeIf { it.isMimeTypeImage() } ?: fallback	2026-08-28
+36373bd9d8d0de619ae5b6f97fa65a59877b28b0	dropped-annotation	reading-confirmed	fun `TextMessageType toPlainText - returns the body if the formatted one only co lost the annotation(s) ['@Test'] it carries in the conflict	2026-08-28
+3a1b7c42a4942eb7f7ed18f03e010c6a947d7273	empty-when	reading-confirmed	empty `when` with no branches: when {     }	2026-08-28
+424bc2e8144ab2c96b89080c2397a1b7d0e0d927	duplicate-named-arg	reading-confirmed	named argument 'mimeType' passed 2 times in one call, at lines [76, 77]	2026-08-28
+4c894189ba832c2018b69e1dd69afa7ee28ebdc2	redeclared	reading-confirmed	'isMessageSearchAvailable' declared 2 times in one scope, at lines [107, 114]	2026-08-28
+4fa93470f0260525ec2fa7f21502b0b8d742077f	redeclared	reading-confirmed	type 'TimelineItemsFactoryTest' declared 2 times in one scope, at lines [52, 339]	2026-08-28
+50987ebcf36736f52d75ae0ee5b815334cc4d6d2	empty-body-sibling,redeclared,unreachable-code	reading-confirmed	line 185 unreachable after the return above: return options.outMimeType?.takeIf { it.isMimeTypeImage() } ?: fallback	2026-08-28
+59237dca4ed00e2151c7465d0aab5b3913577f47	delimiter-imbalance,dropped-annotation	reading-confirmed	paren balance 260 open 258 close	2026-08-28
+5e9459908f4c39980118f6211876b8e3628beb47	redeclared	reading-confirmed	'messageSearchService' declared 2 times in one scope, at lines [110, 113]	2026-08-28
+61d1d54f4639ccd2c9ba6fb5bcd8e9ff95b6aa41	redeclared	reading-confirmed	'eventsRecorder' declared 2 times in one scope, at lines [47, 48]	2026-08-28
+66bed5e080f9111696b0353ac028c7a79d50a0f0	delimiter-imbalance,dropped-annotation	reading-confirmed	paren balance 238 open 236 close	2026-08-28
+69ee60f0afa999d55b26365ebe717263e3b60711	orphan-kdoc	reading-confirmed	line 38 is a KDoc continuation with no /** opener: * @param enabled true to publish room notifications as Android conversations, which lets the system show them as such and	2026-08-28
+701d541e6a163e278a2db95fd1f62131605e4cd0	delimiter-imbalance	mechanical-only	paren balance 260 open 258 close	2026-08-28
+70fc0427510e7e1e8a2a46aa13c6d8b7492813e3	invalid-xml	reading-confirmed	the resolution is not well-formed XML: no element found: line 9, column 0	2026-08-28
+8813235b57daad0495ee4f0b87f52b9035ba1a75	duplicate-named-arg	reading-confirmed	named argument 'contentScanner' passed 2 times in one call, at lines [157, 158]	2026-08-28
+8c3cf7cd208749caecbdeb4ce3befd69f1de2266	redeclared	reading-confirmed	type 'FailingGrantUriPermissionContext' declared 2 times in one scope, at lines [273, 307]	2026-08-28
+8e801dea66d4b797d3bd1442b22b7ae22483cced	delimiter-imbalance,duplicate-named-arg,orphan-kdoc	reading-confirmed	brace balance 54 open 55 close	2026-08-28
+91a0ecd5e1387f95fca17ad38b578a5c12bbe8d9	delimiter-imbalance	reading-confirmed	paren balance 1358 open 1355 close	2026-08-28
+97697515a60e787c126c54f85f82580ba3ab8696	dropped-annotation	reading-confirmed	fun `present - message search stays unavailable when only the live feature flag  lost the annotation(s) ['@Test'] it carries in the conflict	2026-08-28
+9b2f2312a9939f35bfb220b407eb0715f14824ae	redeclared	reading-confirmed	'renderableItems' declared 2 times in one scope, at lines [111, 112]	2026-08-28
+9bceacb47aa2f1948fe8ee27b6e9c89fb71f3efd	redeclared	reading-confirmed	'resolvedMimeType' declared 2 times in one scope, at lines [87, 97]	2026-08-28
+9fb764f92ec9bc022b01d9010fb22a679a83c6df	redeclared	reading-confirmed	'matrixClient' declared 2 times in one scope, at lines [171, 176]	2026-08-28
+a4931bf657bf71ac0996f346953dc3cfb2110ce8	delimiter-imbalance	reading-confirmed	paren balance 1366 open 1363 close	2026-08-28
+b9e35f19e8bd33311dba8327bf756c4cbdcdf61a	dropped-annotation	reading-confirmed	fun `present - turning the developer options switch off persists the choice`() = lost the annotation(s) ['@Test'] it carries in the conflict	2026-08-28
+bf43c2b204a2851c1a00f088a64ab1e1fb405f9e	dropped-annotation	reading-confirmed	fun `present - message search index section is hidden while the flag is off`() = lost the annotation(s) ['@Test'] it carries in the conflict	2026-08-28
+c3a061b7db731f5dde2b69f3a0c6ea4cf7da09b5	redeclared	reading-confirmed	'finalState' declared 2 times in one scope, at lines [193, 194]	2026-08-28
+c53c17e8fdd75248958fb253fbdd93410676fab1	dropped-annotation	reading-confirmed	fun `withDefaultSubtype keeps a mime type that already has a subtype`() { lost the annotation(s) ['@Test'] it carries in the conflict	2026-08-28
+ce10ab2ee0fba11a16b81bf070b750a2942154de	duplicate-named-arg	reading-confirmed	named argument 'mimeType' passed 2 times in one call, at lines [76, 77]	2026-08-28
+d8cc9175788681bbbb902563a015c269cabc73f4	invalid-xml	reading-confirmed	the resolution is not well-formed XML: no element found: line 12, column 0	2026-08-28
+da8eba76511080bfb655e081f28d7d074b661d1f	duplicate-named-arg	reading-confirmed	named argument 'contentScanner' passed 2 times in one call, at lines [157, 158]	2026-08-28
+de032a3fe1d07b541d6cb70f7dda7c1486dd3d47	redeclared	reading-confirmed	'renderableItems' declared 2 times in one scope, at lines [111, 112]	2026-08-28
+e6de7eca40952b32506da3f5284e7971694f7b76	redeclared	reading-confirmed	identical signature 'fun `ensureDefaultSubtype falls back to octet stream`() {' declared 2 times in one scope, at lines [31, 51]	2026-08-28
+eda111d5653efef3c4bcb7cf9e7bdc9996cfcbf3	orphan-kdoc	reading-confirmed	line 38 is a KDoc continuation with no /** opener: * @param enabled true to publish room notifications as Android conversations, which lets the system show them as such and	2026-08-28
+f07f5d1787244758216f28989aaaed04a721725b	dropped-annotation	reading-confirmed	fun `a file that is not an image keeps the wildcard mime type it was shared with lost the annotation(s) ['@Test'] it carries in the conflict	2026-08-28
+f7d7b482f983d2619096b4f0dcb9994574deab85	empty-body-sibling	reading-confirmed	'handleEvent' has an empty-bodied copy beside a populated one, at lines [102, 107]	2026-08-28
+b3fc2a7512a714b90a4e4487fca8c626d4367f9b	orphan-kdoc	mechanical-only	COMMITTED COPY ONLY: line 99 is a KDoc continuation with no /** opener (the live copy of this same id is clean; rr_cache_import prefers the live one, so only a fresh clone or CI runner would have replayed this)	2026-08-28
