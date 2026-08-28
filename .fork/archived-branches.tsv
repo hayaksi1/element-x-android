@@ -16,5 +16,69 @@
 #   git fetch origin "refs/fork/archive/*:refs/fork/archive/*"
 #   git branch <branch> refs/fork/archive/<branch>
 #
-# branch	sha	pr	proof	date
-
+# status is `archived` (recoverable, branch still on origin) or `deleted`.
+# A row is written when the archive ref is pushed, and updated to `deleted`
+# only if and when the owner approves removing the branch.
+#
+# branch	sha	pr	proof	date	status
+fix/1270-verification-request-timeout	af7e765599	7457	A+B+tree	2026-08-28	archived
+fix/1548-dm-preview-sender	65c2cd8a79	7562	A+B+tree	2026-08-28	archived
+fix/2419-empty-waveform-seek	73f26c3d74	7363	A+B+tree	2026-08-28	archived
+fix/2515-gallery-build-date	76b19a158f	7544	A+B+tree	2026-08-28	archived
+fix/2614-linkify-ipv6-urls	3029218dde	7347	A+B+tree	2026-08-28	archived
+fix/2617-user-id-with-slash	c5a878249b	7445	A+B+tree	2026-08-28	archived
+fix/2812-debug-proxying-docs	23a60cf20a	7543	A+B+tree	2026-08-28	archived
+fix/2925-room-notification-mute-string	aff71cf1b9	7367	A+B+tree	2026-08-28	archived
+fix/3338-rtl-room-list-preview	c3a281815b	7348	A+B+tree	2026-08-28	archived
+fix/3434-mention-suggestion-ranking	88b3559c6b	7536	A+B+tree	2026-08-28	archived
+fix/3444-login-with-full-matrix-id	05528dbd3d	7375	A+B+tree	2026-08-28	archived
+fix/3493-media-progress-insets	1b7631b84e	7366	A+B+tree	2026-08-28	archived
+fix/3835-direct-share-targets	6d28d91541	7574	A+B+tree	2026-08-28	archived
+fix/4008-fediverse-handle-not-email	f5a2d5bf88	7356	A+B+tree	2026-08-28	archived
+fix/4099-server-unreachable	594a5612ad	7567	A+B+tree	2026-08-28	archived
+fix/4112-wildcard-mime-type	c239190994	7449	A+B+tree	2026-08-28	archived
+fix/4191-video-bitrate-clamp	750db0c777	7351	A+B+tree	2026-08-28	archived
+fix/4460-focused-timeline-pagination	0aa283729c	7463	A+B+tree	2026-08-28	archived
+fix/4475-element-call-docs	c893657aa0	7546	A+B+tree	2026-08-28	archived
+fix/4519-hide-verification-fallback	39afaa1fe4	7443	A+B+tree	2026-08-28	archived
+fix/4582-autoscroll-focused-field	9a4daa19b2	7455	A+B+tree	2026-08-28	archived
+fix/4594-leave-room-not-found	04dcc14eaa	7437	A+B+tree	2026-08-28	archived
+fix/4639-system-theme	ddd89f46df	7453	A+B+tree	2026-08-28	archived
+fix/4657-preview-param-suffix	a3a0fdd0e9	7468	A+B+tree	2026-08-28	archived
+fix/4666-feature-module-template	5140b7c3c8	7374	A+B+tree	2026-08-28	archived
+fix/4757-timeline-grouping-timeout	72cc8f848d	7349	A+B+tree	2026-08-28	archived
+fix/4893-copy-blocked-user-id	d04779c8fd	7372	A+B+tree	2026-08-28	archived
+fix/4973-media-gallery-error	813122eebd	7362	A+B+tree	2026-08-28	archived
+fix/5153-sanitize-carriage-return	c901b902b1	7439	A+B+tree	2026-08-28	archived
+fix/5267-room-alias-resolver-timeout	c95b7e3596	7446	B+tree	2026-08-28	archived
+fix/5319-linkify-matrix-uri	f0e791001f	7354	A+B+tree	2026-08-28	archived
+fix/5356-sender-name-fallback	e8e67dc0c5	7539	A+B+tree	2026-08-28	archived
+fix/5383-incompatible-room-list-filters	8943c4e724	7342	A+B+tree	2026-08-28	archived
+fix/5428-send-to-room-subtitle	629dc15a86	7371	A+B+tree	2026-08-28	archived
+fix/5623-share-unlisted-mime-type	8e02f03543	7435	A+B+tree	2026-08-28	archived
+fix/5766-redaction-unknown-target	fec71aaf4d	7350	A+B+tree	2026-08-28	archived
+fix/5780-voice-recorder-double-start	b32d48f7f6	7346	A+B+tree	2026-08-28	archived
+fix/5794-account-data-api	90a2a258d1	7373	A+B+tree	2026-08-28	archived
+fix/5978-caption-markdown	537842bb40	7441	A+B+tree	2026-08-28	archived
+fix/6130-space-left-room-joinable	1299b5c897	7369	A+B+tree	2026-08-28	archived
+fix/6189-no-call-in-empty-dm	7f56c15fb8	7352	A+B+tree	2026-08-28	archived
+fix/6253-duplicate-notification-messages	cbe555009b	7370	A+B+tree	2026-08-28	archived
+fix/6371-save-file-name-conflicts	b2b0927ea9	7344	A+B+tree	2026-08-28	archived
+fix/6426-unifiedpush-account-name	bf958e0008	7345	A+B+tree	2026-08-28	archived
+fix/6429-remove-inplace-fix	999bee2420	7442	A+B+tree	2026-08-28	archived
+fix/6518-encryption-indicator	7dcd55ee08	7447	A+B+tree	2026-08-28	archived
+fix/6730-keep-caption-formatting	4290a9c3b3	7572	A+B+tree	2026-08-28	archived
+fix/6960-inaccessible-reply-preview	aa7b9b8721	7376	A+B+tree	2026-08-28	archived
+fix/7046-voice-message-screen-timeout	8272523b5b	7365	A+B+tree	2026-08-28	archived
+fix/7059-relax-image-compression	932a4d013c	7451	A+B+tree	2026-08-28	archived
+fix/7066-decline-invite-navigate-up	6d712b0b58	7440	B	2026-08-28	archived
+fix/7190-forward-live-location	055fea8d25	7343	A+B+tree	2026-08-28	archived
+fix/7205-intent-replayed-from-history	5dc682c6e0	7436	B+tree	2026-08-28	archived
+fix/7253-skip-other-account-notifications	32f7a9c836	7360	A+B+tree	2026-08-28	archived
+fix/7289-custom-map-style-url	7ebcb86ee1	7340	A+B+tree	2026-08-28	archived
+fix/7314-invalid-pinned-events	b725d37b0e	7379	A+B+tree	2026-08-28	archived
+fix/7393-bug-report-submission	d4863db03e	7395	A+B+tree	2026-08-28	archived
+fix/7397-keep-thread-after-redaction	e19cfbb423	7571	A+B+tree	2026-08-28	archived
+fix/7509-run-database-migrations	362acd6cab	7570	A+B+tree	2026-08-28	archived
+fix/822-record-screenshots-no-change	aa64f07ff0	7355	A+B+tree	2026-08-28	archived
+fix/860-enter-sends-message	4b5429395d	7353	A+B+tree	2026-08-28	archived

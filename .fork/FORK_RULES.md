@@ -149,7 +149,10 @@ git push origin "refs/fork/archive/$b:refs/fork/archive/$b"
 ```
 
 then append a row to the tracked `.fork/archived-branches.tsv` — branch, sha, PR
-number, which proof passed, date. The ref is the recovery handle; the TSV is the
+number, which proof passed, date, and status. **Archiving and deleting are separate
+steps and the status field says which has happened**: a row goes in as `archived` when
+the ref is pushed, and becomes `deleted` only if the owner later approves removing the
+branch. A branch can sit archived indefinitely; that is the safe resting state. The ref is the recovery handle; the TSV is the
 record that survives a fresh clone.
 
 **Then stop and ask.** Deleting a remote branch moves a remote ref, and that has
