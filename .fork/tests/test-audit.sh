@@ -476,6 +476,15 @@ sem_clean "rename-splice: silent when the resolution picks one spelling" \
 sem_fires "rename-splice: fires when both spellings of a renamed type are kept" \
   "$(mk_sem rn_bad "$PRE_REN" $'package p\nsealed interface XEvent {\n}\nsealed interface XEvents {\n}\nfun z() {}\n')" rename-splice
 
+# A rename splice at a USE site has no declaration to compare, so the rule above
+# is blind to it. This is the shape that reached master as a duplicate
+# `when` branch and had to be removed there by hand.
+PRE_USE=$'package p\nfun f(e: E) {\n    when (e) {\n<<<<<<<\n        XEvent.ClearError -> clear()\n=======\n        XEvents.ClearError -> clear()\n>>>>>>>\n    }\n}\n'
+sem_clean "rename-splice: silent when one spelling of a use site is chosen" \
+  "$(mk_sem ru_ok "$PRE_USE" $'package p\nfun f(e: E) {\n    when (e) {\n        XEvents.ClearError -> clear()\n    }\n}\n')"
+sem_fires "rename-splice: fires on both spellings of a renamed USE kept as siblings" \
+  "$(mk_sem ru_bad "$PRE_USE" $'package p\nfun f(e: E) {\n    when (e) {\n        XEvent.ClearError -> clear()\n        XEvents.ClearError -> clear()\n    }\n}\n')" rename-splice
+
 ###############################################################################
 banner "11 -- the entry that motivated all of this, and its sound sibling"
 ###############################################################################
