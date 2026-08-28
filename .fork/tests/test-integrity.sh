@@ -23,6 +23,21 @@ eq()  { if [[ "$2" == "$3" ]]; then ok "$1"; else bad "$1 (expected [$2], got [$
 have(){ if grep -q -- "$2" "$3"; then ok "$1"; else bad "$1 (no match for [$2] in $3)"; fi; }
 hasnt(){ if grep -q -- "$2" "$3"; then bad "$1 (unexpected match for [$2] in $3)"; else ok "$1"; fi; }
 
+# The harness runs under `set -e`. A module bug can therefore kill the harness
+# outright, mid-case -- and a run with no FAIL lines then LOOKS green to anyone
+# grepping for FAIL. This trap makes an abort louder than a failure.
+REACHED_END=0
+on_abort() {
+  local rc=$?
+  [[ $REACHED_END -eq 1 ]] && return 0
+  printf '\n\033[1;31mABORT\033[0m  the harness died before the summary (exit %s).\n' "$rc"
+  printf '        The last PASS above is the last case that COMPLETED, not the\n'
+  printf '        last case that passed. A sourced function exited non-zero under\n'
+  printf '        set -e -- that is a module bug, not a test bug.\n'
+  exit 1
+}
+trap on_abort EXIT
+
 section() { printf '\n--- %s\n' "$*"; }
 
 # --- the globals and helpers the contract says are already defined ----------
@@ -166,6 +181,19 @@ hasnt "origin/HEAD never fires"       "^HEAD	"              "$REPORT.incomplete"
 hasnt "a manifest branch never fires" "^feat/managed	"      "$REPORT.incomplete"
 ok "missing allowlist file did not die (we got here)"
 
+# An allowlist that is nothing but comments: `grep -v '^$'` finds no lines and
+# exits 1, which under `set -euo pipefail` killed the whole run at the
+# assignment. Only reproducible with a comments-only file, which is exactly
+# what a fresh fork has.
+printf '# nothing deliberate yet\n\n' > "$FORK_DIR/unmanaged-branches.txt"
+# Called DIRECTLY, not in a subshell: `if ( ... )` suppresses errexit inside the
+# subshell as well, so a probe would report a pass for the very bug it is meant
+# to catch. Under the bug this line kills the harness and the trap says ABORT.
+incomplete_reset
+check_unmanaged_branches 2>/dev/null
+ok "a comments-only allowlist did not kill the run"
+eq "and the stray still fires through a comments-only allowlist" 1 "$(incomplete_count)"
+
 printf '# deliberate\nchore/stray\n' > "$FORK_DIR/unmanaged-branches.txt"
 incomplete_reset
 check_unmanaged_branches 2>/dev/null
@@ -258,5 +286,6 @@ have "issue body names a branch"      "\`fix/2-behind\`"                       "
 # --- result -----------------------------------------------------------------
 printf '\n=====================================\n'
 printf '%s passed, %s failed\n' "$PASSED" "$FAILED"
+REACHED_END=1
 [[ $FAILED -eq 0 ]] || exit 1
 echo "ALL GREEN"
