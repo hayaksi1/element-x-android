@@ -117,7 +117,7 @@ check_unmanaged_branches() {
 
   allow=" "
   if [[ -f "$FORK_DIR/unmanaged-branches.txt" ]]; then
-    allow=" $(sed -e 's/#.*//' -e 's/[[:space:]]*$//' "$FORK_DIR/unmanaged-branches.txt" | grep -v '^$' | tr '\n' ' ') "
+    allow=" $(sed -e 's/#.*//' -e 's/[[:space:]]*$//' "$FORK_DIR/unmanaged-branches.txt" | grep -v '^$' | tr '\n' ' ' || true) "
   fi
 
   while IFS= read -r short; do

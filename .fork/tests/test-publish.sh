@@ -10,6 +10,21 @@
 # shellcheck disable=SC2034
 set -euo pipefail
 
+# The harness runs under `set -e`, so a module bug can kill it outright, mid-case
+# -- and a transcript with no FAIL lines then LOOKS green to anything grepping
+# for FAIL. This makes an abort louder than a failure.
+REACHED_END=0
+on_abort() {
+  local rc=$?
+  [[ $REACHED_END -eq 1 ]] && return 0
+  printf '\n\033[1;31mABORT\033[0m  the harness died before the summary (exit %s).\n' "$rc"
+  printf '        The last PASS above is the last case that COMPLETED, not the\n'
+  printf '        last case that passed. A sourced function exited non-zero under\n'
+  printf '        set -e -- that is a module bug, not a test bug.\n'
+  exit 1
+}
+trap on_abort EXIT
+
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 T="$HERE/t"
 rm -rf "$T"; mkdir -p "$T"
@@ -261,4 +276,5 @@ eq "dies when refs/heads/master != HEAD" "$rc" "1"
 
 ###############################################################################
 printf '\n\033[1m======== %s passed, %s failed ========\033[0m\n' "$PASSES" "$FAILURES"
+REACHED_END=1
 [[ $FAILURES -eq 0 ]]
