@@ -82,3 +82,7 @@ fix/7397-keep-thread-after-redaction	e19cfbb423	7571	A+B+tree	2026-08-28	deleted
 fix/7509-run-database-migrations	362acd6cab	7570	A+B+tree	2026-08-28	deleted
 fix/822-record-screenshots-no-change	aa64f07ff0	7355	A+B+tree	2026-08-28	deleted
 fix/860-enter-sends-message	4b5429395d	7353	A+B+tree	2026-08-28	deleted
+batch3-base	12791406ca	-	A+B+tree	2026-08-28	archived
+feature/message-search-phase1	10161a686f	-	A+B+tree	2026-08-28	archived
+fix/4124-caption-mentions	12203aaf6d	-	A+B+tree	2026-08-28	archived
+work/batch6	23b75c3423	-	A+B+tree	2026-08-28	archived
