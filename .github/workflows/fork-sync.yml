@@ -248,11 +248,14 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Free space and record the starting headroom
+      # Written to RUNNER_TEMP, not the workspace: actions/checkout wipes the
+      # workspace, so a baseline captured here and read back later is gone. That
+      # is exactly how the first real run failed.
+      - name: Record the starting headroom
         run: |
-          df -h / | tee disk-before.txt
-          free -m  | tee mem-before.txt
-          nproc
+          df -h / | tee "$RUNNER_TEMP/disk-before.txt"
+          free -m  | tee "$RUNNER_TEMP/mem-before.txt"
+          nproc    | tee "$RUNNER_TEMP/nproc.txt"
 
       - name: Checkout (full history; LFS pointers only)
         uses: actions/checkout@v5
@@ -378,9 +381,9 @@ jobs:
         if: always()
         run: |
           { echo; echo "### Resources"; echo '```'
-            echo "-- disk before --"; cat disk-before.txt
+            echo "-- disk before --"; cat "$RUNNER_TEMP/disk-before.txt"
             echo "-- disk after  --"; df -h /
-            echo "-- mem before  --"; cat mem-before.txt
+            echo "-- mem before  --"; cat "$RUNNER_TEMP/mem-before.txt"
             echo "-- mem after   --"; free -m
             echo "-- repo --"; du -sh .git 2>/dev/null || true
           echo '```'; } >> "$GITHUB_STEP_SUMMARY"
@@ -390,12 +393,16 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: fork-rebuild-evidence
+          # Every report path begins with a dot. v4 excludes hidden files by
+          # DEFAULT, so the first real run uploaded rebuild.log and silently
+          # nothing else -- an empty-looking evidence bundle from a green step.
+          include-hidden-files: true
           if-no-files-found: warn
           retention-days: 14
           path: |
             rebuild.log
-            disk-before.txt
-            mem-before.txt
+            ${{ runner.temp }}/disk-before.txt
+            ${{ runner.temp }}/mem-before.txt
             .fork/.report.incomplete
             .fork/.report.conflicts
             .fork/.report.autoresolved
