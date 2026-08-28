@@ -8,7 +8,7 @@ What changed, ref by ref, and what is left for the owner.
 | :--- | :--- | :--- | :--- |
 | `develop` | `502b130548` (238 ahead) | `3ec30d7c94` | **pristine ff-only mirror**, 0 ahead of upstream |
 | `master` | did not exist | `ceeb66c750` | integration branch, 180 commits, **default branch** |
-| `backup/develop-20260828-0119` | — | `502b130548` | immutable backup of the old develop |
+| `backup/develop-20260828-0119` | — | `502b130548` | immutable snapshot of the **old `develop`**, from *before* `master` existed. Regression baseline only — **not** a rollback point for `master` |
 | `feat/fork-tooling` | did not exist | pushed | `.fork/` + workflow + rerere cache |
 | `feat/fork-misc` | did not exist | pushed | 16 commits that lived only on the old develop |
 
@@ -73,12 +73,45 @@ base, restore the pre-cutover tree's version wholesale.
 
 ## Rollback
 
+### Undoing a bad *sync* (the common case)
+
+Every successful `.fork/sync-upstream.sh` run tags its `master` tip
+`sync/<YYYYMMDD-HHMM>`. That tag is the rollback point. `master` is
+fast-forward-only, so rolling back is a new commit restoring the old tree — never
+a reset and never a force-push:
+
 ```bash
+git fetch origin --tags
+git tag --list 'sync/*' --sort=-creatordate | head      # pick the last good build
+
+GOOD=sync/<YYYYMMDD-HHMM>
+BAD=$(git rev-parse origin/master)
+
 git checkout master
-git reset --hard backup/develop-20260828-0119
-git push --force-with-lease origin master
+git reset --hard "$BAD"
+new=$(git commit-tree "$GOOD^{tree}" -p "$BAD" -m "rollback: restore $GOOD")
+git update-ref refs/heads/master "$new" "$BAD"
+git diff "$GOOD" master                                 # MUST print nothing
+git push origin master
+```
+
+To merely *build* an older known-good app, skip all of that:
+`git checkout sync/<YYYYMMDD-HHMM>` and build from the detached head.
+
+### Undoing the *cutover itself* (historical, almost certainly not what you want)
+
+> **`backup/develop-20260828-0119` is a snapshot of the old `develop` taken before
+> `master` existed. It contains none of the 75 integrated branches.** Resetting
+> `master` to it does not restore a working app — it publishes the pre-cutover tree
+> over the accumulated one and discards every integrated branch. Use it as a
+> regression *baseline* (`git diff backup/develop-20260828-0119 master`), never as a
+> rollback target.
+
+Reverting the branch-model change itself means restoring the old `develop`, not
+`master`:
+
+```bash
 git push --force-with-lease origin backup/develop-20260828-0119:develop
 ```
 
-Feature branches were never rewritten, so this restores exactly the pre-cutover
-state.
+No branch was ever deleted or renamed, so every feature branch survives either way.

@@ -196,16 +196,31 @@ open upstream PRs before recommending it.
 
 ## 10. Rollback
 
+Two different rollbacks, and confusing them destroys the app.
+
+**A bad sync** — the routine case. Every successful run tags its `master` tip
+`sync/<YYYYMMDD-HHMM>`. `master` is fast-forward-only, so restore the old tree with a
+new commit rather than a reset:
+
 ```bash
-git checkout develop
-git reset --hard backup/develop-<ts>
-git push --force-with-lease origin develop
-git branch -f combined backup/develop-<ts>
-git push --force-with-lease origin combined
+git fetch origin --tags
+GOOD=sync/<YYYYMMDD-HHMM>; BAD=$(git rev-parse origin/master)
+git checkout master && git reset --hard "$BAD"
+new=$(git commit-tree "$GOOD^{tree}" -p "$BAD" -m "rollback: restore $GOOD")
+git update-ref refs/heads/master "$new" "$BAD"
+git diff "$GOOD" master && git push origin master
 ```
 
-Feature branches are untouched by the reset, so rollback restores exactly
-today's state. The backup tag is immutable and pushed before step 6.
+**The cutover itself** — historical. `backup/develop-<ts>` snapshots the *old
+`develop`*, from before `master` existed; it holds none of the integrated branches, so
+it is never a rollback target for `master`:
+
+```bash
+git push --force-with-lease origin backup/develop-<ts>:develop
+```
+
+Feature branches are untouched either way. The backup tag is immutable and pushed
+before step 6.
 
 ---
 
