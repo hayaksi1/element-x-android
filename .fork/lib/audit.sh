@@ -264,6 +264,34 @@ audit_rerere_cache() {
 # the worktree at that moment. setup-local-git.sh symlinks $GITDIR/rr-cache to
 # that worktree path -- under that setup the cache evaporates mid-run and rerere
 # silently stops replaying. Break the symlink before the first checkout.
+# Seed $GITDIR/rr-cache from the COMMITTED cache. Without this the 87 entries on
+# feat/fork-tooling are inert: rerere only ever reads $GITDIR/rr-cache, which is
+# local, unshared, and pruned by git gc. A fresh clone, a CI runner or a pruned
+# cache would re-ask every conflict that has already been answered once, and on
+# --continue that is the difference between the operator's resolution being
+# replayed and being lost.
+rr_cache_import() {
+  local d src id n=0
+  d="$(rr_cache_dir)"
+  src="$FORK_DIR/rr-cache"
+  [[ -d "$src" ]] || { log "no committed rerere cache at $src"; return 0; }
+  mkdir -p -- "$d"
+  while IFS= read -r id; do
+    [[ -n "$id" ]] || continue
+    # Never overwrite a local entry: it may be a resolution recorded since, and
+    # the committed copy is the older answer.
+    [[ -e "$d/$(basename "$id")" ]] && continue
+    cp -a -- "$id" "$d/" 2>/dev/null || continue
+    n=$((n + 1))
+  done < <(find "$src" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort)
+  if [[ $n -gt 0 ]]; then
+    log "imported $n committed rerere resolution(s) into $d"
+  else
+    log "committed rerere cache already present in $d"
+  fi
+  return 0
+}
+
 rr_cache_stage() {
   local d target root n
   d="$(rr_cache_dir)"

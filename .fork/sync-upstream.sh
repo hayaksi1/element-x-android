@@ -41,6 +41,7 @@ REPORT="$FORK_DIR/.report"
 
 EXIT_INCOMPLETE=3
 EXIT_GATE=4
+SYNC_TS=""
 
 DRY_RUN=0; NO_PUSH=0; CONTINUE=0; SKIP_VERIFY=0; ONLY_FEATURES=""
 
@@ -236,7 +237,19 @@ rebase_features() {
 # --- step 3: rebuild the integration branch --------------------------------
 integrate_branch() {
   local b="$1"
-  local mode rc=0 picks before after
+  local mode rc=0 picks before after gitdir
+
+  # A previous branch can leave an operation in progress: a `cherry-pick
+  # --continue` that refuses leaves CHERRY_PICK_HEAD behind, and git then
+  # refuses to merge over it -- which took out the NEXT branch too. preflight
+  # cannot see this, because the index still matches HEAD.
+  gitdir="$(git rev-parse --git-dir)"
+  if [[ -e "$gitdir/CHERRY_PICK_HEAD" || -e "$gitdir/MERGE_HEAD" ]]; then
+    warn "clearing a leftover in-progress operation before integrating $b"
+    git cherry-pick --quit >/dev/null 2>&1 || true
+    git merge --abort      >/dev/null 2>&1 || true
+    git reset -q --hard HEAD >/dev/null 2>&1 || true
+  fi
 
   before="$(git rev-parse HEAD)"
 
@@ -269,8 +282,9 @@ integrate_branch() {
     # Anything still conflicted is real code. Never auto-resolve it.
     if git status --porcelain | grep -qE '^(UU|AA|UD|DU|DD) '; then
       local paths
+      # cut, not awk: a path containing a space is truncated by $2.
       paths="$(git status --porcelain | grep -E '^(UU|AA|UD|DU|DD) ' \
-               | awk '{print $2}' | paste -sd, -)"
+               | cut -c4- | paste -sd, -)"
       printf '%s\t%s\n' "$b" "$paths" >> "$REPORT.conflicts"
       if [[ "$mode" == "cherry-pick" ]]; then
         git cherry-pick --abort 2>/dev/null || true
@@ -280,10 +294,31 @@ integrate_branch() {
       fail_add "$b" merge-conflict "$mode conflicted in: $paths"
       return 0
     fi
+    # Concluding the operation MUST NOT be swallowed. `|| true` here was the
+    # single worst bug in this script: when a branch conflicted only in binary
+    # snapshot paths, resolve_snapshot_conflicts restored HEAD's copy of every
+    # one of them, the pick became empty, `--continue` refused, and the error
+    # was eaten. The branch contributed nothing, no row was recorded, and the
+    # run pushed a green master with that branch's work missing -- reached by
+    # the fork's own snapshot policy, on the most common branch shape here.
+    local concluded=0
     if [[ "$mode" == "cherry-pick" ]]; then
-      git -c core.editor=true cherry-pick --continue >/dev/null 2>&1 || true
+      git -c core.editor=true cherry-pick --continue >/dev/null 2>&1 && concluded=1
     else
-      git commit --no-edit >/dev/null 2>&1 || true
+      git commit --no-edit >/dev/null 2>&1 && concluded=1
+    fi
+    if [[ $concluded -eq 0 ]]; then
+      if git diff --cached --quiet HEAD 2>/dev/null; then
+        git cherry-pick --skip >/dev/null 2>&1 || git cherry-pick --quit >/dev/null 2>&1 || true
+        git merge --abort >/dev/null 2>&1 || true
+        fail_add "$b" empty-after-resolve \
+          "every conflicted path was binary, resolution kept ours, so the branch added nothing to $INTEGRATION"
+      else
+        git cherry-pick --abort >/dev/null 2>&1 || git cherry-pick --quit >/dev/null 2>&1 || true
+        git merge --abort >/dev/null 2>&1 || true
+        fail_add "$b" integrate-failed "$mode could not be concluded"
+      fi
+      return 0
     fi
   fi
 
@@ -298,6 +333,25 @@ integrate_branch() {
 }
 
 rebuild_integration() {
+  # `git checkout -B` below destroys whatever $INTEGRATION currently points at.
+  # On --continue that is the operator's hand-resolved merge, which they were
+  # told to make and which they have every reason to think is being kept. It is
+  # not: --continue skips the mirror sync and the rebases, but still rebuilds
+  # from scratch. Their content usually survives because rerere replays the
+  # resolution they just recorded -- and when rerere cannot replay it (a rename,
+  # a delete/modify, a whole-file ours/theirs) it is simply gone.
+  #
+  # The rebuild-from-scratch model is not up for negotiation, so instead nothing
+  # is destroyed unrecoverably: the old tip is kept under refs/fork/pre-rebuild/
+  # before the reset. One ref per run, never deleted, and `git log` finds it.
+  if git show-ref --verify --quiet "refs/heads/$INTEGRATION"; then
+    local rescue="refs/fork/pre-rebuild/${SYNC_TS:-unknown}"
+    if [[ $DRY_RUN -eq 0 ]]; then
+      git update-ref "$rescue" "$(git rev-parse "refs/heads/$INTEGRATION")"
+      log "previous $INTEGRATION tip saved at $rescue ($(git rev-parse --short "$rescue"))"
+    fi
+  fi
+
   log "rebuilding $INTEGRATION from $MIRROR"
   run git checkout -B "$INTEGRATION" "$MIRROR"
 
@@ -326,7 +380,12 @@ apply_patches() {
   for p in "$FORK_DIR"/integration-patches/*.patch; do
     log "applying integration patch $(basename "$p")"
     if [[ $DRY_RUN -eq 0 ]]; then
-      git am --3way < "$p" || die "integration patch failed: $p"
+      if ! git am --3way < "$p"; then
+        # Leaving .git/rebase-apply behind makes the NEXT run's preflight say
+        # "commit or stash first", which is the wrong remedy entirely.
+        git am --abort >/dev/null 2>&1 || true
+        die "integration patch failed: $p (the am was aborted; the tree is clean)"
+      fi
     fi
     count=$((count + 1))
   done
@@ -344,10 +403,16 @@ verify() {
     return 0
   fi
 
+  # Subshells for the same reason as assert_artifacts_fresh below: die is
+  # exit 1, which would unwind past rr_cache_export and emit_report and report
+  # 1 where the exit-code contract says 4.
+  local failed=0 g started assemble_ok=0 first=1
+  ( assert_jdk21_with_compiler )      || { warn "JDK 21 check failed";  failed=$((failed + 1)); }
+  ( assert_enterprise_uninitialised ) || { warn "enterprise check failed"; failed=$((failed + 1)); }
+  [[ $failed -gt 0 ]] && return "$failed"
+  # Re-run for effect (the JAVA_HOME export and submodule.recurse) now both pass.
   assert_jdk21_with_compiler
   assert_enterprise_uninitialised
-
-  local failed=0 g started assemble_ok=0 first=1
 
   # A previous release build that was OOM-killed leaves stale APKs behind with
   # no BUILD FAILED line. Clearing the directory first is what makes the mtime
@@ -400,10 +465,26 @@ emit_report() {
     echo
     echo "  To resolve one by hand:"
     echo "    git checkout $INTEGRATION"
-    echo "    git merge --no-ff <branch>"
+    echo "    git merge --no-ff <branch>        # but see below for fix/* branches"
     echo "    # fix the files, then:"
-    echo "    git add <files> && git commit"
-    echo "    # then re-run: .fork/sync-upstream.sh --continue"
+    echo "    git add <files> && git commit     # this is what records the"
+    echo "                                      # resolution into rerere"
+    echo "    .fork/sync-upstream.sh --continue"
+    echo
+    echo "  --continue REBUILDS $INTEGRATION from scratch. It does not keep the"
+    echo "  commit you just made; what carries your work across is rerere"
+    echo "  replaying the resolution that commit recorded. If rerere cannot"
+    echo "  replay it -- a rename, a delete/modify, a whole-file ours/theirs --"
+    echo "  the branch simply conflicts again and the run exits 3 without"
+    echo "  pushing. Your commit is kept at refs/fork/pre-rebuild/<timestamp>"
+    echo "  either way; nothing is thrown away unrecoverably."
+    echo
+    echo "  For a branch whose base predates $MIRROR -- most fix/* branches --"
+    echo "  the run integrates it by CHERRY-PICK, not by merge. Resolving with"
+    echo "  'git merge --no-ff' there drags its stale base across everything"
+    echo "  already integrated, which is what the cherry-pick path exists to"
+    echo "  prevent. Use instead:"
+    echo "    git cherry-pick \$(git rev-list --reverse --no-merges $MIRROR..<branch>)"
   else
     echo "  no conflicts"
   fi
@@ -442,6 +523,7 @@ main() {
   # when unset and refuses when an operator set it to true; setting it first
   # would overwrite the very value the assert exists to catch.
   rr_cache_stage
+  rr_cache_import
   audit_rerere_cache
   assert_enterprise_uninitialised
 
@@ -451,8 +533,8 @@ main() {
   check_pr_drift
   check_unmanaged_branches
 
-  local sync_ts prev_tip rebuild_sha gate_rc n
-  sync_ts="$(sync_timestamp)"
+  local prev_tip rebuild_sha gate_rc n
+  SYNC_TS="$(sync_timestamp)"
 
   if [[ $CONTINUE -eq 0 ]]; then
     sync_mirror
@@ -464,6 +546,15 @@ main() {
   else
     log "--continue: skipping mirror sync and rebases"
     prev_tip="$(cat "$STATE.prev-integration" 2>/dev/null || true)"
+  fi
+  # The graft exists so the REMOTE fast-forwards, so the remote's tip is the
+  # authoritative parent. On a fresh run the locally captured value is the same
+  # thing, but on --continue it is the tip from before the PREVIOUS run's
+  # rebuild: if master was published in between, the graft would parent a stale
+  # commit. publish_ff catches that and dies -- but only after
+  # graft_integration has already rewritten refs/heads/master.
+  if git show-ref --verify --quiet "refs/remotes/origin/$INTEGRATION"; then
+    prev_tip="$(git rev-parse "refs/remotes/origin/$INTEGRATION")"
   fi
 
   rebuild_integration
@@ -490,9 +581,30 @@ main() {
     finish "$EXIT_GATE"
   fi
 
-  graft_integration "$prev_tip" "$sync_ts"
-  tag_sync "$sync_ts"
-  publish_ff "$sync_ts"
+  # Everything that would refuse the push has to refuse BEFORE
+  # graft_integration rewrites refs/heads/master and tag_sync mints a rollback
+  # point. A --skip-verify run used to graft and tag an unverified build and
+  # only then say "refusing to push", leaving sync/<ts> -- the documented
+  # rollback target -- owned by a build no gate ever saw.
+  # Precedence matches the publish() this replaced: --no-push/--dry-run is a
+  # deliberate rehearsal and succeeds, --skip-verify is a refusal. What changed
+  # is only that BOTH now decide before graft_integration rewrites
+  # refs/heads/master. Exit 0 still means "pushed", so neither path can claim it
+  # while grafting or tagging: a rehearsal that mutated master would not be one.
+  if [[ $NO_PUSH -eq 1 || $DRY_RUN -eq 1 ]]; then
+    log "publish skipped (--no-push/--dry-run); nothing grafted, nothing tagged"
+    finish 0
+  fi
+  if [[ $SKIP_VERIFY -eq 1 ]]; then
+    die "refusing to publish: verification was skipped"
+  fi
+  if git rev-parse --verify --quiet "refs/tags/sync/$SYNC_TS" >/dev/null 2>&1; then
+    die "tag sync/$SYNC_TS already exists. Nothing has been grafted or pushed; wait a minute and re-run rather than overwrite a rollback point."
+  fi
+
+  graft_integration "$prev_tip" "$SYNC_TS"
+  tag_sync "$SYNC_TS"
+  publish_ff "$SYNC_TS"
 
   if [[ "$(git symbolic-ref -q --short HEAD || true)" == "$MIRROR" ]]; then
     warn "HEAD ended on $MIRROR; moving off so nothing can commit to the mirror"
