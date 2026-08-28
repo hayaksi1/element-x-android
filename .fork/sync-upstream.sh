@@ -191,7 +191,12 @@ rebase_features() {
       echo "$b" >> "$REPORT.rebase-failed"
     fi
   done
-  git checkout --quiet - 2>/dev/null || true
+  # Never leave the mirror checked out: a branch nobody has checked out cannot
+  # be committed to by accident, and that is the invariant protecting develop.
+  if [[ "$(git symbolic-ref -q --short HEAD || true)" == "$MIRROR" ]]; then
+    git checkout --quiet "$INTEGRATION" 2>/dev/null ||
+      git checkout --quiet "$TOOLING" 2>/dev/null || true
+  fi
 }
 
 # --- step 3: rebuild the integration branch --------------------------------
@@ -401,6 +406,11 @@ main() {
     die "$gate_rc gate(s) failed -- not pushing"
   fi
   publish
+
+  if [[ "$(git symbolic-ref -q --short HEAD || true)" == "$MIRROR" ]]; then
+    warn "HEAD ended on $MIRROR; moving off so nothing can commit to the mirror"
+    git checkout --quiet "$INTEGRATION" 2>/dev/null || true
+  fi
   log "done"
 }
 
