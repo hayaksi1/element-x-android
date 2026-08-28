@@ -340,6 +340,48 @@ rm -f "$FORK_DIR/LAST_RUN.md"
 INTEGRATION_LOOP_DONE=0 write_last_run 3 "$C4" "$C4" "$X1"
 hasnt "exit 3 is a clean refusal, never 'truncated'" "truncated" "$FORK_DIR/LAST_RUN.md"
 
+section "11  a signalled run records the signal, not the last command's status"
+# bash runs the EXIT trap on SIGTERM, but `on_exit $?` there reads the status of
+# the last command that COMPLETED -- so a killed run wrote 'exit code 0 /
+# complete'. The trap wiring is lifted out of sync-upstream.sh verbatim so this
+# tests the real statements, not a copy of them.
+SIGD="$T/signal"
+mkdir -p "$SIGD/.fork"
+if [[ -r "$SYNC" ]]; then
+  {
+    echo 'set -euo pipefail'
+    printf 'FORK_DIR=%q\n'      "$SIGD/.fork"
+    printf 'REPORT=%q\n'        "$SIGD/.fork/.report"
+    printf 'UPSTREAM_REF=%q\n'  "$UPSTREAM_REF"
+    printf 'MIRROR=%q\n'        "$MIRROR"
+    printf 'INTEGRATION=%q\n'   "$INTEGRATION"
+    echo 'DRY_RUN=0'
+    echo 'INTEGRATION_LOOP_DONE=1'
+    printf '. %q\n' "${FORK_LIB:-$HERE/../lib}/integrity.sh"
+    sed -n '/^LAST_RUN_WRITTEN=0$/,/^finish()/p' "$SYNC"
+    grep -E "^ *trap '" "$SYNC"
+    echo 'true'
+    echo 'kill -TERM $$'
+    echo 'sleep 5'
+  } > "$SIGD/run.sh"
+  eq "the trap wiring lifted from sync-upstream.sh has an INT and a TERM trap" 2 \
+     "$(grep -cE "^ *trap '(finish 130' INT|finish 143' TERM)" "$SIGD/run.sh")"
+  sigrc=0
+  bash "$SIGD/run.sh" >/dev/null 2>&1 || sigrc=$?
+  eq "a TERM'd run exits 143" 143 "$sigrc"
+  if [[ -f "$SIGD/.fork/LAST_RUN.md" ]]; then
+    ok "a TERM'd run still writes LAST_RUN.md"
+    have  "...recording the signal's code, not 0" "| exit code | 143 |" "$SIGD/.fork/LAST_RUN.md"
+    hasnt "...and never claiming the run completed" "^\*\*Result:\*\* complete" "$SIGD/.fork/LAST_RUN.md"
+    eq "write_last_run_once is idempotent: the EXIT trap did not rewrite it" 1 \
+       "$(grep -c '^# Fork sync' "$SIGD/.fork/LAST_RUN.md")"
+  else
+    bad "a TERM'd run still writes LAST_RUN.md"
+  fi
+else
+  bad "cannot read $SYNC to lift the trap wiring"
+fi
+
 # --- result -----------------------------------------------------------------
 printf '\n=====================================\n'
 printf '%s passed, %s failed\n' "$PASSED" "$FAILED"
