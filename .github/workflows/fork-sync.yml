@@ -46,14 +46,44 @@ jobs:
           git remote add upstream https://github.com/element-hq/element-x-android.git || true
           git fetch upstream --prune
 
+      # A runner is a fresh clone, so it has no .git/info/attributes. The
+      # committed .gitattributes declares merge=lfs on snapshot PNGs and no
+      # driver of that name exists at any scope, so git falls back to a TEXT
+      # merge of the LFS pointer. setup-local-git.sh installs merge=binary
+      # locally; this asserts it actually took effect before anything merges.
+      - name: Snapshot merge policy
+        run: |
+          .fork/setup-local-git.sh
+          # Detect must never RECORD a resolution nobody reviewed.
+          git config rerere.enabled false
+          git config rerere.autoUpdate false
+          for p in a/snapshots/x.png screenshots/x.png libraries/compound/screenshots/x.png; do
+            got=$(git check-attr merge -- "$p" | sed 's/.*: //')
+            [ "$got" = binary ] || {
+              echo "::error::snapshot merge policy not in effect for $p (merge=$got)"; exit 1; }
+          done
+          echo "::notice::snapshot merge policy asserted (merge=binary)"
+
+      # The only place CI moves a remote ref. develop is a mirror: this must be a
+      # fast-forward to exactly upstream/develop, nothing else, ever.
       - name: Fast-forward the mirror
         run: |
-          if ! git merge-base --is-ancestor origin/develop upstream/develop; then
+          set -euo pipefail
+          old=$(git rev-parse origin/develop)
+          new=$(git rev-parse upstream/develop)
+          if ! git merge-base --is-ancestor "$old" "$new"; then
             echo "::error::develop is not an ancestor of upstream/develop - it carries fork commits"
             git log --oneline upstream/develop..origin/develop
             exit 1
           fi
-          git push origin "$(git rev-parse upstream/develop):refs/heads/develop"
+          if [ "$old" = "$new" ]; then
+            echo "::notice::develop already at $(git rev-parse --short "$new") - nothing to push"
+            exit 0
+          fi
+          echo "develop $(git rev-parse --short "$old") -> $(git rev-parse --short "$new")"
+          # Literal single refspec. No force, no lease, no loop: a fast-forward
+          # needs none, and a plain push fails loudly if the assumption broke.
+          git push origin "$new:refs/heads/develop"
 
       # merge-tree does a real merge in the object database: no worktree, no
       # checkout, no LFS smudge. It cannot replay rerere, so anything it flags
@@ -77,6 +107,18 @@ jobs:
           done
           n=$(wc -l < conflicts.tsv)
           echo "count=$n" >> "$GITHUB_OUTPUT"
+
+          # Branches on origin that are in NEITHER manifest are never merged and
+          # nothing said so. The seeded allowlist means only NEW ones surface.
+          : > unmanaged.txt
+          strip() { sed -e 's/#.*//' -e 's/[[:space:]]*$//' "$@" | grep -v '^$' || true; }
+          strip .fork/features.txt .fork/pr-branches.txt | sort -u > .managed
+          strip .fork/unmanaged-branches.txt 2>/dev/null | sort -u > .allowed || : > .allowed
+          git for-each-ref --format='%(refname)' refs/remotes/origin \
+            | sed 's|^refs/remotes/origin/||' | grep -vx 'HEAD' | sort -u \
+            | grep -vxE 'develop|master|feat/fork-tooling' \
+            | comm -23 - .managed | comm -23 - .allowed > unmanaged.txt || true
+          echo "unmanaged=$(wc -l < unmanaged.txt)" >> "$GITHUB_OUTPUT"
           # Hash the SORTED branch list: unsorted would read as "changed" nightly.
           echo "hash=$(cut -f1 conflicts.tsv | sort | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
 
@@ -144,6 +186,15 @@ jobs:
               echo "# fix, then: git add <files> && git commit"
               echo ".fork/sync-upstream.sh --continue"
               echo '```'
+            fi
+            if [ -s unmanaged.txt ]; then
+              echo
+              echo "### Branches on \`origin\` in neither manifest"
+              echo
+              echo "They are never merged into \`master\`. Add each to \`.fork/features.txt\` or"
+              echo "\`.fork/pr-branches.txt\`, or acknowledge it in \`.fork/unmanaged-branches.txt\`."
+              echo
+              sed 's/^/- `/; s/$/`/' unmanaged.txt
             fi
             echo
             echo "<!-- fork-sync-state: $hash -->"
