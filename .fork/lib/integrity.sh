@@ -236,9 +236,15 @@ write_last_run() {
     elif [[ "$rc" -ne 0 && "$rc" -ne 3 && "$rc" -ne 4 ]]; then
       printf '**Result:** FAILED — the run stopped with exit %s.\n' "$rc"
       echo
-      printf 'It recorded %s failure row(s) before it died, so this is NOT a clean\n' "$n"
-      echo "refusal: the integration loop did not finish and the rows below are"
-      echo "truncated. Read the run's own output for the error that stopped it."
+      if [[ "${INTEGRATION_LOOP_DONE:-0}" -eq 1 ]]; then
+        printf 'The integration loop reached the end of both manifests, so the %s row(s)\n' "$n"
+        echo "below are the complete picture; a later stage died. Read the run's own"
+        echo "output for the error that stopped it."
+      else
+        printf 'It recorded %s failure row(s) before it died, so this is NOT a clean\n' "$n"
+        echo "refusal: the integration loop did not finish and the rows below are"
+        echo "truncated. Read the run's own output for the error that stopped it."
+      fi
       echo
       while IFS= read -r kind; do
         printf '## %s\n\n' "$kind"
