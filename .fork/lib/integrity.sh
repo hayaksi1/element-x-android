@@ -156,6 +156,18 @@ check_unmanaged_branches() {
 # came from one parent, and that parent's own commits are in the pick list, so it
 # is reproducible.
 #
+# `git show` and not `git diff-tree`, deliberately. show is porcelain and does
+# rename detection; diff-tree is plumbing and does not. `git cherry-pick` -- the
+# thing whose replay this predicate is about -- detects renames, so the detector
+# has to see the same merge it will. Without that, a merge that only renames a
+# file reads as a whole-file delete plus a whole-file add, every line of which is
+# "in no parent": fix/4388-media-upload-progress's merge b78f1cbf69 is 3711 bytes
+# of plumbing combined diff and 0 bytes with rename detection on.
+#
+# There is no prefilter. A cheaper file-level test would have to be a second,
+# different predicate over the same merge, and gating one on the other is how a
+# guard ends up meaning neither. The whole manifest sweeps in 1.3s without it.
+#
 # The looser test "the combined diff is non-empty" is NOT the same thing and must
 # not be used: --cc also prints an ordinary interleaving of two parents' one-sided
 # changes. Measured across the manifests, the loose test flags
@@ -185,12 +197,6 @@ merge_only_carriers() {
   local base="$1" b="$2" m n
   while IFS= read -r m; do
     [[ -n "$m" ]] || continue
-    # Cheap superset prefilter. With --name-only, --cc degenerates to -c: it
-    # lists every file differing from all parents, including a clean auto-merge
-    # whose --cc TEXT is empty. That is fine here -- it never misses a merge, it
-    # only skips generating the text diff for the ones that cannot possibly
-    # carry anything.
-    [[ -n "$(git diff-tree --cc --no-commit-id --name-only -r "$m" 2>/dev/null || true)" ]] || continue
     n="$(_fork_merge_only_lines "$m")"
     [[ "$n" -gt 0 ]] || continue
     printf '%s\t%s\n' "$(git rev-parse --short "$m")" "$n"
