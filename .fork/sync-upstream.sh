@@ -621,6 +621,19 @@ emit_report() {
 # --- main -------------------------------------------------------------------
 main() {
   mkdir -p "$FORK_DIR"
+
+  # Publishing from CI is opt-in, and the default is off. A runner that pushes
+  # is a runner that can move develop and master without anyone watching, and
+  # every other guard in here assumes a human is present to read a refusal.
+  # Scoped to Actions on purpose: a local run is unaffected, so this can only
+  # ever make CI stricter, never a local run looser.
+  if [[ -n "${GITHUB_ACTIONS:-}" && "${FORK_SYNC_AUTOPUBLISH:-0}" != "1" ]]; then
+    if [[ $NO_PUSH -eq 0 ]]; then
+      log "CI without FORK_SYNC_AUTOPUBLISH=1: forcing --no-push. Nothing will be pushed."
+      NO_PUSH=1
+    fi
+  fi
+
   incomplete_reset
   trap 'on_exit $?' EXIT
   trap 'finish 130' INT
