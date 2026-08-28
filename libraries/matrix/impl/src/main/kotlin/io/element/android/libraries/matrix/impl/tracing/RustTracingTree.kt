@@ -37,12 +37,13 @@ internal class RustTracingTree(
             LogEventLocation("", null)
         }
         val logLevel = priority.toLogLevel()
+        val taggedMessage = if (tag != null) "[$tag] $message" else message
         logEvent(
             file = location.file,
             line = location.line,
             level = logLevel,
             target = target,
-            message = if (tag != null) "[$tag] $message" else message,
+            message = if (t != null) "$taggedMessage\n${t.stackTraceToString()}" else taggedMessage,
         )
     }
 
