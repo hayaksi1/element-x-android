@@ -437,6 +437,13 @@ apply_patches() {
   fi
   shopt -s nullglob
   for p in "$FORK_DIR"/integration-patches/*.patch; do
+    # An UNTRACKED patch here is applied and ships in $INTEGRATION while existing
+    # in no commit: preflight uses --untracked-files=no so it never reports one,
+    # and the directory is not gitignored. The next clone does not have it, so the
+    # rebuild it produced is unreproducible and nobody can tell why.
+    if ! git ls-files --error-unmatch -- "$p" >/dev/null 2>&1; then
+      die "untracked integration patch: $p -- it would ship in $INTEGRATION while existing in no commit, so the next clone would build something different. Commit it to $TOOLING, or delete it."
+    fi
     log "applying integration patch $(basename "$p")"
     if [[ $DRY_RUN -eq 0 ]]; then
       before="$(git rev-parse HEAD)"
