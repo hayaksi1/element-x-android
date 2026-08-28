@@ -75,6 +75,40 @@ ourselves would corrupt execution mid-run.
 Flags: `--dry-run`, `--no-push`, `--continue`, `--features=a,b`, `--skip-verify`.
 `--skip-verify` exists for iteration and **blocks pushing**.
 
+## Rolling back a bad sync
+
+**`master` is never force-pushed.** The from-scratch rebuild is grafted onto the
+previous `master` tip (`graft_integration` in `lib/publish.sh`): a commit whose tree is
+byte-identical to the rebuild and whose first parent is the old tip. The remote branch
+therefore fast-forwards, and a plain `git push` is enough — which matters, because a
+plain push *fails loudly* if that assumption ever breaks, where `--force-with-lease`
+would have swallowed the signal.
+
+Every successful publish is tagged `sync/<YYYYMMDD-HHMM>`. **That tag is the rollback
+point** — an immutable ref at a `master` tip that passed every gate.
+
+```bash
+git fetch origin --tags
+git tag --list 'sync/*' --sort=-creatordate | head      # pick the last good build
+
+GOOD=sync/<YYYYMMDD-HHMM>
+BAD=$(git rev-parse origin/master)
+
+git checkout master
+git reset --hard "$BAD"
+new=$(git commit-tree "$GOOD^{tree}" -p "$BAD" -m "rollback: restore $GOOD")
+git update-ref refs/heads/master "$new" "$BAD"
+git diff "$GOOD" master                                 # MUST print nothing
+git push origin master                                  # a fast-forward; no force
+```
+
+Just want to *build* an older known-good app? `git checkout sync/<YYYYMMDD-HHMM>` and
+build from the detached head. Nothing is pushed.
+
+**`backup/develop-*` is not a rollback point.** It snapshots the *old `develop`*, from
+before `master` existed, so it contains none of the integrated branches. Its one correct
+use is as a regression baseline: `git diff backup/develop-20260828-0119 master`.
+
 ## Known manual steps
 
 - **Issues must be enabled** on the fork for conflict reporting

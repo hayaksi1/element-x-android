@@ -111,8 +111,33 @@ so the fork's work is always greppable: `git log --grep="Fork-Feature:"`.
 
 ## Force-push policy
 
-`--force-with-lease` only, never `--force`, and only for `develop`, `master`,
-and rebased `feat/*`. **Never** for a branch in `pr-branches.txt`.
+`--force` is banned outright. `--force-with-lease` only, and only for rebased
+`feat/*`. **Never** for a branch in `pr-branches.txt`.
+
+**`master` and `develop` are pushed plain, with no force of any kind.** The sync
+grafts each rebuild onto the previous `master` tip, so the push is a genuine
+fast-forward; `develop` only ever fast-forwards to `upstream/develop`. A rejected
+push there is a real signal — someone pushed, or the graft parented a stale tip —
+and forcing past it destroys the previous published build. Fetch and investigate.
+
+## Rolling back
+
+Every successful sync tags its `master` tip `sync/<YYYYMMDD-HHMM>`. **That tag is the
+rollback point.** Roll back by restoring its tree onto the current tip so the branch
+still fast-forwards:
+
+```bash
+GOOD=sync/<YYYYMMDD-HHMM>; BAD=$(git rev-parse origin/master)
+git checkout master && git reset --hard "$BAD"
+new=$(git commit-tree "$GOOD^{tree}" -p "$BAD" -m "rollback: restore $GOOD")
+git update-ref refs/heads/master "$new" "$BAD"
+git diff "$GOOD" master && git push origin master
+```
+
+**Never roll `master` back to a `backup/develop-*` tag.** Those snapshot the *old
+`develop`* from before `master` existed and contain none of the integrated branches;
+restoring one discards every branch the fork has integrated. They are regression
+baselines, nothing more.
 
 ## Verification before push
 
