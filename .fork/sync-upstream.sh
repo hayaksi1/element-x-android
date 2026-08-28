@@ -573,7 +573,8 @@ emit_report() {
     echo
     printf '  ADVISORY -- these merged clean but changed nothing (likely absorbed upstream):\n'
     sed 's/^/    /' "$REPORT.retire"
-    echo "    (nothing is deleted; review and remove from the manifest by hand if you agree)"
+    echo "    (candidate only, nothing is deleted -- run the two retention proofs"
+    echo "     before acting; see FORK_RULES.md 'Branch retention')"
   fi
   if [[ -s "$REPORT.autoresolved" ]]; then
     echo

@@ -23,7 +23,7 @@ _fork_kind_advice() {
     merge-conflict)
       echo "Resolve on $INTEGRATION by hand, commit, then re-run with --continue. Use git merge --no-ff <branch> ONLY if $MIRROR is already an ancestor of it; for a branch whose base predates the mirror -- most fix/* -- use git cherry-pick \$(git rev-list --reverse --no-merges $MIRROR..<branch>), because merging drags its stale base across everything already integrated. --continue REBUILDS $INTEGRATION: what carries your work across is rerere replaying the resolution your commit records, and the old tip is kept at refs/fork/pre-rebuild/<ts> either way." ;;
     missing-branch)
-      echo "Fetch or recreate the branch, or remove it from the manifest." ;;
+      echo "Fetch the branch, or restore it from refs/fork/archive/<branch>. Removing the manifest line is a retirement, not a first-resort fix: it needs the proofs in FORK_RULES.md 'Branch retention'." ;;
     empty-after-resolve)
       echo "Every conflicted path was binary, so resolution kept ours and the branch added nothing. Re-record the snapshots on that branch, then re-run." ;;
     integrate-failed)
@@ -37,7 +37,7 @@ _fork_kind_advice() {
     pr-drift-diverged)
       echo "Local and origin both moved: reconcile by hand. Never force-push a PR branch." ;;
     pr-no-remote)
-      echo "Not on origin: push the branch, or remove it from pr-branches.txt." ;;
+      echo "Not on origin: push the branch, or restore it from refs/fork/archive/<branch>. Removing the manifest line is a retirement, not a first-resort fix: it needs the proofs in FORK_RULES.md 'Branch retention'." ;;
     unmanaged-branch)
       echo "Add it to a manifest to integrate it, or to .fork/unmanaged-branches.txt to acknowledge it is deliberate." ;;
     *)
