@@ -25,8 +25,10 @@ the role `develop` used to play.
 so a single fork commit breaks every future sync.
 
 If asked to "just commit this to develop", that is a mistake — say so, and put
-the work on a feature branch instead. A `pre-commit` hook enforces this; do not
-bypass it with `--no-verify`.
+the work on a feature branch instead. Two layers enforce it: `develop` is
+**never checked out** (a branch nobody has checked out cannot be committed to by
+accident — the script moves it with `git update-ref`), and a `pre-commit` hook
+refuses commits on it. Do not bypass either with `--no-verify`.
 
 ## Where a change goes
 
@@ -41,6 +43,10 @@ bypass it with `--no-verify`.
 **Never commit tooling changes to `master`.** It is rebuilt from scratch; such a
 commit is deleted with no way to recover it.
 
+**`feat/fork-tooling` is append-only.** It is pushed and other work quotes line
+numbers against it, so never amend, rebase, squash, reorder or force-push it —
+correct it with a new commit on top.
+
 ## The two manifests get opposite treatment
 
 - `.fork/features.txt` — fork-only branches. **Rebased** onto `develop`.
@@ -49,7 +55,58 @@ commit is deleted with no way to recover it.
   commits directly onto them, and rewriting detaches review threads and
   re-fires their CI.
 
-A branch in **both** manifests is a bug; the script hard-fails on it.
+A branch in **both** manifests is a bug; the script hard-fails on it. A branch on
+`origin` in **neither** is silently never merged into `master`;
+`.fork/unmanaged-branches.txt` is the acknowledged set, and anything appearing on
+`origin` after that seed is reported.
+
+**Never regenerate a manifest by overwriting it.** The obvious recipe —
+`gh pr list --state open ... > pr-branches.txt` — drops every closed-but-unmerged
+branch on the floor and hands back a clean-looking file that has quietly lost work.
+Query `--state all`, diff it against the manifest, and *add* what is new. A line
+leaves a manifest only under the retention rule below.
+
+## Branch retention
+
+**A branch may be deleted only if it is provably merged.** Everything else stays:
+closed-but-unmerged PR branches, abandoned branches, experiments, and every branch
+in `.fork/unmanaged-branches.txt`. This is the *only* licence to shrink the branch
+set, and it is **not** licence to fold, rename, squash or consolidate anything —
+branch identity is the thing the rule protects, so a "tidy them into one
+`feat/fork-misc`" plan destroys exactly what it is there to preserve.
+
+Provably merged means GitHub reports the PR `MERGED` **and** at least one of these
+two mechanical proofs passes:
+
+```bash
+git merge-base --is-ancestor origin/$b upstream/develop   # A: literal ancestor
+git cherry upstream/develop origin/$b | grep -c '^+'      # B: 0 => every patch absorbed
+```
+
+Proof B is the one that catches a squash-merge, where the tip is an ancestor of
+nothing upstream yet every patch has an equivalent there. Read B's printed count,
+never the exit status: `grep -c` exits 1 when the count is 0, which is the *passing*
+case, so a `&&` chain or `set -e` inverts the answer.
+
+**GitHub's `MERGED` is a signal, never the proof.** A squash-merged PR reads
+`MERGED` while its tip is an ancestor of nothing; a merged PR whose commit was later
+*reverted* upstream reads `MERGED` forever. If GitHub says merged and both proofs
+fail, the branch is **not** prunable — report it and leave it.
+
+Before anything is deleted, make it recoverable and make the record durable:
+
+```bash
+git update-ref "refs/fork/archive/$b" "$(git rev-parse "origin/$b")"
+git push origin "refs/fork/archive/$b:refs/fork/archive/$b"
+```
+
+then append a row to the tracked `.fork/archived-branches.tsv` — branch, sha, PR
+number, which proof passed, date. The ref is the recovery handle; the TSV is the
+record that survives a fresh clone.
+
+**Then stop and ask.** Deleting a remote branch moves a remote ref, and that has
+always needed the owner's explicit approval. The sync script itself never deletes
+or renames a branch, and that stays true — retirement is reported, never performed.
 
 ## Syncing is `.fork/sync-upstream.sh` and nothing else
 
@@ -151,6 +208,10 @@ the two things this fork breaks most:
 :tests:uitests:verifyPaparazziDebug
 detekt ktlintCheck :app:lintGplayDebug
 ```
+
+**Never weaken a guard to get a green run.** Every one of these exists because
+that exact failure happened and nothing noticed. Guards get stricter, allowlists
+shrink, and a stated limit is a documented boundary rather than a knob.
 
 ## Secrets
 
