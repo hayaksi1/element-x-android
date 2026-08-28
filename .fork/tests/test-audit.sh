@@ -383,7 +383,7 @@ fi
 ###############################################################################
 banner "10 -- the semantic rules: each one silent on sound code, firing on broken"
 ###############################################################################
-# Every rule below was validated to fire ZERO times across all 4240 committed
+# Every rule below was validated to fire ZERO times across all 4267 committed
 # .kt files in this repository. A rule that only ever fires is not a check, so
 # each case ships BOTH halves: a sound fixture that must pass and a broken one
 # that must not.
@@ -428,6 +428,19 @@ sem_clean "redeclared: silent on two genuine overloads" \
   "$(mk_sem ov_ok "$PRE_MIN" $'package p\nclass C {\n    fun g(x: Int) {}\n    fun g(x: String) {}\n}\n')"
 sem_fires "redeclared: fires on a repeated type name" \
   "$(mk_sem ov_bad "$PRE_MIN" $'package p\nclass C {\n}\nclass C {\n}\nfun z() {}\n')" redeclared
+
+# 97f5560448 declared `createDefaultShareIntentHandler()` twice and every rule
+# passed it. Balancing the WHOLE line rejected the signature: the expression
+# body's own `(` left the line one paren short, so it was never keyed at all.
+# Cutting the body off instead is what catches it -- and the backticked pair
+# below is why that cut has to skip ticks, since those parentheses belong to
+# the test's NAME, not to its parameter list.
+sem_clean "redeclared: silent on two expression-bodied overloads" \
+  "$(mk_sem xb_ok "$PRE_MIN" $'package p\nclass C {\n    private fun make(x: Int) = Handler(x)\n    private fun make(x: String) = Handler(x)\n}\n')"
+sem_clean "redeclared: silent on distinct tests whose names contain parentheses" \
+  "$(mk_sem xb_tick "$PRE_MIN" $'package p\nclass C {\n    fun `listOf() returns a`() {\n        a()\n    }\n    fun `listOf() returns b`() {\n        b()\n    }\n}\n')"
+sem_fires "redeclared: fires on an expression-bodied fun declared twice in one scope" \
+  "$(mk_sem xb_bad "$PRE_MIN" $'package p\nclass C {\n    private fun make() = Handler(\n        a,\n    )\n    private fun make() = Handler(\n        b,\n    )\n}\n')" redeclared
 
 sem_clean "duplicate-named-arg: silent on the same label in two different calls" \
   "$(mk_sem na_ok "$PRE_MIN" $'package p\nfun f() {\n    g(\n        mimeType = a,\n    )\n    h(\n        mimeType = b,\n    )\n}\n')"

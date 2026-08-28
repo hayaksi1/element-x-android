@@ -197,14 +197,50 @@ def redeclared_valvar(code_lines):
             for (_, n), v in sorted(seen.items(), key=lambda kv: kv[0][1]) if len(v) > 1]
 
 
+def signature_of(line):
+    """`fun name(params): Ret` from a declaration line, or "" if incomplete.
+
+    Balancing the whole line rejects an expression body: `fun f() = Foo(`
+    counts two opens against one close, so the duplicated
+    `createDefaultShareIntentHandler()` in 97f5560448 went unseen.  What has to
+    be complete is the PARAMETER LIST; the body -- `=` or `{` -- is not part of
+    the signature, so it is cut rather than counted.  Scanning starts at `fun`
+    so an annotation's own parentheses cannot close the list early.
+    """
+    kw = re.search(r"\bfun\b", line)
+    if not kw:
+        return ""
+    depth, tick = 0, False
+    for i in range(kw.start(), len(line)):
+        ch = line[i]
+        # Callers keep backticks so signatures stay distinguishable, so a test
+        # named `mediaUploadInfoList() returns ...` carries parentheses that are
+        # part of the NAME.  Counting them closes the parameter list early and
+        # collapses three separate tests onto one key.
+        if ch == "`":
+            tick = not tick
+        elif tick:
+            continue
+        elif ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+            if depth == 0:
+                ret = re.match(r"\s*:\s*[^={]+", line[i + 1:])
+                return (line[:i + 1] + (ret.group(0) if ret else "")).strip()
+    return ""
+
+
 def redeclared_types(tick_lines):
     """A class/interface/object name declared twice in one scope, or a `fun`
     whose entire signature line repeats in one scope.
 
     Types cannot be overloaded, so a repeated name is always a redeclaration.
     Functions can be, so only a byte-identical signature counts, and only when
-    it is COMPLETE on one line: `fun Foo(` with its parameters below is
-    identical between two genuine overloads.
+    the parameter list is COMPLETE on one line: `fun Foo(` with its parameters
+    below is identical between two genuine overloads.  Kotlin cannot overload
+    on return type alone, so two identical signatures are a redeclaration even
+    where the bodies differ.
     """
     types = collections.defaultdict(list)
     funs = collections.defaultdict(list)
@@ -212,8 +248,10 @@ def redeclared_types(tick_lines):
         m = TYPEDECL.match(line)
         if m:
             types[(scope, m.group(2))].append(i + 1)
-        elif FUNSIG.match(line) and line.strip() and line.count("(") == line.count(")"):
-            funs[(scope, line.strip())].append(i + 1)
+        elif FUNSIG.match(line) and line.strip():
+            sig = signature_of(line)
+            if sig:
+                funs[(scope, sig)].append(i + 1)
     out = ["type '%s' declared %d times in one scope, at lines %s" % (n, len(v), v[:6])
            for (_, n), v in types.items() if len(v) > 1]
     out += ["identical signature '%s' declared %d times in one scope, at lines %s"
