@@ -382,6 +382,35 @@ else
   bad "cannot read $SYNC to lift the trap wiring"
 fi
 
+section "12  assert_patch_landed refuses a patch that applied nothing"
+# `git format-patch -1` on a MERGE commit emits an empty patch, and
+# `git am --3way` on an empty patch exits 0 having done nothing. Every rebuild
+# then drops the fix that patch was supposed to carry, silently.
+(
+  cd "$REPO_ROOT"
+  h="$(git rev-parse HEAD)"
+  if ( assert_patch_landed "0001-empty.patch" "$h" ) >/dev/null 2>&1; then
+    exit 3
+  fi
+  git commit -q --allow-empty -m "a patch that did land"
+  assert_patch_landed "0002-real.patch" "$h" || exit 4
+) 2>/dev/null && landrc=0 || landrc=$?
+case "$landrc" in
+  0) ok "assert_patch_landed dies on an unmoved HEAD and stays silent on a moved one" ;;
+  3) bad "assert_patch_landed did NOT fire when HEAD had not moved" ;;
+  4) bad "assert_patch_landed fired on a patch that DID create a commit" ;;
+  *) bad "assert_patch_landed case aborted (rc=$landrc)" ;;
+esac
+if err="$( ( cd "$REPO_ROOT"; assert_patch_landed "0001-empty.patch" "$(git rev-parse HEAD)" ) 2>&1 )"; then :; fi
+case "$err" in
+  *"applied nothing"*) ok "...and says the patch applied nothing" ;;
+  *) bad "...error text does not say the patch applied nothing: $err" ;;
+esac
+case "$err" in
+  *merge*) ok "...and names the merge-commit export as the cause" ;;
+  *) bad "...error text does not name the cause" ;;
+esac
+
 # --- result -----------------------------------------------------------------
 printf '\n=====================================\n'
 printf '%s passed, %s failed\n' "$PASSED" "$FAILED"
