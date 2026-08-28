@@ -8,6 +8,8 @@
 
 package io.element.android.features.ftue.impl.sessionverification.choosemode
 
+import io.element.android.libraries.matrix.test.FakeMatrixClient
+import io.element.android.libraries.matrix.api.MatrixClient
 import com.google.common.truth.Truth.assertThat
 import io.element.android.features.logout.api.direct.DirectLogoutEvent
 import io.element.android.features.logout.api.direct.DirectLogoutState
@@ -127,8 +129,10 @@ class ChooseSessionVerificationModePresenterTest {
 
     private fun createPresenter(
         encryptionService: FakeEncryptionService = FakeEncryptionService(),
-        directLogoutPresenter: Presenter<DirectLogoutState> = Presenter<DirectLogoutState> { aDirectLogoutState() }
+        directLogoutPresenter: Presenter<DirectLogoutState> = Presenter<DirectLogoutState> { aDirectLogoutState() },
+        matrixClient: MatrixClient = FakeMatrixClient(),
     ) = ChooseSelfVerificationModePresenter(
+        matrixClient = matrixClient,
         encryptionService = encryptionService,
         directLogoutPresenter = directLogoutPresenter,
     )
