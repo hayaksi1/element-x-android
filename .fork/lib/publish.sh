@@ -17,7 +17,7 @@
 #      previous known-good build is a named, immutable ref. THAT is the
 #      rollback point.
 #
-# Reads: MIRROR INTEGRATION DRY_RUN NO_PUSH SKIP_VERIFY
+# Reads: MIRROR INTEGRATION UPSTREAM_REF DRY_RUN NO_PUSH SKIP_VERIFY
 # Calls: log warn die run  (sync-upstream.sh) / assert_push_list (integrity.sh)
 
 # echo YYYYMMDD-HHMM in UTC. Call ONCE per run and pass the value around, so the
@@ -117,6 +117,44 @@ tag_sync() {
   run git tag -a "$tag" -m "fork sync $ts: $INTEGRATION rebuilt from $MIRROR" "refs/heads/$INTEGRATION"
 }
 
+# assert_mirror_pristine
+# The mirror is a byte-exact copy of upstream. Nothing of the fork's may ever
+# land on it, because a single fork commit breaks every future fast-forward.
+#
+# sync_mirror enforces that -- but sync_mirror is CALLED only when CONTINUE is 0,
+# and publish_ff below pushes refs/heads/$MIRROR on every path into it. A
+# --continue run therefore published the mirror having checked nothing at all:
+# whatever was on local develop went straight to origin, silently, exit 0.
+#
+# So the check lives HERE, as a precondition of the push, rather than as a step
+# that happens to run first on one of two paths. A guard that protects a push has
+# to be reachable from the push, not from one of its callers.
+#
+# It DIES rather than skipping just the mirror push: $INTEGRATION was rebuilt
+# from this mirror, so a poisoned mirror means the whole run is built on fork
+# commits that upstream has never seen. There is nothing here worth publishing.
+assert_mirror_pristine() {
+  local up="${UPSTREAM_REF:-}"
+
+  # Unprovable is not the same as fine. Without a resolvable upstream ref there
+  # is no way to show the mirror is clean, and "cannot tell" must not push.
+  [[ -n "$up" ]] ||
+    die "assert_mirror_pristine: UPSTREAM_REF is unset -- cannot prove $MIRROR is pristine, refusing to push it"
+  git rev-parse --verify --quiet "$up^{commit}" >/dev/null 2>&1 ||
+    die "assert_mirror_pristine: $up does not resolve -- cannot prove $MIRROR is pristine, refusing to push it"
+  git rev-parse --verify --quiet "refs/heads/$MIRROR^{commit}" >/dev/null 2>&1 ||
+    die "assert_mirror_pristine: refs/heads/$MIRROR does not exist"
+
+  # Ancestor, not equality: --continue skips sync_mirror, so the mirror may
+  # legitimately be BEHIND upstream. Behind is stale, which is harmless. AHEAD is
+  # a fork commit on the mirror, which is the thing that must never be published.
+  if git merge-base --is-ancestor "refs/heads/$MIRROR" "$up"; then return 0; fi
+
+  warn "$MIRROR is NOT an ancestor of $up. Commits the mirror has and $up does not:"
+  git log --oneline "$up..refs/heads/$MIRROR" >&2 || true
+  die "refusing to push: $MIRROR carries fork commit(s). The mirror must stay a byte-exact copy of $up, and $INTEGRATION was rebuilt from it, so nothing in this run is publishable. Move that work to a feat/* branch and reset $MIRROR to $up."
+}
+
 # publish_ff <sync_ts>
 # Replacement for publish(). Pushes develop, master and the sync tag with NO
 # force of any kind: after graft_integration the master push is a genuine
@@ -145,6 +183,11 @@ publish_ff() {
   declare -F assert_push_list >/dev/null 2>&1 ||
     die "assert_push_list is not defined -- .fork/lib/integrity.sh was not sourced"
   assert_push_list "$MIRROR" "$INTEGRATION" "$tag"
+
+  # Before the NO_PUSH return, exactly like assert_push_list above it: a
+  # rehearsal that prints "refs verified" while the mirror carries a fork commit
+  # is telling the operator the opposite of the truth.
+  assert_mirror_pristine
 
   if [[ $NO_PUSH -eq 1 ]]; then log "push skipped (--no-push); refs verified"; return 0; fi
   if [[ $SKIP_VERIFY -eq 1 ]]; then die "refusing to push: verification was skipped"; fi
