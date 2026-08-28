@@ -164,6 +164,15 @@ check_unmanaged_branches() {
 # "in no parent": fix/4388-media-upload-progress's merge b78f1cbf69 is 3711 bytes
 # of plumbing combined diff and 0 bytes with rename detection on.
 #
+# `git merge-tree --write-tree` is NOT the test either, though it looks like a
+# cleaner one: it answers "did a human touch this merge", which is a different
+# question. Cross-checked over all 14 merges in the manifests, it agrees on 12
+# and over-fires on two -- 73292fcf2e (fix/2914) and bd1a961f4c (fix/4600), both
+# conflicts a human resolved by keeping BOTH sides verbatim, so every line is
+# still in a parent and the pick list reproduces it. Both are pr-branches.txt
+# branches that can never be rebased, so adopting it would re-introduce exactly
+# the run-wedging false positive this predicate exists to avoid.
+#
 # There is no prefilter. A cheaper file-level test would have to be a second,
 # different predicate over the same merge, and gating one on the other is how a
 # guard ends up meaning neither. The whole manifest sweeps in 1.3s without it.
