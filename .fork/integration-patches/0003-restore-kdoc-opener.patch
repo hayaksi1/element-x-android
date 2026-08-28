@@ -1,0 +1,38 @@
+From b71978df65aba8db744437acdab982905a548336 Mon Sep 17 00:00:00 2001
+From: t <erkan.gec01@gmail.com>
+Date: Sat, 29 Aug 2026 01:03:45 +0300
+Subject: [PATCH] Restore the KDoc opener the merge consumed in
+ SessionPreferencesStore
+
+The integration of fix/5022-disable-markdown resolved the conflict by taking
+the surrounding lines as context, and in doing so ate the `/**` that opens the
+setMarkdownEnabled doc comment. What is left is a bare `* @param enabled` line
+sitting directly after getSelectedRoomListFilters(), which Kotlin reads as a
+member declaration.
+
+This is a syntax error in :libraries:preferences:api, a base module, so it
+takes the whole build down rather than the feature that caused it - the
+compile stops at "Expecting member declaration" on line 107 and nothing
+downstream is even attempted.
+
+Fork-Feature: fork-misc
+---
+ .../libraries/preferences/api/store/SessionPreferencesStore.kt  | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/libraries/preferences/api/src/main/kotlin/io/element/android/libraries/preferences/api/store/SessionPreferencesStore.kt b/libraries/preferences/api/src/main/kotlin/io/element/android/libraries/preferences/api/store/SessionPreferencesStore.kt
+index b34c6e668f..21821f2e0f 100644
+--- a/libraries/preferences/api/src/main/kotlin/io/element/android/libraries/preferences/api/store/SessionPreferencesStore.kt
++++ b/libraries/preferences/api/src/main/kotlin/io/element/android/libraries/preferences/api/store/SessionPreferencesStore.kt
+@@ -104,6 +104,8 @@ interface SessionPreferencesStore {
+ 
+     /** The names of the room list filters the user has selected; defaults to none. */
+     fun getSelectedRoomListFilters(): Flow<Set<String>>
++
++    /**
+      * @param enabled true to turn the markdown in a message into formatting when it is sent.
+      */
+     suspend fun setMarkdownEnabled(enabled: Boolean)
+-- 
+2.52.0
+
