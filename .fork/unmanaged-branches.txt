@@ -16,64 +16,15 @@
 # Nothing here is ever renamed, folded or consolidated.
 #
 #
+#
+# 2026-08-28: 56 entries removed here because their branches were deleted --
+# provably merged, archived to refs/fork/archive/<b>, recorded in
+# archived-branches.tsv, owner-approved. This file lists branches that EXIST
+# on origin and are deliberately unmanaged; a line for a branch that is gone
+# would be a claim about a ref nobody can look at.
+#
 # develop, master and feat/fork-tooling are excluded by the check itself.
 
 backup/develop-pre-upstream-sync-20260823
-fix/1270-verification-request-timeout
-fix/1548-dm-preview-sender
-fix/2419-empty-waveform-seek
-fix/2515-gallery-build-date
-fix/2614-linkify-ipv6-urls
-fix/2617-user-id-with-slash
-fix/2812-debug-proxying-docs
-fix/2925-room-notification-mute-string
-fix/3338-rtl-room-list-preview
-fix/3444-login-with-full-matrix-id
-fix/3493-media-progress-insets
-fix/4008-fediverse-handle-not-email
-fix/4099-server-unreachable
-fix/4112-wildcard-mime-type
-fix/4191-video-bitrate-clamp
-fix/4460-focused-timeline-pagination
-fix/4475-element-call-docs
-fix/4519-hide-verification-fallback
-fix/4582-autoscroll-focused-field
-fix/4594-leave-room-not-found
-fix/4639-system-theme
-fix/4657-preview-param-suffix
-fix/4666-feature-module-template
-fix/4757-timeline-grouping-timeout
-fix/4893-copy-blocked-user-id
-fix/4973-media-gallery-error
-fix/5153-sanitize-carriage-return
-fix/5319-linkify-matrix-uri
-fix/5356-sender-name-fallback
-fix/5383-incompatible-room-list-filters
-fix/5428-send-to-room-subtitle
-fix/5623-share-unlisted-mime-type
-fix/5766-redaction-unknown-target
-fix/5780-voice-recorder-double-start
-fix/5794-account-data-api
-fix/5978-caption-markdown
-fix/6130-space-left-room-joinable
-fix/6189-no-call-in-empty-dm
-fix/6253-duplicate-notification-messages
-fix/6371-save-file-name-conflicts
-fix/6426-unifiedpush-account-name
-fix/6429-remove-inplace-fix
-fix/6518-encryption-indicator
-fix/6730-keep-caption-formatting
 fix/6853-remember-revealed-images
-fix/6960-inaccessible-reply-preview
-fix/7046-voice-message-screen-timeout
-fix/7059-relax-image-compression
-fix/7190-forward-live-location
-fix/7253-skip-other-account-notifications
-fix/7289-custom-map-style-url
-fix/7314-invalid-pinned-events
-fix/7393-bug-report-submission
-fix/7397-keep-thread-after-redaction
-fix/7509-run-database-migrations
-fix/822-record-screenshots-no-change
-fix/860-enter-sends-message
 integration/share-sheet-shortcuts
