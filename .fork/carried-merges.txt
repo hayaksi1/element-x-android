@@ -1,0 +1,24 @@
+# Merges whose OWN content is already carried into master by other means.
+#
+# check_merge_only_content refuses a branch when a merge on it adds or removes
+# lines that are in NONE of its parents: the cherry-pick pick list is
+# --no-merges, so that content is in no commit it replays and would go missing
+# silently. For a branch in features.txt the fix is to put the content into a
+# normal commit on the branch. For a branch in pr-branches.txt there is no such
+# fix -- it may never be rebased or amended -- so the content is exported as an
+# integration patch under .fork/integration-patches/ instead, and the merge is
+# recorded here to say so.
+#
+# Without this file that branch wedges the tool: the guard fails the run, a
+# failed run SKIPS apply_patches, and the very patch that would carry the
+# content therefore never applies. Exit 3 on every future run, with rebase
+# forbidden and `git merge --no-ff` unavailable once the mirror is no longer an
+# ancestor.
+#
+# One merge sha per line, short or full. Keyed on the SHA, deliberately: a NEW
+# merge on the same branch has a different sha and still fails, so an
+# acknowledgement can never cover work it was never shown. An entry that no
+# longer resolves is ignored rather than trusted, so the guard fires again.
+#
+# Recording a sha here asserts the content is carried. Nothing verifies that for
+# you -- export the patch FIRST, and check it applies, before adding the line.
