@@ -22,3 +22,18 @@
 #
 # Recording a sha here asserts the content is carried. Nothing verifies that for
 # you -- export the patch FIRST, and check it applies, before adding the line.
+
+# feature/search-index-button
+#
+# 3e79bd6a61 carries 38 lines present in neither parent. 28 of them are real:
+# the search-index coverage marker and the deleteEventCacheStore helper in
+# RustMatrixClientFactory.kt, plus two tests. The other 10 belong to the OLD
+# code-block chrome API (CodeBlockOverlay / computeCodeBlockOverlays), which no
+# longer exists on master - the chrome now comes from feature/code-block-copy-
+# button as CodeBlockAction / CodeBlockBounds - so restoring them would not
+# compile. They are deliberately not carried.
+#
+# Carried by .fork/integration-patches/0002-carry-search-index-button-merge-content.patch,
+# verified with git apply --check and git am --3way at master: 2 files, 129
+# insertions, no rejects, braces balanced, both test names present exactly once.
+3e79bd6a61312f2abe837e39f43c9f8804b1b609

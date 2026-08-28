@@ -1,0 +1,48 @@
+From a547c387b885f1be568f044dcf9f271901c5c6a0 Mon Sep 17 00:00:00 2001
+From: t <erkan.gec01@gmail.com>
+Date: Sat, 29 Aug 2026 01:05:56 +0300
+Subject: [PATCH] Drop the developer settings visibility wrapper fix/6703
+ replaces
+
+The integration kept both generations of the same block: upstream's
+AnimatedVisibility wrapper around DeveloperPreferencesView(onOpenDeveloperSettings),
+and fix/6703-developer-options-layout-jump's replacement, which takes isVisible
+and keeps the row laid out while hiding it with alpha and clearAndSetSemantics.
+
+Keeping both does not compile - the first call passes a lambda where isVisible
+is expected and omits onOpenDeveloperSettings - and it also defeats the branch:
+AnimatedVisibility removing the row from layout is the jump the branch exists
+to stop. Keep only the replacement, and drop the import it orphans.
+
+Fork-Feature: fork-misc
+---
+ .../features/preferences/impl/root/PreferencesRootView.kt   | 6 ------
+ 1 file changed, 6 deletions(-)
+
+diff --git a/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/root/PreferencesRootView.kt b/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/root/PreferencesRootView.kt
+index e5018a84a3..e62582880b 100644
+--- a/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/root/PreferencesRootView.kt
++++ b/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/root/PreferencesRootView.kt
+@@ -8,7 +8,6 @@
+ 
+ package io.element.android.features.preferences.impl.root
+ 
+-import androidx.compose.animation.AnimatedVisibility
+ import androidx.compose.foundation.clickable
+ import androidx.compose.foundation.layout.Box
+ import androidx.compose.foundation.layout.BoxScope
+@@ -341,11 +340,6 @@ private fun ColumnScope.GeneralSection(
+         )
+     }
+     // Put developer settings at the end, so nothing bad happens if the user clicks 8 times to enable the entry
+-    AnimatedVisibility(
+-        visible = state.showDeveloperSettings,
+-    ) {
+-        DeveloperPreferencesView(onOpenDeveloperSettings)
+-    }
+     DeveloperPreferencesView(
+         isVisible = state.showDeveloperSettings,
+         onOpenDeveloperSettings = onOpenDeveloperSettings,
+-- 
+2.52.0
+

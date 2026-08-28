@@ -1,0 +1,96 @@
+From 4511bf906fb7d402c7eb7f396b703c466ef71862 Mon Sep 17 00:00:00 2001
+From: t <erkan.gec01@gmail.com>
+Date: Sat, 29 Aug 2026 01:10:14 +0300
+Subject: [PATCH] Compose the four timeline filters instead of keeping two
+ generations
+
+Four branches add a filter to TimelineItemsFactory: fix/3575 drops blank-body
+state events, fix/4095 keeps only displayable events, fix/4417 drops redacted
+ones when the user has turned them off, and fix/5209 drops membership changes
+that changed nothing. The integration kept two generations of the same code in
+two places.
+
+In replaceWith both the fix/4095 pair and the pre-4095 pair survived, so
+updateWith and buildAndEmitTimelineItemStates each ran twice and the second
+call passed three arguments to a four-parameter function. In
+buildAndEmitTimelineItemStates `val renderableItems` was declared twice; the
+second read newTimelineItemStates directly, which made fix/3575's filter dead
+code while still compiling as a redeclaration error only.
+
+Chain them instead: displayable events feed the diff cache and the emit, and
+the blank-body filter feeds the redaction filter. fix/5209's guard was missing
+altogether - its helper, its two imports and the OR beside
+isKeyVerificationRequest are restored, so the branch contributes again.
+
+Fork-Feature: fork-misc
+---
+ .../factories/TimelineItemsFactory.kt         | 21 ++++++++++++-------
+ 1 file changed, 14 insertions(+), 7 deletions(-)
+
+diff --git a/features/messages/impl/src/main/kotlin/io/element/android/features/messages/impl/timeline/factories/TimelineItemsFactory.kt b/features/messages/impl/src/main/kotlin/io/element/android/features/messages/impl/timeline/factories/TimelineItemsFactory.kt
+index b9a7fee03e..e36663607c 100644
+--- a/features/messages/impl/src/main/kotlin/io/element/android/features/messages/impl/timeline/factories/TimelineItemsFactory.kt
++++ b/features/messages/impl/src/main/kotlin/io/element/android/features/messages/impl/timeline/factories/TimelineItemsFactory.kt
+@@ -24,8 +24,10 @@ import io.element.android.libraries.core.coroutine.CoroutineDispatchers
+ import io.element.android.libraries.matrix.api.room.RoomMember
+ import io.element.android.libraries.matrix.api.timeline.MatrixTimelineItem
+ import io.element.android.libraries.matrix.api.timeline.item.event.EventTimelineItem
++import io.element.android.libraries.matrix.api.timeline.item.event.MembershipChange
+ import io.element.android.libraries.matrix.api.timeline.item.event.MessageContent
+ import io.element.android.libraries.matrix.api.timeline.item.event.OtherMessageType
++import io.element.android.libraries.matrix.api.timeline.item.event.RoomMembershipContent
+ import kotlinx.collections.immutable.ImmutableList
+ import kotlinx.collections.immutable.toImmutableList
+ import kotlinx.coroutines.flow.Flow
+@@ -75,9 +77,7 @@ class TimelineItemsFactory(
+         lock.withLock {
+             val displayableItems = timelineItems.keepDisplayableTimelineEvents()
+             diffCacheUpdater.updateWith(displayableItems)
+-            buildAndEmitTimelineItemStates(displayableItems, roomMembers, renderReadReceipts)
+-            diffCacheUpdater.updateWith(timelineItems)
+-            buildAndEmitTimelineItemStates(timelineItems, roomMembers, renderReadReceipts, renderRedactedMessages)
++            buildAndEmitTimelineItemStates(displayableItems, roomMembers, renderReadReceipts, renderRedactedMessages)
+         }
+     }
+ 
+@@ -108,11 +108,11 @@ class TimelineItemsFactory(
+                 newTimelineItemStates.add(updatedItem)
+             }
+         }
+-        val renderableItems = newTimelineItemStates.filterNot { it.isStateEventWithBlankBody() }
++        val itemsWithBody = newTimelineItemStates.filterNot { it.isStateEventWithBlankBody() }
+         val renderableItems = if (renderRedactedMessages) {
+-            newTimelineItemStates
++            itemsWithBody
+         } else {
+-            newTimelineItemStates.filterNot { it.isRedactedEvent() }
++            itemsWithBody.filterNot { it.isRedactedEvent() }
+         }
+         val result = timelineItemGrouper.group(renderableItems).toImmutableList()
+         this._timelineItems.emit(result)
+@@ -126,7 +126,10 @@ class TimelineItemsFactory(
+     ): TimelineItem? {
+         val timelineItem =
+             when (val currentTimelineItem = timelineItems[index]) {
+-                is MatrixTimelineItem.Event -> if (currentTimelineItem.event.isKeyVerificationRequest()) {
++                is MatrixTimelineItem.Event -> if (
++                    currentTimelineItem.event.isKeyVerificationRequest() ||
++                    currentTimelineItem.event.isMembershipChangeWithoutEffect()
++                ) {
+                     null
+                 } else {
+                     eventItemFactory.create(currentTimelineItem, index, timelineItems, roomMembers, renderReadReceipts)
+@@ -148,6 +151,10 @@ private fun EventTimelineItem.isKeyVerificationRequest(): Boolean {
+     return messageType is OtherMessageType && messageType.isKeyVerificationRequest
+ }
+ 
++private fun EventTimelineItem.isMembershipChangeWithoutEffect(): Boolean {
++    return (content as? RoomMembershipContent)?.change == MembershipChange.NONE
++}
++
+ private fun TimelineItem.isStateEventWithBlankBody(): Boolean {
+     val content = (this as? TimelineItem.Event)?.content
+     return content is TimelineItemStateContent && content.body.isBlank()
+-- 
+2.52.0
+
