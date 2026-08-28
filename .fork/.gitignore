@@ -1,2 +1,4 @@
-.fork/.report*
-.fork/.state
+.report*
+.state
+rr-cache/*
+!rr-cache/.gitkeep
