@@ -27,6 +27,7 @@ import io.element.android.features.preferences.impl.tasks.ClearCacheUseCase
 import io.element.android.features.preferences.impl.tasks.ComputeCacheSizeUseCase
 import io.element.android.features.preferences.impl.tasks.MarkAllRoomsAsRead
 import io.element.android.features.preferences.impl.tasks.VacuumStoresUseCase
+import io.element.android.features.preferences.impl.utils.ShowDeveloperSettingsProvider
 import io.element.android.libraries.androidutils.filesize.FileSizeFormatter
 import io.element.android.libraries.architecture.AsyncAction
 import io.element.android.libraries.architecture.AsyncData
@@ -69,6 +70,7 @@ class DeveloperSettingsPresenter(
     private val featureFlagService: FeatureFlagService,
     private val matrixClient: MatrixClient,
     private val messageSearchIndexer: MessageSearchIndexer,
+    private val showDeveloperSettingsProvider: ShowDeveloperSettingsProvider,
     private val buildMeta: BuildMeta,
     private val notificationSettingsService: NotificationSettingsService,
 ) : Presenter<DeveloperSettingsState> {
@@ -122,6 +124,8 @@ class DeveloperSettingsPresenter(
             cursor = sweepCursor,
         )
 
+        val showDeveloperSettings by showDeveloperSettingsProvider.showDeveloperSettings.collectAsState()
+
         fun handleEvent(event: DeveloperSettingsEvent) {
             when (event) {
                 DeveloperSettingsEvent.ClearCache -> coroutineScope.clearCache(clearCacheAction)
@@ -136,6 +140,9 @@ class DeveloperSettingsPresenter(
                 }
                 is DeveloperSettingsEvent.SetShowColorPicker -> {
                     showColorPicker = event.show
+                }
+                is DeveloperSettingsEvent.SetShowDeveloperSettings -> {
+                    showDeveloperSettingsProvider.setShowDeveloperSettings(event.show)
                 }
                 DeveloperSettingsEvent.VacuumStores -> coroutineScope.launch {
                     vacuumStoresUseCase()
@@ -167,6 +174,7 @@ class DeveloperSettingsPresenter(
 
         val appDeveloperSettingsState = appDeveloperSettingsPresenter.present()
         return DeveloperSettingsState(
+            showDeveloperSettings = showDeveloperSettings,
             appDeveloperSettingsState = appDeveloperSettingsState,
             cacheSize = cacheSize.value,
             databaseSizes = databaseSizes.value,
