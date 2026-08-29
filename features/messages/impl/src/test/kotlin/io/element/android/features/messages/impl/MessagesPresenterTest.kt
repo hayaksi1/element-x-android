@@ -52,6 +52,7 @@ import io.element.android.libraries.core.mimetype.MimeTypes
 import io.element.android.libraries.designsystem.components.avatar.AvatarData
 import io.element.android.libraries.designsystem.components.avatar.AvatarSize
 import io.element.android.libraries.designsystem.utils.snackbar.SnackbarDispatcher
+import io.element.android.libraries.emoji.api.recentemojis.AddRecentEmoji
 import io.element.android.libraries.featureflag.api.FeatureFlags
 import io.element.android.libraries.featureflag.test.FakeFeatureFlagService
 import io.element.android.libraries.matrix.api.core.EventId
@@ -71,6 +72,7 @@ import io.element.android.libraries.matrix.api.room.tombstone.SuccessorRoom
 import io.element.android.libraries.matrix.api.timeline.Timeline
 import io.element.android.libraries.matrix.api.timeline.item.TimelineItemDebugInfo
 import io.element.android.libraries.matrix.api.timeline.item.event.EventOrTransactionId
+import io.element.android.libraries.matrix.api.timeline.item.event.LocalEventSendState
 import io.element.android.libraries.matrix.api.timeline.item.event.toEventOrTransactionId
 import io.element.android.libraries.matrix.test.AN_AVATAR_URL
 import io.element.android.libraries.matrix.test.AN_EVENT_ID
@@ -82,7 +84,7 @@ import io.element.android.libraries.matrix.test.A_SESSION_ID_2
 import io.element.android.libraries.matrix.test.A_THREAD_ID
 import io.element.android.libraries.matrix.test.A_USER_ID
 import io.element.android.libraries.matrix.test.A_USER_ID_2
-import io.element.android.libraries.matrix.test.FakeMatrixClient
+import io.element.android.libraries.matrix.test.core.FakeSendHandle
 import io.element.android.libraries.matrix.test.core.aBuildMeta
 import io.element.android.libraries.matrix.test.encryption.FakeEncryptionService
 import io.element.android.libraries.matrix.test.permalink.FakePermalinkParser
@@ -95,7 +97,6 @@ import io.element.android.libraries.matrix.test.room.threads.FakeThreadsListServ
 import io.element.android.libraries.matrix.test.timeline.FakeTimeline
 import io.element.android.libraries.matrix.test.timeline.aTimelineItemDebugInfo
 import io.element.android.libraries.matrix.ui.messages.reply.InReplyToDetails
-import io.element.android.libraries.recentemojis.api.AddRecentEmoji
 import io.element.android.libraries.textcomposer.model.MessageComposerMode
 import io.element.android.libraries.textcomposer.model.TextEditorState
 import io.element.android.libraries.textcomposer.model.aTextEditorStateMarkdown
@@ -144,31 +145,6 @@ class MessagesPresenterTest {
             assertThat(initialState.inviteProgress).isEqualTo(AsyncData.Uninitialized)
             assertThat(initialState.showReinvitePrompt).isFalse()
             assertThat(initialState.showLiveLocationShareBanner).isFalse()
-        }
-    }
-
-    @Test
-    fun `present - message search stays unavailable when only the live feature flag is enabled`() = runTest {
-        val featureFlagService = FakeFeatureFlagService(
-            initialState = mapOf(FeatureFlags.MessageSearch.key to true),
-        )
-        val presenter = createMessagesPresenter(featureFlagService = featureFlagService)
-
-        presenter.testWithLifecycleOwner {
-            val state = consumeItemsUntilTimeout().last()
-            assertThat(state.canSearch).isFalse()
-        }
-    }
-
-    @Test
-    fun `present - message search is available when the live client has an index`() = runTest {
-        val presenter = createMessagesPresenter(
-            matrixClient = FakeMatrixClient(isMessageSearchAvailable = true),
-        )
-
-        presenter.testWithLifecycleOwner {
-            val state = consumeItemsUntilTimeout().last()
-            assertThat(state.canSearch).isTrue()
         }
     }
 
@@ -1014,6 +990,33 @@ class MessagesPresenterTest {
     }
 
     @Test
+    fun `present - handle action edit caption starts from the formatted caption`() = runTest {
+        val messageEvent = aMessageEvent(
+            content = aTimelineItemImageContent(
+                caption = "Hello world",
+                htmlCaption = "<b>Hello</b> world",
+            )
+        )
+        val composerRecorder = EventsRecorder<MessageComposerEvent>()
+        val presenter = createMessagesPresenter(
+            messageComposerPresenter = { aMessageComposerState(eventSink = composerRecorder, showTextFormatting = true) },
+        )
+        presenter.testWithLifecycleOwner {
+            val initialState = awaitItem()
+            initialState.eventSink(MessagesEvent.HandleAction(TimelineItemAction.EditCaption, messageEvent))
+            awaitItem()
+            composerRecorder.assertSingle(
+                MessageComposerEvent.SetMode(
+                    composerMode = MessageComposerMode.EditCaption(
+                        eventOrTransactionId = AN_EVENT_ID.toEventOrTransactionId(),
+                        content = "<b>Hello</b> world",
+                    )
+                )
+            )
+        }
+    }
+
+    @Test
     fun `present - handle action add caption`() = runTest {
         val composerRecorder = EventsRecorder<MessageComposerEvent>()
         val presenter = createMessagesPresenter(
@@ -1066,6 +1069,56 @@ class MessagesPresenterTest {
             val initialState = awaitItem()
             initialState.eventSink(MessagesEvent.HandleAction(TimelineItemAction.RemoveCaption, messageEvent))
             editCaptionLambda.assertions().isCalledOnce().with(value(AN_EVENT_ID.toEventOrTransactionId()), value(null), value(null))
+        }
+    }
+
+    @Test
+    fun `present - handle action retry sending`() = runTest {
+        val retryLambda = lambdaRecorder<Result<Unit>> { Result.success(Unit) }
+        val messageEvent = aMessageEvent(
+            sendState = LocalEventSendState.Failed.Unknown("Error"),
+            sendHandleProvider = { FakeSendHandle(retryLambda = retryLambda) },
+        )
+        val presenter = createMessagesPresenter()
+        presenter.testWithLifecycleOwner {
+            skipItems(1)
+            val initialState = awaitItem()
+            initialState.eventSink(MessagesEvent.HandleAction(TimelineItemAction.RetrySending, messageEvent))
+            advanceUntilIdle()
+            retryLambda.assertions().isCalledOnce()
+        }
+    }
+
+    @Test
+    fun `present - handle action retry sending - failure is ignored`() = runTest {
+        val retryLambda = lambdaRecorder<Result<Unit>> { Result.failure(AN_EXCEPTION) }
+        val messageEvent = aMessageEvent(
+            sendState = LocalEventSendState.Failed.Unknown("Error"),
+            sendHandleProvider = { FakeSendHandle(retryLambda = retryLambda) },
+        )
+        val presenter = createMessagesPresenter()
+        presenter.testWithLifecycleOwner {
+            skipItems(1)
+            val initialState = awaitItem()
+            initialState.eventSink(MessagesEvent.HandleAction(TimelineItemAction.RetrySending, messageEvent))
+            advanceUntilIdle()
+            retryLambda.assertions().isCalledOnce()
+        }
+    }
+
+    @Test
+    fun `present - handle action retry sending - no send handle, it should have no effect`() = runTest {
+        val messageEvent = aMessageEvent(
+            sendState = LocalEventSendState.Failed.Unknown("Error"),
+            sendHandleProvider = { null },
+        )
+        val presenter = createMessagesPresenter()
+        presenter.testWithLifecycleOwner {
+            skipItems(1)
+            val initialState = awaitItem()
+            initialState.eventSink(MessagesEvent.HandleAction(TimelineItemAction.RetrySending, messageEvent))
+            advanceUntilIdle()
+            // No op!
         }
     }
 
@@ -1405,7 +1458,6 @@ class MessagesPresenterTest {
         },
         encryptionService: FakeEncryptionService = FakeEncryptionService(),
         featureFlagService: FakeFeatureFlagService = FakeFeatureFlagService(),
-        matrixClient: FakeMatrixClient = FakeMatrixClient(),
         actionListEventSink: (ActionListEvent) -> Unit = {},
         addRecentEmoji: AddRecentEmoji = AddRecentEmoji { _ -> lambdaError() },
         markAsFullyRead: MarkAsFullyRead = FakeMarkAsFullyRead(),
@@ -1437,7 +1489,6 @@ class MessagesPresenterTest {
             analyticsService = analyticsService,
             encryptionService = encryptionService,
             featureFlagService = featureFlagService,
-            matrixClient = matrixClient,
             addRecentEmoji = addRecentEmoji,
             markAsFullyRead = markAsFullyRead,
             liveLocationShareManager = liveLocationShareManager,
