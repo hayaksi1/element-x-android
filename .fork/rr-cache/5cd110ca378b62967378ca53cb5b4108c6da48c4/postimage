@@ -214,14 +214,14 @@ private fun MessageSearchIndexCategory(state: DeveloperSettingsState) {
                 supportingContent = {
                     Text("Fetches older history room by room so it becomes searchable. Uses network data and shows progress in a notification.")
                 },
-                onClick = { state.eventSink(DeveloperSettingsEvents.StartSearchIndexing) },
+                onClick = { state.eventSink(DeveloperSettingsEvent.StartSearchIndexing) },
             )
             is MessageSearchIndexStatus.Paused -> ListItem(
                 content = { Text("Resume indexing") },
                 supportingContent = {
                     Text("Paused at room ${status.roomsDone} of ${status.roomsTotal}.")
                 },
-                onClick = { state.eventSink(DeveloperSettingsEvents.StartSearchIndexing) },
+                onClick = { state.eventSink(DeveloperSettingsEvent.StartSearchIndexing) },
             )
             MessageSearchIndexStatus.WaitingForRun -> {
                 LinearProgressIndicator(
@@ -265,7 +265,7 @@ private fun MessageSearchIndexCategory(state: DeveloperSettingsState) {
                 )
                 ListItem(
                     content = { Text("Start indexing again") },
-                    onClick = { state.eventSink(DeveloperSettingsEvents.StartSearchIndexing) },
+                    onClick = { state.eventSink(DeveloperSettingsEvent.StartSearchIndexing) },
                 )
             }
         }
@@ -286,7 +286,7 @@ private fun SearchIndexSupportingText(text: String) {
 private fun CancelSearchIndexingItem(state: DeveloperSettingsState) {
     ListItem(
         content = { Text("Cancel indexing") },
-        onClick = { state.eventSink(DeveloperSettingsEvents.CancelSearchIndexing) },
+        onClick = { state.eventSink(DeveloperSettingsEvent.CancelSearchIndexing) },
     )
 }
 
@@ -302,7 +302,7 @@ private fun DeveloperSettingsToggle(state: DeveloperSettingsState) {
                     "${ShowDeveloperSettingsProvider.DEVELOPER_SETTINGS_COUNTER} times to bring them back."
             },
             isChecked = state.showDeveloperSettings,
-            onCheckedChange = { state.eventSink(DeveloperSettingsEvents.SetShowDeveloperSettings(it)) },
+            onCheckedChange = { state.eventSink(DeveloperSettingsEvent.SetShowDeveloperSettings(it)) },
         )
     }
 }
