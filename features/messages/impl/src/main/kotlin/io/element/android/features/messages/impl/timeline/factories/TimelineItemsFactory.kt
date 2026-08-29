@@ -130,8 +130,3 @@ private fun EventTimelineItem.isKeyVerificationRequest(): Boolean {
     val messageType = (content as? MessageContent)?.type
     return messageType is OtherMessageType && messageType.isKeyVerificationRequest
 }
-
-private fun EventTimelineItem.isKeyVerificationRequest(): Boolean {
-    val messageType = (content as? MessageContent)?.type
-    return messageType is OtherMessageType && messageType.isKeyVerificationRequest
-}
