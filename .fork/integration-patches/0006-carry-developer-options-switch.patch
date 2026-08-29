@@ -1,0 +1,620 @@
+From 1392da63ce52236b29bfa39d240491505b27225e Mon Sep 17 00:00:00 2001
+From: hayaksi1 <193020925+hayaksi1@users.noreply.github.com>
+Date: Sun, 30 Aug 2026 01:08:05 +0300
+Subject: [PATCH] Carry the developer-options switch after cherry-pick drops
+ its merge-only lines
+
+SetShowDeveloperSettings lives in merge 8338fec20c, which cherry-pick
+--no-merges cannot replay. This commit is the same content on current
+develop so the rebuild can apply it as an integration patch.
+
+Fork-Feature: fork-tooling
+---
+ .../impl/developer/DeveloperSettingsEvent.kt  |  1 +
+ .../developer/DeveloperSettingsPresenter.kt   |  3 +
+ .../impl/developer/DeveloperSettingsState.kt  |  1 +
+ .../DeveloperSettingsStatePreviewParam.kt     |  5 +
+ .../impl/developer/DeveloperSettingsView.kt   | 21 +++++
+ .../appsettings/AppDeveloperSettingsView.kt   |  3 +-
+ .../utils/ShowDeveloperSettingsProvider.kt    | 33 +++++--
+ .../DeveloperSettingsPresenterTest.kt         | 51 +++++++++++
+ .../developer/DeveloperSettingsViewTest.kt    | 12 +++
+ .../impl/root/PreferencesRootPresenterTest.kt | 25 ++++-
+ .../ShowDeveloperSettingsProviderTest.kt      | 91 +++++++++++++++++++
+ .../api/store/AppPreferencesStore.kt          |  8 ++
+ .../impl/store/DefaultAppPreferencesStore.kt  | 13 +++
+ .../store/DefaultAppPreferencesStoreTest.kt   | 23 ++++-
+ .../test/InMemoryAppPreferencesStore.kt       | 10 ++
+ 15 files changed, 287 insertions(+), 13 deletions(-)
+ create mode 100644 features/preferences/impl/src/test/kotlin/io/element/android/features/preferences/impl/utils/ShowDeveloperSettingsProviderTest.kt
+
+diff --git a/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsEvent.kt b/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsEvent.kt
+index 34ccba2abe..8512f18506 100644
+--- a/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsEvent.kt
++++ b/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsEvent.kt
+@@ -11,6 +11,7 @@ package io.element.android.features.preferences.impl.developer
+ import androidx.compose.ui.graphics.Color
+ 
+ sealed interface DeveloperSettingsEvent {
++    data class SetShowDeveloperSettings(val show: Boolean) : DeveloperSettingsEvent
+     data class SetShowColorPicker(val show: Boolean) : DeveloperSettingsEvent
+     data class ChangeBrandColor(val color: Color?) : DeveloperSettingsEvent
+     data object ClearCache : DeveloperSettingsEvent
+diff --git a/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsPresenter.kt b/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsPresenter.kt
+index 74bf595ce4..95bc8fb490 100644
+--- a/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsPresenter.kt
++++ b/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsPresenter.kt
+@@ -99,6 +99,9 @@ class DeveloperSettingsPresenter(
+         fun handleEvent(event: DeveloperSettingsEvent) {
+             when (event) {
+                 DeveloperSettingsEvent.ClearCache -> coroutineScope.clearCache(clearCacheAction)
++                is DeveloperSettingsEvent.SetShowDeveloperSettings -> {
++                    showDeveloperSettingsProvider.setShowDeveloperSettings(event.show)
++                }
+                 is DeveloperSettingsEvent.ChangeBrandColor -> coroutineScope.launch {
+                     showColorPicker = false
+                     val color = event.color
+diff --git a/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsState.kt b/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsState.kt
+index a4345c6452..5cf2f0ebf6 100644
+--- a/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsState.kt
++++ b/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsState.kt
+@@ -15,6 +15,7 @@ import io.element.android.libraries.matrix.api.core.DeviceId
+ import kotlinx.collections.immutable.ImmutableMap
+ 
+ data class DeveloperSettingsState(
++    val showDeveloperSettings: Boolean,
+     val appDeveloperSettingsState: AppDeveloperSettingsState,
+     val cacheSize: AsyncData<String>,
+     val databaseSizes: AsyncData<ImmutableMap<String, String>>,
+diff --git a/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsStatePreviewParam.kt b/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsStatePreviewParam.kt
+index 0a42251b40..b0578d94f7 100644
+--- a/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsStatePreviewParam.kt
++++ b/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsStatePreviewParam.kt
+@@ -20,6 +20,9 @@ open class DeveloperSettingsStatePreviewParam : PreviewParameterProvider<Develop
+     override val values: Sequence<DeveloperSettingsState>
+         get() = sequenceOf(
+             aDeveloperSettingsState(),
++            aDeveloperSettingsState(
++                showDeveloperSettings = false,
++            ),
+             aDeveloperSettingsState(
+                 clearCacheAction = AsyncAction.Loading
+             ),
+@@ -39,6 +42,7 @@ open class DeveloperSettingsStatePreviewParam : PreviewParameterProvider<Develop
+ }
+ 
+ fun aDeveloperSettingsState(
++    showDeveloperSettings: Boolean = true,
+     appDeveloperSettingsState: AppDeveloperSettingsState = anAppDeveloperSettingsState(),
+     clearCacheAction: AsyncAction<Unit> = AsyncAction.Uninitialized,
+     markAllRoomsAsReadAction: AsyncAction<Unit> = AsyncAction.Uninitialized,
+@@ -48,6 +52,7 @@ fun aDeveloperSettingsState(
+     deviceId: DeviceId = DeviceId("ILAKNDNASDLK"),
+     eventSink: (DeveloperSettingsEvent) -> Unit = {},
+ ) = DeveloperSettingsState(
++    showDeveloperSettings = showDeveloperSettings,
+     appDeveloperSettingsState = appDeveloperSettingsState,
+     cacheSize = AsyncData.Success("1.2 MB"),
+     databaseSizes = AsyncData.Success(persistentMapOf("state_store" to "1.2MB")),
+diff --git a/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsView.kt b/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsView.kt
+index 8eff49c471..903659c45d 100644
+--- a/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsView.kt
++++ b/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsView.kt
+@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
+ import io.element.android.compound.theme.ElementTheme
+ import io.element.android.features.preferences.impl.R
+ import io.element.android.features.preferences.impl.developer.appsettings.AppDeveloperSettingsView
++import io.element.android.features.preferences.impl.utils.ShowDeveloperSettingsProvider
+ import io.element.android.libraries.androidutils.system.copyToClipboard
+ import io.element.android.libraries.architecture.AsyncAction
+ import io.element.android.libraries.designsystem.components.ProgressDialog
+@@ -30,6 +31,7 @@ import io.element.android.libraries.designsystem.components.dialogs.ErrorDialog
+ import io.element.android.libraries.designsystem.components.list.ListItemContent
+ import io.element.android.libraries.designsystem.components.preferences.PreferenceCategory
+ import io.element.android.libraries.designsystem.components.preferences.PreferencePage
++import io.element.android.libraries.designsystem.components.preferences.PreferenceSwitch
+ import io.element.android.libraries.designsystem.preview.ElementPreview
+ import io.element.android.libraries.designsystem.preview.PreviewsDayNight
+ import io.element.android.libraries.designsystem.theme.components.CircularProgressIndicator
+@@ -82,9 +84,11 @@ fun DeveloperSettingsView(
+         title = stringResource(id = CommonStrings.common_developer_options)
+     ) {
+         // Note: this is OK to hardcode strings in this debug screen.
++        DeveloperSettingsToggle(state)
+         AppDeveloperSettingsView(
+             state = state.appDeveloperSettingsState,
+             onOpenShowkase = onOpenShowkase,
++            showTopDivider = true,
+         )
+         SessionCategory(deviceId = state.deviceId)
+         NotificationCategory(
+@@ -183,6 +187,23 @@ fun DeveloperSettingsView(
+     )
+ }
+ 
++@Composable
++private fun DeveloperSettingsToggle(state: DeveloperSettingsState) {
++    PreferenceCategory(showTopDivider = false) {
++        PreferenceSwitch(
++            title = if (state.showDeveloperSettings) "On" else "Off",
++            subtitle = if (state.showDeveloperSettings) {
++                null
++            } else {
++                "Developer options are no longer listed in Settings. Tap the version number " +
++                    "${ShowDeveloperSettingsProvider.DEVELOPER_SETTINGS_COUNTER} times to bring them back."
++            },
++            isChecked = state.showDeveloperSettings,
++            onCheckedChange = { state.eventSink(DeveloperSettingsEvent.SetShowDeveloperSettings(it)) },
++        )
++    }
++}
++
+ @Composable
+ private fun SessionCategory(deviceId: DeviceId) {
+     PreferenceCategory(title = "Session") {
+diff --git a/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/developer/appsettings/AppDeveloperSettingsView.kt b/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/developer/appsettings/AppDeveloperSettingsView.kt
+index 7b1401b5e5..78b0fc0875 100644
+--- a/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/developer/appsettings/AppDeveloperSettingsView.kt
++++ b/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/developer/appsettings/AppDeveloperSettingsView.kt
+@@ -44,6 +44,7 @@ fun AppDeveloperSettingsView(
+     state: AppDeveloperSettingsState,
+     onOpenShowkase: () -> Unit,
+     modifier: Modifier = Modifier,
++    showTopDivider: Boolean = false,
+ ) {
+     Column(
+         modifier = modifier.fillMaxWidth(),
+@@ -51,7 +52,7 @@ fun AppDeveloperSettingsView(
+         // Note: this is OK to hardcode strings in this debug screen.
+         PreferenceCategory(
+             title = "Feature flags",
+-            showTopDivider = false,
++            showTopDivider = showTopDivider,
+         ) {
+             FeatureListContent(state)
+         }
+diff --git a/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/utils/ShowDeveloperSettingsProvider.kt b/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/utils/ShowDeveloperSettingsProvider.kt
+index b0cfea07d4..921d5a2b6a 100644
+--- a/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/utils/ShowDeveloperSettingsProvider.kt
++++ b/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/utils/ShowDeveloperSettingsProvider.kt
+@@ -8,31 +8,52 @@
+ 
+ package io.element.android.features.preferences.impl.utils
+ 
++import dev.zacsweers.metro.AppScope
+ import dev.zacsweers.metro.Inject
++import dev.zacsweers.metro.SingleIn
+ import io.element.android.libraries.core.meta.BuildMeta
+ import io.element.android.libraries.core.meta.BuildType
++import io.element.android.libraries.di.annotations.AppCoroutineScope
++import io.element.android.libraries.preferences.api.store.AppPreferencesStore
+ import io.element.android.libraries.ui.utils.MultipleTapToUnlock
+ import kotlinx.coroutines.CoroutineScope
+-import kotlinx.coroutines.flow.MutableStateFlow
++import kotlinx.coroutines.flow.SharingStarted
+ import kotlinx.coroutines.flow.StateFlow
++import kotlinx.coroutines.flow.stateIn
++import kotlinx.coroutines.launch
+ 
++@SingleIn(AppScope::class)
+ @Inject
+ class ShowDeveloperSettingsProvider(
+     buildMeta: BuildMeta,
++    private val appPreferencesStore: AppPreferencesStore,
++    @AppCoroutineScope
++    private val appCoroutineScope: CoroutineScope,
+ ) {
+     companion object {
+         const val DEVELOPER_SETTINGS_COUNTER = 7
+     }
+ 
+-    private val multipleTapToUnlock = MultipleTapToUnlock(DEVELOPER_SETTINGS_COUNTER)
+-    private val isDeveloperBuild = buildMeta.buildType != BuildType.RELEASE
++    private var multipleTapToUnlock = MultipleTapToUnlock(DEVELOPER_SETTINGS_COUNTER)
+ 
+-    private val _showDeveloperSettings = MutableStateFlow(isDeveloperBuild)
+-    val showDeveloperSettings: StateFlow<Boolean> = _showDeveloperSettings
++    val showDeveloperSettings: StateFlow<Boolean> = appPreferencesStore
++        .showDeveloperSettingsFlow()
++        .stateIn(
++            scope = appCoroutineScope,
++            started = SharingStarted.Eagerly,
++            initialValue = buildMeta.buildType != BuildType.RELEASE,
++        )
+ 
+     fun unlockDeveloperSettings(scope: CoroutineScope) {
+         if (multipleTapToUnlock.unlock(scope)) {
+-            _showDeveloperSettings.value = true
++            multipleTapToUnlock = MultipleTapToUnlock(DEVELOPER_SETTINGS_COUNTER)
++            setShowDeveloperSettings(true)
++        }
++    }
++
++    fun setShowDeveloperSettings(show: Boolean) {
++        appCoroutineScope.launch {
++            appPreferencesStore.setShowDeveloperSettings(show)
+         }
+     }
+ }
+diff --git a/features/preferences/impl/src/test/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsPresenterTest.kt b/features/preferences/impl/src/test/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsPresenterTest.kt
+index b76939f72c..4549d7b448 100644
+--- a/features/preferences/impl/src/test/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsPresenterTest.kt
++++ b/features/preferences/impl/src/test/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsPresenterTest.kt
+@@ -279,4 +279,55 @@ class DeveloperSettingsPresenterTest {
+             notificationSettingsService = notificationSettingsService,
+         )
+     }
++}
++    @Test
++    fun `present - turning the developer options switch off persists the choice`() = runTest {
++        val appPreferencesStore = InMemoryAppPreferencesStore(showDeveloperSettings = true)
++        val presenter = createDeveloperSettingsPresenter(
++            showDeveloperSettingsProvider = ShowDeveloperSettingsProvider(
++                buildMeta = aBuildMeta(BuildType.DEBUG),
++                appPreferencesStore = appPreferencesStore,
++                appCoroutineScope = backgroundScope,
++            ),
++        )
++        presenter.test {
++            val state = consumeItemsUntilPredicate { it.showDeveloperSettings }.last()
++            state.eventSink(DeveloperSettingsEvent.SetShowDeveloperSettings(false))
++            consumeItemsUntilPredicate { !it.showDeveloperSettings }
++            cancelAndIgnoreRemainingEvents()
++        }
++        assertThat(appPreferencesStore.showDeveloperSettingsFlow().first()).isFalse()
++    }
++
++    private fun createDeveloperSettingsPresenter(
++        sessionId: SessionId = A_SESSION_ID,
++        deviceId: DeviceId = A_DEVICE_ID,
++        cacheSizeUseCase: FakeComputeCacheSizeUseCase = FakeComputeCacheSizeUseCase(),
++        clearCacheUseCase: FakeClearCacheUseCase = FakeClearCacheUseCase(),
++        enterpriseService: EnterpriseService = FakeEnterpriseService(),
++        vacuumStoresUseCase: VacuumStoresUseCase = VacuumStoresUseCase {},
++        databaseSizesUseCase: GetDatabaseSizesUseCase = GetDatabaseSizesUseCase { Result.success(SdkStoreSizes(null, null, null, null)) },
++        markAllRoomsAsRead: FakeMarkAllRoomsAsRead = FakeMarkAllRoomsAsRead(),
++        showDeveloperSettingsProvider: ShowDeveloperSettingsProvider = ShowDeveloperSettingsProvider(
++            buildMeta = aBuildMeta(BuildType.DEBUG),
++            appPreferencesStore = InMemoryAppPreferencesStore(showDeveloperSettings = true),
++            appCoroutineScope = CoroutineScope(EmptyCoroutineContext),
++        ),
++        buildMeta: BuildMeta = aBuildMeta(),
++    ): DeveloperSettingsPresenter {
++        return DeveloperSettingsPresenter(
++            appDeveloperSettingsPresenter = { anAppDeveloperSettingsState() },
++            sessionId = sessionId,
++            deviceId = deviceId,
++            computeCacheSizeUseCase = cacheSizeUseCase,
++            clearCacheUseCase = clearCacheUseCase,
++            enterpriseService = enterpriseService,
++            vacuumStoresUseCase = vacuumStoresUseCase,
++            databaseSizesUseCase = databaseSizesUseCase,
++            fileSizeFormatter = FakeFileSizeFormatter(),
++            markAllRoomsAsRead = markAllRoomsAsRead,
++            showDeveloperSettingsProvider = showDeveloperSettingsProvider,
++            buildMeta = buildMeta,
++        )
++    }
+ }
+diff --git a/features/preferences/impl/src/test/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsViewTest.kt b/features/preferences/impl/src/test/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsViewTest.kt
+index fcc69cda91..ac9bf73a17 100644
+--- a/features/preferences/impl/src/test/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsViewTest.kt
++++ b/features/preferences/impl/src/test/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsViewTest.kt
+@@ -85,6 +85,18 @@ class DeveloperSettingsViewTest : RobolectricTest() {
+         }
+     }
+ 
++    @Test
++    fun `clicking on the developer options switch emits the expected event`() = runAndroidComposeUiTest {
++        val eventsRecorder = EventsRecorder<DeveloperSettingsEvent>()
++        setDeveloperSettingsView(
++            state = aDeveloperSettingsState(
++                eventSink = eventsRecorder
++            ),
++        )
++        onNodeWithText("On").performClick()
++        eventsRecorder.assertSingle(DeveloperSettingsEvent.SetShowDeveloperSettings(false))
++    }
++
+     @Config(qualifiers = "h2400dp")
+     @Test
+     fun `clicking on clear cache emits the expected event`() = runAndroidComposeUiTest {
+diff --git a/features/preferences/impl/src/test/kotlin/io/element/android/features/preferences/impl/root/PreferencesRootPresenterTest.kt b/features/preferences/impl/src/test/kotlin/io/element/android/features/preferences/impl/root/PreferencesRootPresenterTest.kt
+index 0bda80fe0c..56ad673754 100644
+--- a/features/preferences/impl/src/test/kotlin/io/element/android/features/preferences/impl/root/PreferencesRootPresenterTest.kt
++++ b/features/preferences/impl/src/test/kotlin/io/element/android/features/preferences/impl/root/PreferencesRootPresenterTest.kt
+@@ -37,6 +37,7 @@ import io.element.android.libraries.matrix.test.A_USER_NAME
+ import io.element.android.libraries.matrix.test.FakeMatrixClient
+ import io.element.android.libraries.matrix.test.core.aBuildMeta
+ import io.element.android.libraries.matrix.test.verification.FakeSessionVerificationService
++import io.element.android.libraries.preferences.test.InMemoryAppPreferencesStore
+ import io.element.android.libraries.sessionstorage.api.SessionStore
+ import io.element.android.libraries.sessionstorage.test.InMemorySessionStore
+ import io.element.android.libraries.sessionstorage.test.aSessionData
+@@ -46,12 +47,14 @@ import io.element.android.tests.testutils.lambda.lambdaRecorder
+ import io.element.android.tests.testutils.lambda.value
+ import io.element.android.tests.testutils.test
+ import kotlinx.collections.immutable.persistentListOf
++import kotlinx.coroutines.CoroutineScope
+ import kotlinx.coroutines.ExperimentalCoroutinesApi
+ import kotlinx.coroutines.flow.MutableStateFlow
+ import kotlinx.coroutines.flow.flowOf
+ import kotlinx.coroutines.test.runTest
+ import org.junit.Rule
+ import org.junit.Test
++import kotlin.coroutines.EmptyCoroutineContext
+ 
+ class PreferencesRootPresenterTest {
+     @get:Rule
+@@ -177,13 +180,17 @@ class PreferencesRootPresenterTest {
+     }
+ 
+     @Test
+-    fun `present - developer settings is hidden by default in release builds`() = runTest {
++    fun `present - developer settings is hidden when the preference is off`() = runTest {
+         createPresenter(
+             matrixClient = FakeMatrixClient(
+                 canDeactivateAccountResult = { true },
+                 accountManagementUrlResult = { Result.success(null) },
+             ),
+-            showDeveloperSettingsProvider = ShowDeveloperSettingsProvider(aBuildMeta(BuildType.RELEASE))
++            showDeveloperSettingsProvider = ShowDeveloperSettingsProvider(
++                buildMeta = aBuildMeta(BuildType.RELEASE),
++                appPreferencesStore = InMemoryAppPreferencesStore(showDeveloperSettings = false),
++                appCoroutineScope = backgroundScope,
++            ),
+         ).test {
+             val loadedState = awaitFirstItem()
+             assertThat(loadedState.showDeveloperSettings).isFalse()
+@@ -191,13 +198,17 @@ class PreferencesRootPresenterTest {
+     }
+ 
+     @Test
+-    fun `present - developer settings can be enabled in release builds`() = runTest {
++    fun `present - developer settings can be unlocked by tapping the version`() = runTest {
+         createPresenter(
+             matrixClient = FakeMatrixClient(
+                 canDeactivateAccountResult = { true },
+                 accountManagementUrlResult = { Result.success(null) },
+             ),
+-            showDeveloperSettingsProvider = ShowDeveloperSettingsProvider(aBuildMeta(BuildType.RELEASE))
++            showDeveloperSettingsProvider = ShowDeveloperSettingsProvider(
++                buildMeta = aBuildMeta(BuildType.RELEASE),
++                appPreferencesStore = InMemoryAppPreferencesStore(showDeveloperSettings = false),
++                appCoroutineScope = backgroundScope,
++            ),
+         ).test {
+             val loadedState = awaitFirstItem()
+             repeat(times = ShowDeveloperSettingsProvider.DEVELOPER_SETTINGS_COUNTER) {
+@@ -328,7 +339,11 @@ class PreferencesRootPresenterTest {
+     private fun createPresenter(
+         matrixClient: FakeMatrixClient = FakeMatrixClient(),
+         sessionVerificationService: FakeSessionVerificationService = FakeSessionVerificationService(),
+-        showDeveloperSettingsProvider: ShowDeveloperSettingsProvider = ShowDeveloperSettingsProvider(aBuildMeta(BuildType.DEBUG)),
++        showDeveloperSettingsProvider: ShowDeveloperSettingsProvider = ShowDeveloperSettingsProvider(
++            buildMeta = aBuildMeta(BuildType.DEBUG),
++            appPreferencesStore = InMemoryAppPreferencesStore(showDeveloperSettings = true),
++            appCoroutineScope = CoroutineScope(EmptyCoroutineContext),
++        ),
+         rageshakeFeatureAvailability: RageshakeFeatureAvailability = RageshakeFeatureAvailability { flowOf(true) },
+         indicatorService: IndicatorService = FakeIndicatorService(),
+         featureFlagService: FeatureFlagService = FakeFeatureFlagService(),
+diff --git a/features/preferences/impl/src/test/kotlin/io/element/android/features/preferences/impl/utils/ShowDeveloperSettingsProviderTest.kt b/features/preferences/impl/src/test/kotlin/io/element/android/features/preferences/impl/utils/ShowDeveloperSettingsProviderTest.kt
+new file mode 100644
+index 0000000000..f0f3e67f5a
+--- /dev/null
++++ b/features/preferences/impl/src/test/kotlin/io/element/android/features/preferences/impl/utils/ShowDeveloperSettingsProviderTest.kt
+@@ -0,0 +1,91 @@
++/*
++ * Copyright (c) 2026 Element Creations Ltd.
++ *
++ * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
++ * Please see LICENSE files in the repository root for full details.
++ */
++
++@file:OptIn(ExperimentalCoroutinesApi::class)
++
++package io.element.android.features.preferences.impl.utils
++
++import com.google.common.truth.Truth.assertThat
++import io.element.android.libraries.core.meta.BuildType
++import io.element.android.libraries.matrix.test.core.aBuildMeta
++import io.element.android.libraries.preferences.test.InMemoryAppPreferencesStore
++import kotlinx.coroutines.ExperimentalCoroutinesApi
++import kotlinx.coroutines.test.TestScope
++import kotlinx.coroutines.test.runCurrent
++import kotlinx.coroutines.test.runTest
++import org.junit.Test
++
++// Every assertion is made against a provider whose build type gives the opposite initial value, so a
++// passing test proves the stored preference won rather than the default.
++class ShowDeveloperSettingsProviderTest {
++    @Test
++    fun `tapping fewer times than required leaves the settings hidden`() = runTest {
++        val store = InMemoryAppPreferencesStore(showDeveloperSettings = false)
++        val provider = createProvider(store, BuildType.DEBUG)
++
++        repeat(ShowDeveloperSettingsProvider.DEVELOPER_SETTINGS_COUNTER - 1) {
++            provider.unlockDeveloperSettings(backgroundScope)
++        }
++        runCurrent()
++
++        assertThat(provider.showDeveloperSettings.value).isFalse()
++    }
++
++    @Test
++    fun `unlocking is still in effect for a provider created later`() = runTest {
++        val store = InMemoryAppPreferencesStore(showDeveloperSettings = false)
++        val provider = createProvider(store, BuildType.RELEASE)
++
++        repeat(ShowDeveloperSettingsProvider.DEVELOPER_SETTINGS_COUNTER) {
++            provider.unlockDeveloperSettings(backgroundScope)
++        }
++        runCurrent()
++        val later = createProvider(store, BuildType.RELEASE)
++        runCurrent()
++
++        assertThat(later.showDeveloperSettings.value).isTrue()
++    }
++
++    @Test
++    fun `switching off is still in effect for a provider created later`() = runTest {
++        val store = InMemoryAppPreferencesStore(showDeveloperSettings = true)
++        val provider = createProvider(store, BuildType.DEBUG)
++
++        provider.setShowDeveloperSettings(false)
++        runCurrent()
++        val later = createProvider(store, BuildType.DEBUG)
++        runCurrent()
++
++        assertThat(later.showDeveloperSettings.value).isFalse()
++    }
++
++    @Test
++    fun `after switching off, a single tap does not bring the settings back`() = runTest {
++        val store = InMemoryAppPreferencesStore(showDeveloperSettings = false)
++        val provider = createProvider(store, BuildType.DEBUG)
++        repeat(ShowDeveloperSettingsProvider.DEVELOPER_SETTINGS_COUNTER) {
++            provider.unlockDeveloperSettings(backgroundScope)
++        }
++        runCurrent()
++        provider.setShowDeveloperSettings(false)
++        runCurrent()
++
++        provider.unlockDeveloperSettings(backgroundScope)
++        runCurrent()
++
++        assertThat(provider.showDeveloperSettings.value).isFalse()
++    }
++
++    private fun TestScope.createProvider(
++        store: InMemoryAppPreferencesStore,
++        buildType: BuildType,
++    ) = ShowDeveloperSettingsProvider(
++        buildMeta = aBuildMeta(buildType),
++        appPreferencesStore = store,
++        appCoroutineScope = backgroundScope,
++    )
++}
+diff --git a/libraries/preferences/api/src/main/kotlin/io/element/android/libraries/preferences/api/store/AppPreferencesStore.kt b/libraries/preferences/api/src/main/kotlin/io/element/android/libraries/preferences/api/store/AppPreferencesStore.kt
+index 6285c46389..608f0eb388 100644
+--- a/libraries/preferences/api/src/main/kotlin/io/element/android/libraries/preferences/api/store/AppPreferencesStore.kt
++++ b/libraries/preferences/api/src/main/kotlin/io/element/android/libraries/preferences/api/store/AppPreferencesStore.kt
+@@ -28,6 +28,14 @@ interface AppPreferencesStore {
+     /** Whether developer mode is on; defaults to `true` on debug builds and `false` otherwise. */
+     fun isDeveloperModeEnabledFlow(): Flow<Boolean>
+ 
++    /**
++     * @param show true to list the developer options entry in the settings.
++     */
++    suspend fun setShowDeveloperSettings(show: Boolean)
++
++    /** Whether the developer options entry is listed in the settings; defaults to `true` on non release builds. */
++    fun showDeveloperSettingsFlow(): Flow<Boolean>
++
+     /**
+      * @param string the Element Call deployment to use, or `null` to go back to the one from the homeserver.
+      */
+diff --git a/libraries/preferences/impl/src/main/kotlin/io/element/android/libraries/preferences/impl/store/DefaultAppPreferencesStore.kt b/libraries/preferences/impl/src/main/kotlin/io/element/android/libraries/preferences/impl/store/DefaultAppPreferencesStore.kt
+index 1a14a0ea8f..597e486764 100644
+--- a/libraries/preferences/impl/src/main/kotlin/io/element/android/libraries/preferences/impl/store/DefaultAppPreferencesStore.kt
++++ b/libraries/preferences/impl/src/main/kotlin/io/element/android/libraries/preferences/impl/store/DefaultAppPreferencesStore.kt
+@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.first
+ import kotlinx.coroutines.flow.map
+ 
+ private val developerModeKey = booleanPreferencesKey("developerMode")
++private val showDeveloperSettingsKey = booleanPreferencesKey("showDeveloperSettings")
+ private val customElementCallBaseUrlKey = stringPreferencesKey("elementCallBaseUrl")
+ private val themeKey = stringPreferencesKey("theme")
+ private val hideInviteAvatarsKey = booleanPreferencesKey("hideInviteAvatars")
+@@ -69,6 +70,18 @@ class DefaultAppPreferencesStore(
+         }
+     }
+ 
++    override suspend fun setShowDeveloperSettings(show: Boolean) {
++        store.edit { prefs ->
++            prefs[showDeveloperSettingsKey] = show
++        }
++    }
++
++    override fun showDeveloperSettingsFlow(): Flow<Boolean> {
++        return store.data.map { prefs ->
++            prefs[showDeveloperSettingsKey] ?: (buildMeta.buildType != BuildType.RELEASE)
++        }
++    }
++
+     override suspend fun setCustomElementCallBaseUrl(string: String?) {
+         store.edit { prefs ->
+             if (string != null) {
+diff --git a/libraries/preferences/impl/src/test/kotlin/io/element/android/libraries/preferences/impl/store/DefaultAppPreferencesStoreTest.kt b/libraries/preferences/impl/src/test/kotlin/io/element/android/libraries/preferences/impl/store/DefaultAppPreferencesStoreTest.kt
+index 4cf018371a..43c172639b 100644
+--- a/libraries/preferences/impl/src/test/kotlin/io/element/android/libraries/preferences/impl/store/DefaultAppPreferencesStoreTest.kt
++++ b/libraries/preferences/impl/src/test/kotlin/io/element/android/libraries/preferences/impl/store/DefaultAppPreferencesStoreTest.kt
+@@ -120,7 +120,28 @@ class DefaultAppPreferencesStoreTest {
+         assertThat(history.last()).isEqualTo("https://server5.org")
+     }
+ 
+-    private fun createStore() = DefaultAppPreferencesStore(
++    @Test
++    fun `show developer settings defaults to true on non release builds`() = runTest {
++        assertThat(createStore().showDeveloperSettingsFlow().first()).isTrue()
++    }
++
++    @Test
++    fun `show developer settings defaults to false on release builds`() = runTest {
++        val store = createStore(buildMeta.copy(buildType = BuildType.RELEASE))
++
++        assertThat(store.showDeveloperSettingsFlow().first()).isFalse()
++    }
++
++    @Test
++    fun `show developer settings persists updates`() = runTest {
++        val store = createStore()
++
++        store.setShowDeveloperSettings(false)
++
++        assertThat(store.showDeveloperSettingsFlow().first()).isFalse()
++    }
++
++    private fun createStore(buildMeta: BuildMeta = this.buildMeta) = DefaultAppPreferencesStore(
+         buildMeta = buildMeta,
+         preferenceDataStoreFactory = FakePreferenceDataStoreFactory(),
+     )
+diff --git a/libraries/preferences/test/src/main/kotlin/io/element/android/libraries/preferences/test/InMemoryAppPreferencesStore.kt b/libraries/preferences/test/src/main/kotlin/io/element/android/libraries/preferences/test/InMemoryAppPreferencesStore.kt
+index e8d0b0bb8e..0782a9f37f 100644
+--- a/libraries/preferences/test/src/main/kotlin/io/element/android/libraries/preferences/test/InMemoryAppPreferencesStore.kt
++++ b/libraries/preferences/test/src/main/kotlin/io/element/android/libraries/preferences/test/InMemoryAppPreferencesStore.kt
+@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.updateAndGet
+ 
+ class InMemoryAppPreferencesStore(
+     isDeveloperModeEnabled: Boolean = false,
++    showDeveloperSettings: Boolean = false,
+     customElementCallBaseUrl: String? = null,
+     hideInviteAvatars: Boolean? = null,
+     timelineMediaPreviewValue: MediaPreviewValue? = null,
+@@ -37,6 +38,7 @@ class InMemoryAppPreferencesStore(
+     callRingtoneDisplayName: String? = null,
+ ) : AppPreferencesStore {
+     private val isDeveloperModeEnabled = MutableStateFlow(isDeveloperModeEnabled)
++    private val showDeveloperSettings = MutableStateFlow(showDeveloperSettings)
+     private val customElementCallBaseUrl = MutableStateFlow(customElementCallBaseUrl)
+     private val theme = MutableStateFlow(theme)
+     private val liveLocationMinimumDistanceUpdate = MutableStateFlow(liveLocationMinimumDistanceUpdate)
+@@ -60,6 +62,14 @@ class InMemoryAppPreferencesStore(
+         return isDeveloperModeEnabled
+     }
+ 
++    override suspend fun setShowDeveloperSettings(show: Boolean) {
++        showDeveloperSettings.value = show
++    }
++
++    override fun showDeveloperSettingsFlow(): Flow<Boolean> {
++        return showDeveloperSettings
++    }
++
+     override suspend fun setCustomElementCallBaseUrl(string: String?) {
+         customElementCallBaseUrl.tryEmit(string)
+     }
+-- 
+2.52.0
+
