@@ -1,0 +1,21 @@
+<<<<<<<
+# Per-run artefacts. A TRACKED copy of any of these would leave the worktree
+# dirty after every run, and preflight refuses to start on a dirty tree -- so
+# one run would poison the next.
+.report*
+.state*
+LAST_RUN.md
+
+# The rerere cache IS committed: it is what lets a rebuild replay 87 recorded
+# resolutions unattended, and an uncommitted cache is re-asked on every clone.
+# Only entries that pass audit_rerere_cache are ever added. thisimage* is
+# transient state left by an interrupted run and must never be committed.
+rr-cache/**/thisimage*
+
+# The harnesses build throwaway git repos beside themselves when run in place.
+tests/t/
+tests/t-regen/
+=======
+.fork/.report*
+.fork/.state
+>>>>>>>
