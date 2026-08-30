@@ -90,16 +90,6 @@ class AndroidMediaPreProcessor(
                     val imageMimeType = resolveImageMimeType(uri, mimeType).ensureDefaultSubtype()
                     val shouldBeCompressed = mediaOptimizationConfig.compressImages && imageMimeType !in notCompressibleImageTypes
                     processImage(uri, imageMimeType, shouldBeCompressed)
-            }
-            }
-
-            val resolvedMimeType = mimeType.withDefaultSubtype()
-            val result = when {
-                resolvedMimeType == MimeTypes.Svg -> processSvgImage(uri, resolvedMimeType)
-                resolvedMimeType.isMimeTypeImage() -> {
-                    val imageMimeType = resolveImageMimeType(uri, mimeType, fallback = resolvedMimeType)
-                    val shouldBeCompressed = mediaOptimizationConfig.compressImages && imageMimeType !in notCompressibleImageTypes
-                    processImage(uri, imageMimeType, shouldBeCompressed)
                 }
                 resolvedMimeType.isMimeTypeVideo() -> processVideo(uri, resolvedMimeType, mediaOptimizationConfig.videoCompressionPreset)
                 resolvedMimeType.isMimeTypeAudio() -> processAudio(uri, resolvedMimeType)
@@ -173,16 +163,12 @@ class AndroidMediaPreProcessor(
      * from it. Re-encoding a transparent image as JPEG flattens its alpha channel to black, so resolve the real format from the image header first.
      */
     private fun resolveImageMimeType(uri: Uri, declaredMimeType: String): String {
-    }
-
-    private fun resolveImageMimeType(uri: Uri, declaredMimeType: String, fallback: String): String {
         if (declaredMimeType == MimeTypes.Png || declaredMimeType == MimeTypes.Jpeg) return declaredMimeType
         val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         tryOrNull {
             contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }
         }
         return options.outMimeType ?: declaredMimeType
-        return options.outMimeType?.takeIf { it.isMimeTypeImage() } ?: fallback
     }
 
     private suspend fun processImage(uri: Uri, mimeType: String, shouldBeCompressed: Boolean): MediaUploadInfo {
