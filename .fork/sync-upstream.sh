@@ -464,7 +464,22 @@ apply_patches() {
         # Leaving .git/rebase-apply behind makes the NEXT run's preflight say
         # "commit or stash first", which is the wrong remedy entirely.
         git am --abort >/dev/null 2>&1 || true
+        # rerere can land the same fold the patch was exported to carry. Then
+        # `git am --3way` conflicts on a tree that already has the fix, and
+        # reverse-check is the proof the content is present.
+        if git apply --reverse --check "$p" >/dev/null 2>&1; then
+          log "integration patch already in $INTEGRATION: $(basename "$p")"
+          continue
+        fi
         die "integration patch failed: $p (the am was aborted; the tree is clean)"
+      fi
+      # `git am` on a patch whose hunks are already in the tree exits 0 without
+      # creating a commit. That used to die in assert_patch_landed, which is
+      # right for an empty format-patch of a merge. It is wrong once rerere
+      # already replayed the same fold: the fix IS in $INTEGRATION.
+      if [[ "$(git rev-parse HEAD)" == "$before" ]]; then
+        log "integration patch already in $INTEGRATION: $(basename "$p")"
+        continue
       fi
       assert_patch_landed "$p" "$before"
     fi
