@@ -9,6 +9,7 @@ package io.element.android.libraries.core.mimetype
 
 import com.google.common.truth.Truth.assertThat
 import io.element.android.libraries.core.mimetype.MimeTypes.ensureDefaultSubtype
+import io.element.android.libraries.core.mimetype.MimeTypes.withDefaultSubtype
 import org.junit.Test
 
 class MimeTypesTest {
@@ -31,5 +32,12 @@ class MimeTypesTest {
         assertThat(MimeTypes.Any.ensureDefaultSubtype()).isEqualTo(MimeTypes.OctetStream)
         assertThat("text/*".ensureDefaultSubtype()).isEqualTo(MimeTypes.OctetStream)
         assertThat(null.ensureDefaultSubtype()).isEqualTo(MimeTypes.OctetStream)
+    }
+
+    @Test
+    fun `withDefaultSubtype delegates to ensureDefaultSubtype`() {
+        assertThat(MimeTypes.Png.withDefaultSubtype()).isEqualTo(MimeTypes.Png)
+        assertThat(MimeTypes.Images.withDefaultSubtype()).isEqualTo(MimeTypes.Jpeg)
+        assertThat(null.withDefaultSubtype()).isEqualTo(MimeTypes.OctetStream)
     }
 }
