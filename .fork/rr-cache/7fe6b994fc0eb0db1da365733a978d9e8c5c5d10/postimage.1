@@ -6,294 +6,410 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
+@file:OptIn(ExperimentalCoroutinesApi::class)
+
 package io.element.android.features.preferences.impl.developer
 
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.MutableState
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.graphics.toArgb
-import dev.zacsweers.metro.Assisted
-import dev.zacsweers.metro.AssistedFactory
-import dev.zacsweers.metro.AssistedInject
+import androidx.compose.ui.graphics.Color
+import com.google.common.truth.Truth.assertThat
 import io.element.android.features.enterprise.api.EnterpriseService
-import io.element.android.features.preferences.impl.developer.appsettings.AppDeveloperSettingsState
-import io.element.android.features.preferences.impl.tasks.ClearCacheUseCase
-import io.element.android.features.preferences.impl.tasks.ComputeCacheSizeUseCase
-import io.element.android.features.preferences.impl.tasks.MarkAllRoomsAsRead
+import io.element.android.features.enterprise.test.FakeEnterpriseService
+import io.element.android.features.preferences.impl.developer.appsettings.anAppDeveloperSettingsState
+import io.element.android.features.preferences.impl.tasks.FakeClearCacheUseCase
+import io.element.android.features.preferences.impl.tasks.FakeComputeCacheSizeUseCase
+import io.element.android.features.preferences.impl.tasks.FakeMarkAllRoomsAsRead
 import io.element.android.features.preferences.impl.tasks.VacuumStoresUseCase
 import io.element.android.features.preferences.impl.utils.ShowDeveloperSettingsProvider
-import io.element.android.libraries.androidutils.filesize.FileSizeFormatter
+import io.element.android.libraries.androidutils.filesize.FakeFileSizeFormatter
 import io.element.android.libraries.architecture.AsyncAction
 import io.element.android.libraries.architecture.AsyncData
-import io.element.android.libraries.architecture.Presenter
-import io.element.android.libraries.architecture.runCatchingUpdatingState
-import io.element.android.libraries.core.data.ByteUnit
-import io.element.android.libraries.core.extensions.runCatchingExceptions
+import io.element.android.libraries.core.data.megaBytes
 import io.element.android.libraries.core.meta.BuildMeta
-import io.element.android.libraries.featureflag.api.FeatureFlagService
+import io.element.android.libraries.core.meta.BuildType
 import io.element.android.libraries.featureflag.api.FeatureFlags
-import io.element.android.libraries.matrix.api.MatrixClient
+import io.element.android.libraries.featureflag.test.FakeFeatureFlagService
 import io.element.android.libraries.matrix.api.analytics.GetDatabaseSizesUseCase
+import io.element.android.libraries.matrix.api.analytics.SdkStoreSizes
 import io.element.android.libraries.matrix.api.core.DeviceId
 import io.element.android.libraries.matrix.api.core.SessionId
 import io.element.android.libraries.matrix.api.notificationsettings.NotificationSettingsService
-import io.element.android.libraries.matrix.api.search.MessageSearchIndexer
 import io.element.android.libraries.matrix.api.search.MessageSearchSweepActivity
 import io.element.android.libraries.matrix.api.search.SearchBackfillCursor
-import kotlinx.collections.immutable.ImmutableMap
-import kotlinx.collections.immutable.toImmutableMap
+import io.element.android.libraries.matrix.test.A_DEVICE_ID
+import io.element.android.libraries.matrix.test.A_SESSION_ID
+import io.element.android.libraries.matrix.test.FakeMatrixClient
+import io.element.android.libraries.matrix.test.core.aBuildMeta
+import io.element.android.libraries.matrix.test.notificationsettings.FakeNotificationSettingsService
+import io.element.android.libraries.matrix.test.search.FakeMessageSearchIndexer
+import io.element.android.libraries.preferences.test.InMemoryAppPreferencesStore
+import io.element.android.tests.testutils.WarmUpRule
+import io.element.android.tests.testutils.consumeItemsUntilPredicate
+import io.element.android.tests.testutils.lambda.lambdaError
+import io.element.android.tests.testutils.lambda.lambdaRecorder
+import io.element.android.tests.testutils.lambda.value
+import io.element.android.tests.testutils.test
+import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
-import kotlinx.serialization.ExperimentalSerializationApi
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonElement
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.runTest
+import org.junit.Rule
+import org.junit.Test
+import kotlin.coroutines.EmptyCoroutineContext
 
-@AssistedInject
-class DeveloperSettingsPresenter(
-    @Assisted private val navigator: DeveloperSettingsNavigator,
-    private val appDeveloperSettingsPresenter: Presenter<AppDeveloperSettingsState>,
-    private val sessionId: SessionId,
-    private val deviceId: DeviceId,
-    private val computeCacheSizeUseCase: ComputeCacheSizeUseCase,
-    private val clearCacheUseCase: ClearCacheUseCase,
-    private val enterpriseService: EnterpriseService,
-    private val vacuumStoresUseCase: VacuumStoresUseCase,
-    private val databaseSizesUseCase: GetDatabaseSizesUseCase,
-    private val fileSizeFormatter: FileSizeFormatter,
-    private val markAllRoomsAsRead: MarkAllRoomsAsRead,
-    private val featureFlagService: FeatureFlagService,
-    private val matrixClient: MatrixClient,
-    private val messageSearchIndexer: MessageSearchIndexer,
-    private val showDeveloperSettingsProvider: ShowDeveloperSettingsProvider,
-    private val buildMeta: BuildMeta,
-    private val notificationSettingsService: NotificationSettingsService,
-) : Presenter<DeveloperSettingsState> {
-    @AssistedFactory
-    fun interface Factory {
-        fun create(navigator: DeveloperSettingsNavigator): DeveloperSettingsPresenter
-    }
+private const val A_PUSH_RULES_CONTENT = """{"global":{"override":[{"rule_id":".m.rule.master","enabled":false}]}}"""
+private const val A_PUSH_RULES_CONTENT_PRETTY_PRINTED = """{
+  "global": {
+    "override": [
+      {
+        "rule_id": ".m.rule.master",
+        "enabled": false
+      }
+    ]
+  }
+}"""
+private val AN_EXCEPTION = Exception("A failure")
 
-    @Composable
-    override fun present(): DeveloperSettingsState {
-        val cacheSize = remember {
-            mutableStateOf<AsyncData<String>>(AsyncData.Uninitialized)
-        }
-        val databaseSizes = remember {
-            mutableStateOf<AsyncData<ImmutableMap<String, String>>>(AsyncData.Uninitialized)
-        }
-        val clearCacheAction = remember {
-            mutableStateOf<AsyncAction<Unit>>(AsyncAction.Uninitialized)
-        }
-        val markAllRoomsAsReadAction = remember {
-            mutableStateOf<AsyncAction<Unit>>(AsyncAction.Uninitialized)
-        }
-        val pushRulesAction = remember {
-            mutableStateOf<AsyncAction<Unit>>(AsyncAction.Uninitialized)
-        }
-        var showColorPicker by remember {
-            mutableStateOf(false)
-        }
-        LaunchedEffect(Unit) {
-            computeDatabaseSizes(databaseSizes)
-        }
-        val coroutineScope = rememberCoroutineScope()
-        // Compute cache size each time the clear cache action value is changed
-        LaunchedEffect(clearCacheAction.value.isSuccess()) {
-            computeCacheSize(cacheSize)
-        }
+class DeveloperSettingsPresenterTest {
+    @get:Rule
+    val warmUpRule = WarmUpRule()
 
-        val isMessageSearchFlagEnabled by remember {
-            featureFlagService.isFeatureEnabledFlow(FeatureFlags.MessageSearch)
-        }.collectAsState(initial = false)
-        val sweepActivity by remember {
-            messageSearchIndexer.userSweepActivityFlow(sessionId)
-        }.collectAsState(initial = MessageSearchSweepActivity.NONE)
-        val sweepCursor by remember {
-            messageSearchIndexer.cursorFlow(sessionId)
-        }.collectAsState(initial = null)
-        val messageSearchIndexStatus = messageSearchIndexStatus(
-            flagEnabled = isMessageSearchFlagEnabled,
-            indexAvailable = matrixClient.isMessageSearchAvailable,
-            sweepActivity = sweepActivity,
-            cursor = sweepCursor,
-        )
-
-        val showDeveloperSettings by showDeveloperSettingsProvider.showDeveloperSettings.collectAsState()
-
-        fun handleEvent(event: DeveloperSettingsEvent) {
-            when (event) {
-                DeveloperSettingsEvent.ClearCache -> coroutineScope.clearCache(clearCacheAction)
-                is DeveloperSettingsEvent.ChangeBrandColor -> coroutineScope.launch {
-                    showColorPicker = false
-                    val color = event.color
-                        ?.toArgb()
-                        ?.toHexString(HexFormat.UpperCase)
-                        ?.substring(2, 8)
-                        ?.padStart(7, '#')
-                    enterpriseService.overrideBrandColor(sessionId, color)
-                }
-                is DeveloperSettingsEvent.SetShowColorPicker -> {
-                    showColorPicker = event.show
-                }
-                is DeveloperSettingsEvent.SetShowDeveloperSettings -> {
-                    showDeveloperSettingsProvider.setShowDeveloperSettings(event.show)
-                }
-                DeveloperSettingsEvent.VacuumStores -> coroutineScope.launch {
-                    vacuumStoresUseCase()
-                }
-                is DeveloperSettingsEvent.MarkAllRoomsAsRead -> {
-                    if (event.needsConfirmation) {
-                        markAllRoomsAsReadAction.value = AsyncAction.ConfirmingNoParams
-                    } else {
-                        coroutineScope.markAllRoomsAsRead(
-                            markAllRoomsAsReadAction = markAllRoomsAsReadAction,
-                        )
-                    }
-                }
-                DeveloperSettingsEvent.DismissMarkAllRoomsAsReadConfirmation -> {
-                    markAllRoomsAsReadAction.value = AsyncAction.Uninitialized
-                }
-                DeveloperSettingsEvent.OpenPushRules -> coroutineScope.openPushRules(pushRulesAction)
-                DeveloperSettingsEvent.DismissPushRulesError -> {
-                    pushRulesAction.value = AsyncAction.Uninitialized
-                }
-                DeveloperSettingsEvent.StartSearchIndexing -> coroutineScope.launch {
-                    messageSearchIndexer.startUserInitiatedSweep(sessionId)
-                }
-                DeveloperSettingsEvent.CancelSearchIndexing -> {
-                    messageSearchIndexer.cancelSweep(sessionId)
-                }
-            }
-        }
-
-        val appDeveloperSettingsState = appDeveloperSettingsPresenter.present()
-        return DeveloperSettingsState(
-            showDeveloperSettings = showDeveloperSettings,
-            appDeveloperSettingsState = appDeveloperSettingsState,
-            cacheSize = cacheSize.value,
-            databaseSizes = databaseSizes.value,
-            clearCacheAction = clearCacheAction.value,
-            markAllRoomsAsReadAction = markAllRoomsAsReadAction.value,
-            pushRulesAction = pushRulesAction.value,
-            isEnterpriseBuild = buildMeta.isEnterpriseBuild,
-            showColorPicker = showColorPicker,
-            messageSearchIndexStatus = messageSearchIndexStatus,
-            deviceId = deviceId,
-            eventSink = ::handleEvent,
-        )
-    }
-
-    /**
-     * The order of the checks is the trust order of the signals: the flag gates everything, an
-     * unattached index makes any action pointless, live WorkManager activity beats whatever the
-     * stored cursor says (it may be a stale mid-flight snapshot of the sweep that is about to
-     * resume), and only then does the cursor get to describe the past.
-     */
-    private fun messageSearchIndexStatus(
-        flagEnabled: Boolean,
-        indexAvailable: Boolean,
-        sweepActivity: MessageSearchSweepActivity,
-        cursor: SearchBackfillCursor?,
-    ): MessageSearchIndexStatus {
-        return when {
-            !flagEnabled -> MessageSearchIndexStatus.Hidden
-            !indexAvailable -> MessageSearchIndexStatus.RestartNeeded
-            sweepActivity == MessageSearchSweepActivity.RUNNING -> MessageSearchIndexStatus.Running(
-                roomsDone = cursor?.index ?: 0,
-                roomsTotal = cursor?.queue?.size ?: 0,
-            )
-            sweepActivity == MessageSearchSweepActivity.WAITING -> MessageSearchIndexStatus.WaitingForRun
-            cursor == null -> MessageSearchIndexStatus.Idle
-            !cursor.isDrained -> MessageSearchIndexStatus.Paused(
-                roomsDone = cursor.index,
-                roomsTotal = cursor.queue.size,
-            )
-            cursor.queue.isNotEmpty() -> MessageSearchIndexStatus.Finished(
-                roomsSwept = cursor.queue.size,
-                pagesFetched = cursor.pagesIssued,
-            )
-            else -> MessageSearchIndexStatus.Idle
-        }
-    }
-
-    private fun CoroutineScope.computeCacheSize(cacheSize: MutableState<AsyncData<String>>) = launch {
-        suspend {
-            computeCacheSizeUseCase()
-        }.runCatchingUpdatingState(cacheSize)
-    }
-
-    private fun CoroutineScope.computeDatabaseSizes(databaseSizes: MutableState<AsyncData<ImmutableMap<String, String>>>) = launch {
-        suspend {
-            databaseSizesUseCase(sessionId).getOrThrow().let { sizes ->
-                buildMap {
-                    sizes.stateStore?.let { stateStoreSize ->
-                        put("State store", fileSizeFormatter.format(stateStoreSize.into(ByteUnit.BYTES), useShortFormat = true))
-                    }
-                    sizes.eventCacheStore?.let { eventCacheStoreSize ->
-                        put("Event cache store", fileSizeFormatter.format(eventCacheStoreSize.into(ByteUnit.BYTES), useShortFormat = true))
-                    }
-                    sizes.mediaStore?.let { mediaStoreSize ->
-                        put("Media store", fileSizeFormatter.format(mediaStoreSize.into(ByteUnit.BYTES), useShortFormat = true))
-                    }
-                    sizes.cryptoStore?.let { cryptoStoreSize ->
-                        put("Crypto store", fileSizeFormatter.format(cryptoStoreSize.into(ByteUnit.BYTES), useShortFormat = true))
-                    }
-                }
-            }.toImmutableMap()
-        }.runCatchingUpdatingState(databaseSizes)
-    }
-
-    private fun CoroutineScope.clearCache(clearCacheAction: MutableState<AsyncAction<Unit>>) = launch {
-        suspend { clearCacheUseCase() }.runCatchingUpdatingState(state = clearCacheAction)
-    }
-
-    private fun CoroutineScope.markAllRoomsAsRead(
-        markAllRoomsAsReadAction: MutableState<AsyncAction<Unit>>,
-    ) = launch {
-        suspend {
-            markAllRoomsAsRead().getOrThrow()
-        }.runCatchingUpdatingState(state = markAllRoomsAsReadAction)
-    }
-
-    private fun CoroutineScope.openPushRules(pushRulesAction: MutableState<AsyncAction<Unit>>) = launch {
-        pushRulesAction.value = AsyncAction.Loading
-        notificationSettingsService.getRawPushRules()
-            .onSuccess { content ->
-                pushRulesAction.value = AsyncAction.Uninitialized
-                navigator.openPushRules(
-                    filename = pushRulesFilename(),
-                    content = content.orEmpty().prettyPrintJson(),
+    @Test
+    fun `present - ensures initial states are correct`() = runTest {
+        val presenter = createDeveloperSettingsPresenter(
+            databaseSizesUseCase = GetDatabaseSizesUseCase {
+                Result.success(
+                    SdkStoreSizes(stateStore = 10.megaBytes, eventCacheStore = 10.megaBytes, mediaStore = 10.megaBytes, cryptoStore = 10.megaBytes)
                 )
             }
-            .onFailure {
-                pushRulesAction.value = AsyncAction.Failure(it)
+        )
+        presenter.test {
+            awaitItem().also { state ->
+                assertThat(state.appDeveloperSettingsState.features).isNotEmpty()
+                assertThat(state.clearCacheAction).isEqualTo(AsyncAction.Uninitialized)
+                assertThat(state.cacheSize).isEqualTo(AsyncData.Uninitialized)
+                assertThat(state.isEnterpriseBuild).isFalse()
+                assertThat(state.showColorPicker).isFalse()
+                assertThat(state.deviceId).isEqualTo(A_DEVICE_ID)
             }
+            awaitItem().also { state ->
+                assertThat(state.cacheSize.isLoading()).isTrue()
+            }
+            awaitItem().also { state ->
+                assertThat(state.cacheSize).isInstanceOf(AsyncData.Success::class.java)
+                assertThat(state.databaseSizes.dataOrNull()).isEqualTo(
+                    persistentMapOf(
+                        "State store" to "10485760 Bytes",
+                        "Event cache store" to "10485760 Bytes",
+                        "Media store" to "10485760 Bytes",
+                        "Crypto store" to "10485760 Bytes"
+                    )
+                )
+            }
+        }
     }
 
-    /**
-     * The user id contains a colon, which is not a valid character for a file name on all the file systems,
-     * so replace it by an underscore.
-     */
-    private fun pushRulesFilename() = "push_rules${sessionId.value.replace(':', '_')}.json"
-}
+    @Test
+    fun `present - clear cache`() = runTest {
+        val clearCacheUseCase = FakeClearCacheUseCase()
+        val presenter = createDeveloperSettingsPresenter(clearCacheUseCase = clearCacheUseCase)
+        presenter.test {
+            skipItems(2)
+            assertThat(clearCacheUseCase.executeHasBeenCalled).isFalse()
+            awaitItem().also { state ->
+                state.eventSink(DeveloperSettingsEvent.ClearCache)
+            }
+            awaitItem().also { state ->
+                assertThat(state.clearCacheAction).isInstanceOf(AsyncAction.Loading::class.java)
+            }
+            awaitItem().also { state ->
+                assertThat(state.clearCacheAction).isInstanceOf(AsyncAction.Success::class.java)
+                assertThat(clearCacheUseCase.executeHasBeenCalled).isTrue()
+            }
+            awaitItem().also { state ->
+                assertThat(state.cacheSize).isInstanceOf(AsyncData.Loading::class.java)
+            }
+            awaitItem().also { state ->
+                assertThat(state.cacheSize).isInstanceOf(AsyncData.Success::class.java)
+            }
+        }
+    }
 
-@OptIn(ExperimentalSerializationApi::class)
-private val prettyPrintJson = Json {
-    prettyPrint = true
-    // Keep the indentation small, for a better rendering on mobile.
-    prettyPrintIndent = "  "
-}
+    @Test
+    fun `present - enterprise build can change the brand color`() = runTest {
+        val overrideBrandColorResult = lambdaRecorder<SessionId?, String?, Unit> { _, _ -> }
+        val presenter = createDeveloperSettingsPresenter(
+            enterpriseService = FakeEnterpriseService(overrideBrandColorResult = overrideBrandColorResult),
+            buildMeta = aBuildMeta(isEnterpriseBuild = true),
+        )
+        presenter.test {
+            skipItems(1)
+            val initialState = awaitItem()
+            assertThat(initialState.isEnterpriseBuild).isTrue()
+            initialState.eventSink(DeveloperSettingsEvent.SetShowColorPicker(true))
+            assertThat(awaitItem().showColorPicker).isTrue()
+            initialState.eventSink(DeveloperSettingsEvent.SetShowColorPicker(false))
+            assertThat(awaitItem().showColorPicker).isFalse()
+            initialState.eventSink(DeveloperSettingsEvent.SetShowColorPicker(true))
+            assertThat(awaitItem().showColorPicker).isTrue()
+            initialState.eventSink(DeveloperSettingsEvent.ChangeBrandColor(Color.Green))
+            assertThat(awaitItem().showColorPicker).isFalse()
+            skipItems(1)
+            overrideBrandColorResult.assertions().isCalledOnce()
+                .with(value(A_SESSION_ID), value("#00FF00"))
+        }
+    }
 
-/**
- * Pretty print this json content, so that it is readable when rendered.
- * Return the content as is if it is not valid json.
- */
-private fun String.prettyPrintJson(): String = runCatchingExceptions {
-    prettyPrintJson.encodeToString(JsonElement.serializer(), prettyPrintJson.parseToJsonElement(this))
-}.getOrDefault(this)
+    @Test
+    fun `present - confirm mark all rooms as read`() = runTest {
+        val markAllRoomsAsRead = FakeMarkAllRoomsAsRead()
+        val presenter = createDeveloperSettingsPresenter(markAllRoomsAsRead = markAllRoomsAsRead)
+        presenter.test {
+            skipItems(2)
+            val initialState = awaitItem()
+            initialState.eventSink(DeveloperSettingsEvent.MarkAllRoomsAsRead(needsConfirmation = true))
+            val stateWithConfirmation = awaitItem()
+            assertThat(stateWithConfirmation.markAllRoomsAsReadAction.isConfirming()).isTrue()
+            stateWithConfirmation.eventSink(DeveloperSettingsEvent.MarkAllRoomsAsRead(needsConfirmation = false))
+            awaitItem().also { state ->
+                assertThat(state.markAllRoomsAsReadAction.isConfirming()).isFalse()
+                assertThat(state.markAllRoomsAsReadAction).isInstanceOf(AsyncAction.Loading::class.java)
+            }
+            awaitItem().also { state ->
+                assertThat(state.markAllRoomsAsReadAction).isInstanceOf(AsyncAction.Success::class.java)
+                assertThat(markAllRoomsAsRead.invokeCallCount).isEqualTo(1)
+            }
+        }
+    }
+
+    @Test
+    fun `present - VacuumStores action invokes the VacuumStoresUseCase`() = runTest {
+        var vacuumCalled = false
+        val presenter = createDeveloperSettingsPresenter(
+            vacuumStoresUseCase = VacuumStoresUseCase {
+                vacuumCalled = true
+            }
+        )
+        presenter.test {
+            val state = awaitItem()
+            assertThat(vacuumCalled).isFalse()
+            state.eventSink(DeveloperSettingsEvent.VacuumStores)
+            skipItems(1)
+            assertThat(vacuumCalled).isTrue()
+        }
+    }
+
+
+    @Test
+    fun `present - message search index section is hidden while the flag is off`() = runTest {
+        val presenter = createDeveloperSettingsPresenter()
+        presenter.test {
+            assertThat(awaitItem().messageSearchIndexStatus).isEqualTo(MessageSearchIndexStatus.Hidden)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `present - message search index needs a restart when the flag is on but no index is attached`() = runTest {
+        val presenter = createDeveloperSettingsPresenter(
+            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.MessageSearch.key to true)),
+        )
+        presenter.test {
+            consumeItemsUntilPredicate { it.messageSearchIndexStatus == MessageSearchIndexStatus.RestartNeeded }
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `present - message search index maps a running sweep to progress`() = runTest {
+        val indexer = FakeMessageSearchIndexer()
+        val presenter = createDeveloperSettingsPresenter(
+            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.MessageSearch.key to true)),
+            matrixClient = FakeMatrixClient(isMessageSearchAvailable = true),
+            messageSearchIndexer = indexer,
+        )
+        presenter.test {
+            indexer.userSweepActivityFlow.value = MessageSearchSweepActivity.RUNNING
+            indexer.cursorFlow.value = SearchBackfillCursor(
+                generation = 1,
+                queue = listOf("!a:server.org", "!b:server.org", "!c:server.org"),
+                index = 1,
+            )
+            consumeItemsUntilPredicate {
+                it.messageSearchIndexStatus == MessageSearchIndexStatus.Running(roomsDone = 1, roomsTotal = 3)
+            }
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `present - message search index reports a drained sweep as finished`() = runTest {
+        val indexer = FakeMessageSearchIndexer()
+        val presenter = createDeveloperSettingsPresenter(
+            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.MessageSearch.key to true)),
+            matrixClient = FakeMatrixClient(isMessageSearchAvailable = true),
+            messageSearchIndexer = indexer,
+        )
+        presenter.test {
+            indexer.cursorFlow.value = SearchBackfillCursor(
+                generation = 1,
+                queue = listOf("!a:server.org", "!b:server.org"),
+                index = 2,
+                pagesIssued = 42,
+                finishedAt = 123L,
+            )
+            consumeItemsUntilPredicate {
+                it.messageSearchIndexStatus == MessageSearchIndexStatus.Finished(roomsSwept = 2, pagesFetched = 42)
+            }
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `present - start and cancel indexing delegate to the indexer`() = runTest {
+        val startRecorder = lambdaRecorder<SessionId, Unit> { }
+        val cancelRecorder = lambdaRecorder<SessionId, Unit> { }
+        val presenter = createDeveloperSettingsPresenter(
+            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.MessageSearch.key to true)),
+            matrixClient = FakeMatrixClient(isMessageSearchAvailable = true),
+            messageSearchIndexer = FakeMessageSearchIndexer(
+                startUserInitiatedSweepLambda = startRecorder,
+                cancelSweepLambda = cancelRecorder,
+            ),
+        )
+        presenter.test {
+            val state = awaitItem()
+            state.eventSink(DeveloperSettingsEvent.StartSearchIndexing)
+            state.eventSink(DeveloperSettingsEvent.CancelSearchIndexing)
+            cancelAndIgnoreRemainingEvents()
+        }
+        startRecorder.assertions().isCalledOnce().with(value(A_SESSION_ID))
+        cancelRecorder.assertions().isCalledOnce().with(value(A_SESSION_ID))
+    }
+
+    @Test
+    fun `present - OpenPushRules event navigates to the push rules content`() = runTest {
+        val openPushRulesLambda = lambdaRecorder<String, String, Unit> { _, _ -> }
+        val presenter = createDeveloperSettingsPresenter(
+            navigator = DeveloperSettingsNavigator(openPushRulesLambda),
+            notificationSettingsService = FakeNotificationSettingsService(
+                getRawPushRulesResult = { Result.success(A_PUSH_RULES_CONTENT) },
+            ),
+        )
+        presenter.test {
+            val state = awaitItem()
+            assertThat(state.pushRulesAction).isEqualTo(AsyncAction.Uninitialized)
+            state.eventSink(DeveloperSettingsEvent.OpenPushRules)
+            skipItems(1)
+            awaitItem().also {
+                assertThat(it.pushRulesAction).isEqualTo(AsyncAction.Uninitialized)
+            }
+            openPushRulesLambda.assertions().isCalledOnce().with(
+                value("push_rules@alice_server.org.json"),
+                value(A_PUSH_RULES_CONTENT_PRETTY_PRINTED),
+            )
+        }
+    }
+
+    @Test
+    fun `present - OpenPushRules event keeps the content as is when it is not valid json`() = runTest {
+        val openPushRulesLambda = lambdaRecorder<String, String, Unit> { _, _ -> }
+        val presenter = createDeveloperSettingsPresenter(
+            navigator = DeveloperSettingsNavigator(openPushRulesLambda),
+            notificationSettingsService = FakeNotificationSettingsService(
+                getRawPushRulesResult = { Result.success("not json") },
+            ),
+        )
+        presenter.test {
+            awaitItem().eventSink(DeveloperSettingsEvent.OpenPushRules)
+            skipItems(2)
+            openPushRulesLambda.assertions().isCalledOnce().with(
+                value("push_rules@alice_server.org.json"),
+                value("not json"),
+            )
+        }
+    }
+
+    @Test
+    fun `present - OpenPushRules event failure can be dismissed`() = runTest {
+        val presenter = createDeveloperSettingsPresenter(
+            notificationSettingsService = FakeNotificationSettingsService(
+                getRawPushRulesResult = { Result.failure(AN_EXCEPTION) },
+            ),
+        )
+        presenter.test {
+            val state = awaitItem()
+            state.eventSink(DeveloperSettingsEvent.OpenPushRules)
+            skipItems(1)
+            awaitItem().also {
+                assertThat(it.pushRulesAction).isEqualTo(AsyncAction.Failure(AN_EXCEPTION))
+                it.eventSink(DeveloperSettingsEvent.DismissPushRulesError)
+            }
+            awaitItem().also {
+                assertThat(it.pushRulesAction).isEqualTo(AsyncAction.Uninitialized)
+            }
+        }
+    }
+
+
+    @Test
+    fun `present - turning the developer options switch off persists the choice`() = runTest {
+        val appPreferencesStore = InMemoryAppPreferencesStore(showDeveloperSettings = true)
+        val presenter = createDeveloperSettingsPresenter(
+            showDeveloperSettingsProvider = ShowDeveloperSettingsProvider(
+                buildMeta = aBuildMeta(BuildType.DEBUG),
+                appPreferencesStore = appPreferencesStore,
+                appCoroutineScope = backgroundScope,
+            ),
+        )
+        presenter.test {
+            val state = consumeItemsUntilPredicate { it.showDeveloperSettings }.last()
+            state.eventSink(DeveloperSettingsEvent.SetShowDeveloperSettings(false))
+            consumeItemsUntilPredicate { !it.showDeveloperSettings }
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertThat(appPreferencesStore.showDeveloperSettingsFlow().first()).isFalse()
+    }
+
+    private fun createDeveloperSettingsPresenter(
+        navigator: DeveloperSettingsNavigator = DeveloperSettingsNavigator { _, _ -> lambdaError() },
+        sessionId: SessionId = A_SESSION_ID,
+        deviceId: DeviceId = A_DEVICE_ID,
+        cacheSizeUseCase: FakeComputeCacheSizeUseCase = FakeComputeCacheSizeUseCase(),
+        clearCacheUseCase: FakeClearCacheUseCase = FakeClearCacheUseCase(),
+        enterpriseService: EnterpriseService = FakeEnterpriseService(),
+        vacuumStoresUseCase: VacuumStoresUseCase = VacuumStoresUseCase {},
+        databaseSizesUseCase: GetDatabaseSizesUseCase = GetDatabaseSizesUseCase { Result.success(SdkStoreSizes(null, null, null, null)) },
+        markAllRoomsAsRead: FakeMarkAllRoomsAsRead = FakeMarkAllRoomsAsRead(),
+        featureFlagService: FakeFeatureFlagService = FakeFeatureFlagService(),
+        matrixClient: FakeMatrixClient = FakeMatrixClient(),
+        messageSearchIndexer: FakeMessageSearchIndexer = FakeMessageSearchIndexer(),
+        showDeveloperSettingsProvider: ShowDeveloperSettingsProvider = ShowDeveloperSettingsProvider(
+            buildMeta = aBuildMeta(BuildType.DEBUG),
+            appPreferencesStore = InMemoryAppPreferencesStore(showDeveloperSettings = true),
+            appCoroutineScope = CoroutineScope(EmptyCoroutineContext),
+        ),
+        buildMeta: BuildMeta = aBuildMeta(),
+        notificationSettingsService: NotificationSettingsService = FakeNotificationSettingsService(),
+    ): DeveloperSettingsPresenter {
+        return DeveloperSettingsPresenter(
+            navigator = navigator,
+            appDeveloperSettingsPresenter = { anAppDeveloperSettingsState() },
+            sessionId = sessionId,
+            deviceId = deviceId,
+            computeCacheSizeUseCase = cacheSizeUseCase,
+            clearCacheUseCase = clearCacheUseCase,
+            enterpriseService = enterpriseService,
+            vacuumStoresUseCase = vacuumStoresUseCase,
+            databaseSizesUseCase = databaseSizesUseCase,
+            fileSizeFormatter = FakeFileSizeFormatter(),
+            markAllRoomsAsRead = markAllRoomsAsRead,
+            featureFlagService = featureFlagService,
+            matrixClient = matrixClient,
+            messageSearchIndexer = messageSearchIndexer,
+            showDeveloperSettingsProvider = showDeveloperSettingsProvider,
+            buildMeta = buildMeta,
+            notificationSettingsService = notificationSettingsService,
+        )
+    }
+}
