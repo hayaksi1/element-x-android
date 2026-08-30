@@ -12,6 +12,7 @@ import dev.zacsweers.metro.Inject
 import io.element.android.features.enterprise.api.ClientBuilderEnterpriseHook
 import io.element.android.libraries.androidutils.crypto.ClientSecret
 import io.element.android.libraries.core.coroutine.CoroutineDispatchers
+import io.element.android.libraries.core.extensions.runCatchingExceptions
 import io.element.android.libraries.core.data.ByteUnit
 import io.element.android.libraries.core.data.megaBytes
 import io.element.android.libraries.di.CacheDirectory
@@ -83,13 +84,37 @@ class RustMatrixClientFactory(
         val sessionPaths = sessionData.getSessionPaths()
         val isMessageSearchAvailable = featureFlagService.isFeatureEnabled(FeatureFlags.MessageSearch)
         val indexDirectory = File(sessionPaths.fileDirectory, SEARCH_INDEX_DIRECTORY)
+        val coverageMarker = File(sessionPaths.fileDirectory, SEARCH_INDEX_COVERAGE_MARKER)
 
         if (!isMessageSearchAvailable && indexDirectory.exists()) {
             // With search off, events reach the event cache unindexed and the index can never
             // catch up on them. Delete it so the next enable rebuilds it from a state where
             // coverage can actually be guaranteed, instead of resuming a silently stale index.
+            // The marker goes first: if this is interrupted after a partial directory deletion,
+            // a surviving marker would let a later restore trust the broken index.
             Timber.tag("RustMatrixClient").i("Message search is disabled, deleting the stale search index")
-            indexDirectory.deleteRecursively()
+            if (!coverageMarker.exists() || coverageMarker.delete()) {
+                indexDirectory.deleteRecursively()
+            } else {
+                Timber.tag("RustMatrixClient").w("Could not invalidate the search index coverage marker, keeping the index for now")
+            }
+        }
+
+        // Events already in the event cache store when the index is created are re-hydrated from
+        // disk on pagination, and the SDK drops those updates before the indexer — they would stay
+        // unsearchable forever. Deleting the store once forces that history back through the
+        // network, where indexing genuinely happens.
+        val needsCoverageBootstrap = isMessageSearchAvailable &&
+            !(indexDirectory.exists() && coverageMarker.exists()) &&
+            File(sessionPaths.cacheDirectory, EVENT_CACHE_STORE_NAME).exists()
+
+        var coverageEstablished = !needsCoverageBootstrap
+        if (needsCoverageBootstrap) {
+            Timber.tag("RustMatrixClient").i("The event cache predates the search index, deleting the event cache store so history gets re-fetched and indexed")
+            coverageEstablished = deleteEventCacheStore(sessionPaths)
+            if (!coverageEstablished) {
+                Timber.tag("RustMatrixClient").w("Could not delete the event cache store, will retry on the next start")
+            }
         }
 
         val client = getBaseClientBuilder(
@@ -117,8 +142,25 @@ class RustMatrixClientFactory(
 
         client.restoreSession(sessionData.toSession())
 
+        if (isMessageSearchAvailable && coverageEstablished && !coverageMarker.exists()) {
+            // Failing to record coverage must never fail the session restore; without the marker
+            // the bootstrap simply runs again on the next start.
+            runCatchingExceptions { coverageMarker.createNewFile() }
+                .onFailure { Timber.tag("RustMatrixClient").w(it, "Failed to write the search index coverage marker") }
+        }
+
         create(client, sessionData, isMessageSearchAvailable)
     }
+
+    /**
+     * Deletes the event cache store files. The WAL and SHM sidecars go first: if this is
+     * interrupted, a database without its WAL is merely stale, while a fresh database next to a
+     * leftover WAL is corruption waiting to be replayed.
+     */
+    private fun deleteEventCacheStore(sessionPaths: SessionPaths): Boolean =
+        listOf("$EVENT_CACHE_STORE_NAME-wal", "$EVENT_CACHE_STORE_NAME-shm", EVENT_CACHE_STORE_NAME)
+            .map { File(sessionPaths.cacheDirectory, it) }
+            .all { !it.exists() || it.delete() }
 
     suspend fun create(
         client: Client,
@@ -130,6 +172,16 @@ class RustMatrixClientFactory(
         // Must be called before creating the sync service, timelines etc.
         if (featureFlagService.isFeatureEnabled(FeatureFlags.AutomaticBackPagination)) {
             client.enableAutomaticBackpagination()
+        }
+
+        val sessionPaths = sessionData.getSessionPaths()
+        val coverageMarker = File(sessionPaths.fileDirectory, SEARCH_INDEX_COVERAGE_MARKER)
+        if (isMessageSearchAvailable && !coverageMarker.exists() && !File(sessionPaths.cacheDirectory, EVENT_CACHE_STORE_NAME).exists()) {
+            // Nothing has been cached yet — a fresh login, or a heal that just cleared the
+            // caches — so the index covers everything by construction. Recording that here
+            // spares fresh sessions a pointless cache clear on their first restart.
+            runCatchingExceptions { coverageMarker.createNewFile() }
+                .onFailure { Timber.tag("RustMatrixClient").w(it, "Failed to write the search index coverage marker") }
         }
 
         client.setUtdDelegate(UtdTracker(analyticsService))
@@ -240,6 +292,20 @@ class RustMatrixClientFactory(
  * Not the cache directory: the index is not disposable, and a cache wipe should not destroy it.
  */
 internal const val SEARCH_INDEX_DIRECTORY = "search-index"
+
+/**
+ * Marker file recording that the search index has seen every event since the event cache was last
+ * empty. Events already in the cache store when the index is created are re-hydrated from disk on
+ * pagination and never reach the indexer, so an index without this guarantee silently misses them.
+ * Sibling of [SEARCH_INDEX_DIRECTORY] rather than inside it: the SDK owns that directory's layout.
+ */
+internal const val SEARCH_INDEX_COVERAGE_MARKER = "search-index.covered"
+
+/**
+ * The SDK's event cache store inside the session's cache directory. The name is fixed by the SDK's
+ * SQLite store; its presence is how we detect that events were cached before the index existed.
+ */
+internal const val EVENT_CACHE_STORE_NAME = "matrix-sdk-event-cache.sqlite3"
 
 sealed interface ClientBuilderSlidingSync {
     // The proxy will be supplied when restoring the Session.
