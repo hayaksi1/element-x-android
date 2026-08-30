@@ -68,7 +68,9 @@ private object CustomHtmlToDomParser {
     fun document(html: String): Document {
         val outputSettings = OutputSettings().prettyPrint(false).indentAmount(0)
         val cleanHtml = Jsoup.clean(html.withHeadingsAsBoldParagraphs(), "", safeList, outputSettings)
-        return Jsoup.parse(cleanHtml)
+        return Jsoup.parse(cleanHtml).also { document ->
+            document.select("s, strike").forEach { it.tagName("del") }
+        }
     }
 
     private fun String.withHeadingsAsBoldParagraphs(): String {
@@ -95,6 +97,8 @@ private object CustomHtmlToDomParser {
             "em",
             "u",
             "del",
+            "s",
+            "strike",
             "code",
             "ul",
             "ol",
