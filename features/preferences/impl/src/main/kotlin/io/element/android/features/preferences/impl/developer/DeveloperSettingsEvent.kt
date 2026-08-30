@@ -10,13 +10,16 @@ package io.element.android.features.preferences.impl.developer
 
 import androidx.compose.ui.graphics.Color
 
-sealed interface DeveloperSettingsEvents {
-    data class SetShowColorPicker(val show: Boolean) : DeveloperSettingsEvents
-    data class ChangeBrandColor(val color: Color?) : DeveloperSettingsEvents
-    data object ClearCache : DeveloperSettingsEvents
-    data object VacuumStores : DeveloperSettingsEvents
-    data class MarkAllRoomsAsRead(val needsConfirmation: Boolean) : DeveloperSettingsEvents
-    data object DismissMarkAllRoomsAsReadConfirmation : DeveloperSettingsEvents
-    data object StartSearchIndexing : DeveloperSettingsEvents
-    data object CancelSearchIndexing : DeveloperSettingsEvents
+sealed interface DeveloperSettingsEvent {
+    data class SetShowColorPicker(val show: Boolean) : DeveloperSettingsEvent
+    data class ChangeBrandColor(val color: Color?) : DeveloperSettingsEvent
+    data object ClearCache : DeveloperSettingsEvent
+    data object VacuumStores : DeveloperSettingsEvent
+    data class MarkAllRoomsAsRead(val needsConfirmation: Boolean) : DeveloperSettingsEvent
+    data object DismissMarkAllRoomsAsReadConfirmation : DeveloperSettingsEvent
+    data object OpenPushRules : DeveloperSettingsEvent
+    data object DismissPushRulesError : DeveloperSettingsEvent
+    data class SetShowDeveloperSettings(val show: Boolean) : DeveloperSettingsEvent
+    data object StartSearchIndexing : DeveloperSettingsEvent
+    data object CancelSearchIndexing : DeveloperSettingsEvent
 }
