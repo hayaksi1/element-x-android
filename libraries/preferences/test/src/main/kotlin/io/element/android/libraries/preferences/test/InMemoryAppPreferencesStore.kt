@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.updateAndGet
 
 class InMemoryAppPreferencesStore(
     isDeveloperModeEnabled: Boolean = false,
+    hideSpaceRooms: Boolean = false,
     customElementCallBaseUrl: String? = null,
     hideInviteAvatars: Boolean? = null,
     timelineMediaPreviewValue: MediaPreviewValue? = null,
@@ -39,6 +40,7 @@ class InMemoryAppPreferencesStore(
     callRingtoneDisplayName: String? = null,
 ) : AppPreferencesStore {
     private val isDeveloperModeEnabled = MutableStateFlow(isDeveloperModeEnabled)
+    private val hideSpaceRooms = MutableStateFlow(hideSpaceRooms)
     private val customElementCallBaseUrl = MutableStateFlow(customElementCallBaseUrl)
     private val theme = MutableStateFlow(theme)
     private val roomListActivityVisibility = MutableStateFlow(roomListActivityVisibility)
@@ -69,6 +71,14 @@ class InMemoryAppPreferencesStore(
 
     override fun isDeveloperModeEnabledFlow(): Flow<Boolean> {
         return isDeveloperModeEnabled
+    }
+
+    override suspend fun setHideSpaceRooms(hide: Boolean) {
+        hideSpaceRooms.value = hide
+    }
+
+    override fun hideSpaceRoomsFlow(): Flow<Boolean> {
+        return hideSpaceRooms
     }
 
     override suspend fun setCustomElementCallBaseUrl(string: String?) {
