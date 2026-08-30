@@ -33,14 +33,15 @@
 # button as CodeBlockAction / CodeBlockBounds - so restoring them would not
 # compile. They are deliberately not carried.
 #
-# Carried by .fork/integration-patches/0002-carry-search-index-button-merge-content.patch,
-# verified with git apply --check and git am --3way at master: 2 files, 129
-# insertions, no rejects, braces balanced, both test names present exactly once.
+# The coverage marker is now in master via rerere of feature/search-index-button.
+# The 0002 integration patch was retired: git am --3way conflicts on a tree
+# that already has the helper, and reverse-check no longer applies.
 3e79bd6a61312f2abe837e39f43c9f8804b1b609
 
 # fix/developer-options-switch
 #
 # 8338fec20c carries SetShowDeveloperSettings (event, presenter handler, view
-# wiring, two tests). Cherry-pick --no-merges cannot replay a merge. Carried by
-# 0006-carry-developer-options-switch.patch.
+# wiring, two tests). Cherry-pick --no-merges cannot replay a merge. The 0006
+# integration patch was retired: git am --3way conflicts on a tree that already
+# has the switch via rerere of fix/developer-options-switch.
 8338fec20c71f61e6618b1fd7842c7dc065afa91
