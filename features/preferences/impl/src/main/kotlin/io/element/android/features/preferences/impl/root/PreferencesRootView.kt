@@ -8,7 +8,6 @@
 
 package io.element.android.features.preferences.impl.root
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -19,7 +18,10 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.unit.dp
@@ -338,11 +340,10 @@ private fun ColumnScope.GeneralSection(
         )
     }
     // Put developer settings at the end, so nothing bad happens if the user clicks 8 times to enable the entry
-    AnimatedVisibility(
-        visible = state.showDeveloperSettings,
-    ) {
-        DeveloperPreferencesView(onOpenDeveloperSettings)
-    }
+    DeveloperPreferencesView(
+        isVisible = state.showDeveloperSettings,
+        onOpenDeveloperSettings = onOpenDeveloperSettings,
+    )
 }
 
 @Composable
@@ -363,11 +364,21 @@ private fun ColumnScope.Footer(
 }
 
 @Composable
-private fun DeveloperPreferencesView(onOpenDeveloperSettings: () -> Unit) {
+private fun DeveloperPreferencesView(
+    isVisible: Boolean,
+    onOpenDeveloperSettings: () -> Unit,
+) {
     ListItem(
+        modifier = if (isVisible) {
+            Modifier
+        } else {
+            Modifier
+                .alpha(0f)
+                .clearAndSetSemantics { hideFromAccessibility() }
+        },
         content = { Text(stringResource(id = CommonStrings.common_developer_options)) },
         leadingContent = ListItemContent.Icon(IconSource.Vector(CompoundIcons.Code())),
-        onClick = onOpenDeveloperSettings
+        onClick = if (isVisible) onOpenDeveloperSettings else null,
     )
 }
 
