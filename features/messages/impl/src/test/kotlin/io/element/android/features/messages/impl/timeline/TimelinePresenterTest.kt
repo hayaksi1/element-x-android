@@ -1072,9 +1072,6 @@ class TimelinePresenterTest {
         val presenter = createTimelinePresenter(
             room = room,
             timeline = room.liveTimeline,
-        val presenter = createTimelinePresenter(
-            room = room,
-            timeline = room.liveTimeline,
         )
         presenter.test {
             val initialState = awaitFirstItem()
@@ -1094,9 +1091,6 @@ class TimelinePresenterTest {
             Result.success(true)
         }
         val room = aRoomWithDetachedTimeline(paginateLambda = paginateLambda)
-        val presenter = createTimelinePresenter(
-            room = room,
-            timeline = room.liveTimeline,
         val presenter = createTimelinePresenter(
             room = room,
             timeline = room.liveTimeline,
@@ -1121,9 +1115,6 @@ class TimelinePresenterTest {
             Result.success(false)
         }
         val room = aRoomWithDetachedTimeline(paginateLambda = paginateLambda)
-        val presenter = createTimelinePresenter(
-            room = room,
-            timeline = room.liveTimeline,
         val presenter = createTimelinePresenter(
             room = room,
             timeline = room.liveTimeline,
@@ -1837,14 +1828,6 @@ class TimelinePresenterTest {
     private fun aRoomWithDetachedTimeline(
         paginateLambda: (Timeline.PaginationDirection) -> Result<Boolean>,
         createTimelineResult: () -> Result<Timeline> = { Result.success(aDetachedTimeline(paginateLambda)) },
-    ): FakeJoinedRoom {
-        return FakeJoinedRoom(
-            liveTimeline = FakeTimeline(timelineItems = flowOf(emptyList())).apply {
-                this.paginateLambda = paginateLambda
-            },
-            createTimelineResult = { createTimelineResult() },
-        }
-
     ): FakeJoinedRoom {
         return FakeJoinedRoom(
             liveTimeline = FakeTimeline(timelineItems = flowOf(emptyList())).apply {

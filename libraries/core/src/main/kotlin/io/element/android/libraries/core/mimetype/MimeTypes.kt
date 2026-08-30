@@ -69,9 +69,6 @@ object MimeTypes {
      * concrete default for its top level type.
      */
     fun String?.ensureDefaultSubtype(): String = when {
-    }
-
-    fun String?.withDefaultSubtype(): String = when {
         this == null -> OctetStream
         hasSubtype(this) -> this
         this == Images -> Jpeg
@@ -79,4 +76,6 @@ object MimeTypes {
         this == Audio -> Mp3
         else -> OctetStream
     }
+
+    fun String?.withDefaultSubtype(): String = ensureDefaultSubtype()
 }
