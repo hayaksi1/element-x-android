@@ -38,13 +38,15 @@ import io.element.android.features.messages.impl.timeline.protection.TimelinePro
 import io.element.android.features.messages.impl.timeline.protection.aTimelineProtectionState
 import io.element.android.features.roomcall.api.RoomCallState
 import io.element.android.features.roomcall.api.aStandByCallState
-import io.element.android.features.roommembermoderation.api.RoomMemberModerationEvent
+import io.element.android.features.roommembermoderation.api.RoomMemberModerationEvents
 import io.element.android.features.roommembermoderation.api.RoomMemberModerationPermissions
 import io.element.android.features.roommembermoderation.api.RoomMemberModerationState
+import io.element.android.libraries.architecture.AsyncAction
 import io.element.android.libraries.architecture.AsyncData
 import io.element.android.libraries.designsystem.components.avatar.AvatarData
 import io.element.android.libraries.designsystem.components.avatar.AvatarSize
 import io.element.android.libraries.designsystem.preview.ROOM_NAME
+import io.element.android.libraries.matrix.api.core.EventId
 import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.matrix.api.core.ThreadId
 import io.element.android.libraries.matrix.api.encryption.identity.IdentityState
@@ -92,11 +94,13 @@ open class MessagesStateProvider : PreviewParameterProvider<MessagesState> {
                 composerState = aMessageComposerState(textEditorState = aTextEditorStateMarkdown()),
                 identityChangeState = anIdentityChangeState(listOf(aRoomMemberIdentityStateChange()))
             ),
+            aMessagesState(redactEventAction = MessagesState.ConfirmingRedaction(EventId("\$anEventId"))),
         )
 }
 
 fun aMessagesState(
     roomName: String? = ROOM_NAME,
+    memberCount: Long? = 42,
     roomAvatar: AvatarData = AvatarData("!id:domain", ROOM_NAME, size = AvatarSize.TimelineRoom),
     userEventPermissions: UserEventPermissions = aUserEventPermissions(),
     composerState: MessageComposerState = aMessageComposerState(
@@ -130,10 +134,16 @@ fun aMessagesState(
     ),
     isCurrentlySharingLiveLocationInRoom: Boolean = false,
     canSearch: Boolean = false,
+<<<<<<<
+=======
+    dmUserStatus: DisplayedStatus? = null,
+>>>>>>>
     eventSink: (MessagesEvent) -> Unit = {},
+    redactEventAction: AsyncAction<Unit> = AsyncAction.Uninitialized,
 ) = MessagesState(
     roomId = RoomId("!id:domain"),
     roomName = roomName,
+    memberCount = memberCount,
     roomAvatar = roomAvatar,
     heroes = persistentListOf(),
     userEventPermissions = userEventPermissions,
@@ -161,6 +171,11 @@ fun aMessagesState(
     threads = threads,
     showLiveLocationShareBanner = isCurrentlySharingLiveLocationInRoom,
     canSearch = canSearch,
+<<<<<<<
+=======
+    dmUserStatus = dmUserStatus,
+    redactEventAction = redactEventAction,
+>>>>>>>
     eventSink = eventSink,
 )
 
@@ -168,7 +183,7 @@ fun aRoomMemberModerationState(
     permissions: RoomMemberModerationPermissions = RoomMemberModerationPermissions.DEFAULT,
 ) = object : RoomMemberModerationState {
     override val permissions: RoomMemberModerationPermissions = permissions
-    override val eventSink: (RoomMemberModerationEvent) -> Unit = {}
+    override val eventSink: (RoomMemberModerationEvents) -> Unit = {}
 }
 
 fun aUserEventPermissions(
