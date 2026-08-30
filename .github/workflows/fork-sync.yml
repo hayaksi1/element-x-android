@@ -329,11 +329,16 @@ jobs:
         run: |
           set -uo pipefail
           set +e
-          .fork/sync-upstream.sh --no-push 2>&1 | tee rebuild.log
+          args=(--no-push)
+          if [ "${{ inputs.skip_verify }}" = "true" ]; then
+            args+=(--skip-verify)
+            echo "::notice::Gradle gates skipped (skip_verify=true); this job never publishes"
+          fi
+          .fork/sync-upstream.sh "${args[@]}" 2>&1 | tee rebuild.log
           rc=${PIPESTATUS[0]}
           set -e
           echo "rc=$rc" >> "$GITHUB_OUTPUT"
-          echo "::notice::sync-upstream.sh exited $rc (3 = integration incomplete, nothing published: expected)"
+          echo "::notice::sync-upstream.sh exited $rc (0 = complete, 3 = incomplete, 4 = gates; nothing published)"
 
       - name: Assert nothing was published
         if: always()
