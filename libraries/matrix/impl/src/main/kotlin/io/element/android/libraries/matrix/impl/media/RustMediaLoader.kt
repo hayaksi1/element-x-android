@@ -74,7 +74,6 @@ class RustMediaLoader(
                         filename = filename,
                         // Fallback to a default mime type based on the main type, so that the SDK can create a file with the correct extension.
                         mimeType = mimeType.ensureDefaultSubtype(),
-                        mimeType = mimeType.withDefaultSubtype(),
                         useCache = useCache,
                         tempDir = cacheDirectory.path,
                     )
