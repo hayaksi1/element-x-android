@@ -17,12 +17,17 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import io.element.android.compound.theme.ElementTheme
 import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
 import io.element.android.libraries.designsystem.theme.components.CircularProgressIndicator
 import io.element.android.libraries.designsystem.theme.components.LinearProgressIndicator
+import io.element.android.libraries.designsystem.theme.components.Text
+import io.element.android.libraries.designsystem.theme.components.TextButton
 import io.element.android.libraries.matrix.api.timeline.Timeline
+import io.element.android.libraries.ui.strings.CommonStrings
 
 @Composable
 internal fun TimelineLoadingMoreIndicator(
@@ -52,6 +57,29 @@ internal fun TimelineLoadingMoreIndicator(
     }
 }
 
+@Composable
+internal fun TimelineLoadMoreFailedIndicator(
+    onRetryClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text = stringResource(CommonStrings.common_something_went_wrong),
+            style = ElementTheme.typography.fontBodyMdRegular,
+            color = ElementTheme.colors.textSecondary,
+        )
+        TextButton(
+            text = stringResource(CommonStrings.action_retry),
+            onClick = onRetryClick,
+        )
+    }
+}
+
 @PreviewsDayNight
 @Composable
 internal fun TimelineLoadingMoreIndicatorPreview() = ElementPreview {
@@ -62,4 +90,10 @@ internal fun TimelineLoadingMoreIndicatorPreview() = ElementPreview {
         TimelineLoadingMoreIndicator(Timeline.PaginationDirection.BACKWARDS)
         TimelineLoadingMoreIndicator(Timeline.PaginationDirection.FORWARDS)
     }
+}
+
+@PreviewsDayNight
+@Composable
+internal fun TimelineLoadMoreFailedIndicatorPreview() = ElementPreview {
+    TimelineLoadMoreFailedIndicator(onRetryClick = {})
 }

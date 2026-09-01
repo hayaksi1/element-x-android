@@ -83,12 +83,14 @@ import io.element.android.compound.tokens.generated.CompoundIcons
 import io.element.android.features.messages.impl.crypto.sendfailure.resolve.ResolveVerifiedUserSendFailureView
 import io.element.android.features.messages.impl.timeline.components.FloatingDateBadgeOverlay
 import io.element.android.features.messages.impl.timeline.components.TimelineItemRow
+import io.element.android.features.messages.impl.timeline.components.virtual.TimelineLoadMoreFailedIndicator
 import io.element.android.features.messages.impl.timeline.components.toText
 import io.element.android.features.messages.impl.timeline.di.LocalTimelineItemPresenterFactories
 import io.element.android.features.messages.impl.timeline.di.aFakeTimelineItemPresenterFactories
 import io.element.android.features.messages.impl.timeline.focus.FocusRequestStateView
 import io.element.android.features.messages.impl.timeline.model.NewEventState
 import io.element.android.features.messages.impl.timeline.model.TimelineItem
+import io.element.android.features.messages.impl.timeline.model.virtual.TimelineItemLoadingIndicatorModel
 import io.element.android.features.messages.impl.timeline.model.event.TimelineItemEventContent
 import io.element.android.features.messages.impl.timeline.model.event.TimelineItemEventContentPreviewParam
 import io.element.android.features.messages.impl.timeline.protection.TimelineProtectionState
@@ -206,29 +208,37 @@ fun TimelineView(
                     contentType = { timelineItem -> timelineItem.contentType() },
                     key = { timelineItem -> timelineItem.identifier() },
                 ) { timelineItem ->
-                    TimelineItemRow(
-                        timelineItem = timelineItem,
-                        timelineMode = state.timelineMode,
-                        timelineRoomInfo = state.timelineRoomInfo,
-                        timelineProtectionState = timelineProtectionState,
-                        isLastOutgoingMessage = state.isLastOutgoingMessage(timelineItem.identifier()),
-                        focusedEventId = state.focusedEventId,
-                        displayThreadSummaries = state.displayThreadSummaries,
-                        onUserDataClick = onUserDataClick,
-                        onLinkClick = onLinkClick,
-                        onLinkLongClick = ::onLinkLongClick,
-                        onContentClick = onContentClick,
-                        onGalleryItemClick = onGalleryItemClick,
-                        onLongClick = onMessageLongClick,
-                        inReplyToClick = ::inReplyToClick,
-                        onReactionClick = onReactionClick,
-                        onReactionLongClick = onReactionLongClick,
-                        onMoreReactionsClick = onMoreReactionsClick,
-                        onReadReceiptClick = onReadReceiptClick,
-                        onSwipeToReply = onSwipeToReply,
-                        onJoinCallClick = onJoinCallClick,
-                        eventSink = state.eventSink,
-                    )
+                    val failedLoadingIndicator = ((timelineItem as? TimelineItem.Virtual)?.model as? TimelineItemLoadingIndicatorModel)
+                        ?.takeIf { it.direction in state.paginationFailures }
+                    if (failedLoadingIndicator != null) {
+                        TimelineLoadMoreFailedIndicator(
+                            onRetryClick = { state.eventSink(TimelineEvent.RetryLoadMore(failedLoadingIndicator.direction)) },
+                        )
+                    } else {
+                        TimelineItemRow(
+                            timelineItem = timelineItem,
+                            timelineMode = state.timelineMode,
+                            timelineRoomInfo = state.timelineRoomInfo,
+                            timelineProtectionState = timelineProtectionState,
+                            isLastOutgoingMessage = state.isLastOutgoingMessage(timelineItem.identifier()),
+                            focusedEventId = state.focusedEventId,
+                            displayThreadSummaries = state.displayThreadSummaries,
+                            onUserDataClick = onUserDataClick,
+                            onLinkClick = onLinkClick,
+                            onLinkLongClick = ::onLinkLongClick,
+                            onContentClick = onContentClick,
+                            onGalleryItemClick = onGalleryItemClick,
+                            onLongClick = onMessageLongClick,
+                            inReplyToClick = ::inReplyToClick,
+                            onReactionClick = onReactionClick,
+                            onReactionLongClick = onReactionLongClick,
+                            onMoreReactionsClick = onMoreReactionsClick,
+                            onReadReceiptClick = onReadReceiptClick,
+                            onSwipeToReply = onSwipeToReply,
+                            onJoinCallClick = onJoinCallClick,
+                            eventSink = state.eventSink,
+                        )
+                    }
                 }
             }
 
