@@ -53,6 +53,17 @@ class RustSpaceRoomListTest {
     }
 
     @Test
+    fun `paginationStateFlow delivers the initial state once`() = runTest {
+        val innerSpaceRoomList = FakeFfiSpaceRoomList(
+            paginationStateResult = { SpaceRoomListPaginationState.Idle(true) }
+        )
+        innerSpaceRoomList.paginationStateFlow().test {
+            assertThat(awaitItem()).isEqualTo(SpaceRoomListPaginationState.Idle(true))
+            expectNoEvents()
+        }
+    }
+
+    @Test
     fun `spaceRoomsFlow emits values`() = runTest {
         val innerSpaceRoomList = FakeFfiSpaceRoomList(
             paginationStateResult = { SpaceRoomListPaginationState.Idle(false) }
