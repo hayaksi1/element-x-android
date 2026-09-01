@@ -46,6 +46,7 @@ class FakeFfiSpaceRoomList(
 
     override fun subscribeToPaginationStateUpdates(listener: SpaceRoomListPaginationStateListener): TaskHandle {
         spaceRoomListPaginationStateListener = listener
+        listener.onUpdate(paginationStateResult())
         return FakeFfiTaskHandle()
     }
 
