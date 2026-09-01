@@ -73,6 +73,7 @@ private object CustomHtmlToDomParser {
     }
 
     private fun String.withHeadingsAsBoldParagraphs(): String {
+        if (!contains("<h", ignoreCase = true)) return this
         val document = Jsoup.parseBodyFragment(this)
         val headings = document.select("h1, h2, h3, h4, h5, h6")
         if (headings.isEmpty()) return this
