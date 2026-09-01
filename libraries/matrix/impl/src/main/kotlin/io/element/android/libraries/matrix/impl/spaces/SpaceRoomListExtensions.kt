@@ -32,9 +32,6 @@ internal fun SpaceRoomListInterface.paginationStateFlow(): Flow<SpaceRoomListPag
             trySend(paginationState)
         }
     }
-    // Send the initial value
-    trySend(paginationState())
-    // Then subscribe to updates
     val result = subscribeToPaginationStateUpdates(listener)
     awaitClose {
         result.cancelAndDestroy()
@@ -68,7 +65,6 @@ internal fun SpaceRoomListInterface.spaceUpdateFlow(): Flow<Optional<SpaceRoom>>
             }
         }
         Timber.d("Open spaceUpdateFlow for SpaceRoomListInterface ${this@spaceUpdateFlow}")
-        trySendBlocking(Optional.ofNullable(space()))
         val taskHandle = subscribeToSpaceUpdates(listener)
         awaitClose {
             Timber.d("Close spaceUpdateFlow for SpaceRoomListInterface ${this@spaceUpdateFlow}")
