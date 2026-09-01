@@ -8,6 +8,7 @@
 
 package io.element.android.features.messages.impl.timeline
 
+import androidx.compose.ui.tooling.preview.PreviewParameterProvider
 import io.element.android.features.messages.impl.crypto.sendfailure.resolve.ResolveVerifiedUserSendFailureState
 import io.element.android.features.messages.impl.crypto.sendfailure.resolve.aResolveVerifiedUserSendFailureState
 import io.element.android.features.messages.impl.timeline.components.MessageShieldData
@@ -24,6 +25,7 @@ import io.element.android.features.messages.impl.timeline.model.event.TimelineIt
 import io.element.android.features.messages.impl.timeline.model.event.TimelineItemRedactedContent
 import io.element.android.features.messages.impl.timeline.model.event.aTimelineItemStateEventContent
 import io.element.android.features.messages.impl.timeline.model.event.aTimelineItemTextContent
+import io.element.android.features.messages.impl.timeline.model.virtual.TimelineItemLoadingIndicatorModel
 import io.element.android.features.messages.impl.timeline.model.virtual.aTimelineItemDaySeparatorModel
 import io.element.android.features.messages.impl.timeline.sendfailure.SendFailureDialogState
 import io.element.android.features.messages.impl.typing.TypingNotificationState
@@ -139,6 +141,38 @@ internal fun aTimelineItemList(content: TimelineItemEventContent): ImmutableList
         // A day separator
         aTimelineItemDaySeparator(),
     )
+}
+
+fun aTimelineItemLoadingIndicator(
+    direction: Timeline.PaginationDirection = Timeline.PaginationDirection.BACKWARDS,
+): TimelineItem.Virtual {
+    return TimelineItem.Virtual(
+        id = UniqueId("loading_indicator_$direction"),
+        model = TimelineItemLoadingIndicatorModel(direction = direction, timestamp = 0),
+    )
+}
+
+data class ThreadTimelinePreviewState(
+    val timelineItems: ImmutableList<TimelineItem>,
+    val paginationFailures: ImmutableSet<Timeline.PaginationDirection>,
+)
+
+class ThreadTimelinePreviewStatePreviewParam : PreviewParameterProvider<ThreadTimelinePreviewState> {
+    override val values: Sequence<ThreadTimelinePreviewState>
+        get() = sequenceOf(
+            ThreadTimelinePreviewState(
+                timelineItems = persistentListOf(),
+                paginationFailures = persistentSetOf(),
+            ),
+            ThreadTimelinePreviewState(
+                timelineItems = persistentListOf(aTimelineItemLoadingIndicator()),
+                paginationFailures = persistentSetOf(),
+            ),
+            ThreadTimelinePreviewState(
+                timelineItems = persistentListOf(aTimelineItemLoadingIndicator()),
+                paginationFailures = persistentSetOf(Timeline.PaginationDirection.BACKWARDS),
+            ),
+        )
 }
 
 fun aTimelineItemDaySeparator(): TimelineItem.Virtual {
