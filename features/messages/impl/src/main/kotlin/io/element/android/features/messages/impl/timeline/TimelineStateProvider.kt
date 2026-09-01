@@ -45,7 +45,9 @@ import io.element.android.libraries.matrix.api.timeline.item.event.MessageShield
 import io.element.android.libraries.matrix.ui.messages.reply.InReplyToDetails
 import io.element.android.libraries.matrix.ui.messages.reply.aProfileDetailsReady
 import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.ImmutableSet
 import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.collections.immutable.toImmutableList
 import java.util.UUID
 import kotlin.random.Random
@@ -62,6 +64,7 @@ fun aTimelineState(
     displayThreadSummaries: Boolean = false,
     displayJumpToUnread: Boolean = false,
     jumpToUnread: JumpToUnreadState = JumpToUnreadState.Hidden,
+    paginationFailures: ImmutableSet<Timeline.PaginationDirection> = persistentSetOf(),
     newEventState: NewEventState = NewEventState.None,
     selectionState: SelectionState = SelectionState.Disabled,
     useNewTimelineEventRenderer: Boolean = false,
@@ -88,6 +91,7 @@ fun aTimelineState(
         jumpToUnread = jumpToUnread,
         selectionState = selectionState,
         useNewTimelineEventRenderer = useNewTimelineEventRenderer,
+        paginationFailures = paginationFailures,
         eventSink = eventSink,
     )
 }

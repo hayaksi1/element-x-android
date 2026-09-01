@@ -51,6 +51,7 @@ import io.element.android.tests.testutils.robolectric.RobolectricTest
 import io.element.android.tests.testutils.setSafeContent
 import io.element.android.wysiwyg.link.Link
 import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.collections.immutable.toImmutableList
 import org.junit.Ignore
 import org.junit.Test
@@ -71,6 +72,26 @@ class TimelineViewTest : RobolectricTest() {
             ),
         )
         eventsRecorder.assertSingle(TimelineEvent.LoadMore(Timeline.PaginationDirection.BACKWARDS))
+    }
+
+    @Test
+    fun `a failed pagination shows a retry action instead of emitting LoadMore again`() = runAndroidComposeUiTest {
+        val eventsRecorder = EventsRecorder<TimelineEvent>()
+        setTimelineView(
+            state = aTimelineState(
+                timelineItems = persistentListOf<TimelineItem>(
+                    TimelineItem.Virtual(
+                        id = UniqueId("backward_pagination"),
+                        model = TimelineItemLoadingIndicatorModel(Timeline.PaginationDirection.BACKWARDS, 0)
+                    ),
+                ),
+                paginationFailures = persistentSetOf(Timeline.PaginationDirection.BACKWARDS),
+                eventSink = eventsRecorder,
+            ),
+        )
+        eventsRecorder.assertEmpty()
+        onNodeWithText(activity!!.getString(CommonStrings.action_retry)).performClick()
+        eventsRecorder.assertSingle(TimelineEvent.RetryLoadMore(Timeline.PaginationDirection.BACKWARDS))
     }
 
     @Test

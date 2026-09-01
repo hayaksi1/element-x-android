@@ -84,6 +84,7 @@ import io.element.android.features.messages.impl.crypto.sendfailure.resolve.Reso
 import io.element.android.features.messages.impl.timeline.components.FloatingDateBadgeOverlay
 import io.element.android.features.messages.impl.timeline.components.TimelineItemRow
 import io.element.android.features.messages.impl.timeline.components.toText
+import io.element.android.features.messages.impl.timeline.components.virtual.TimelineLoadMoreFailedIndicator
 import io.element.android.features.messages.impl.timeline.di.LocalTimelineItemPresenterFactories
 import io.element.android.features.messages.impl.timeline.di.aFakeTimelineItemPresenterFactories
 import io.element.android.features.messages.impl.timeline.focus.FocusRequestStateView
@@ -93,6 +94,7 @@ import io.element.android.features.messages.impl.timeline.model.TimelineItemSele
 import io.element.android.features.messages.impl.timeline.model.event.TimelineItemEventContent
 import io.element.android.features.messages.impl.timeline.model.event.TimelineItemEventContentPreviewParam
 import io.element.android.features.messages.impl.timeline.model.event.aTimelineItemTextContent
+import io.element.android.features.messages.impl.timeline.model.virtual.TimelineItemLoadingIndicatorModel
 import io.element.android.features.messages.impl.timeline.protection.TimelineProtectionState
 import io.element.android.features.messages.impl.timeline.protection.aTimelineProtectionState
 import io.element.android.libraries.designsystem.atomic.atoms.UnreadIndicatorAtom
@@ -224,39 +226,47 @@ fun TimelineView(
                         contentType = { timelineItem -> timelineItem.contentType() },
                         key = { timelineItem -> timelineItem.identifier() },
                     ) { timelineItem ->
-                        TimelineItemRow(
-                            timelineItem = timelineItem,
-                            timelineMode = state.timelineMode,
-                            timelineRoomInfo = state.timelineRoomInfo,
-                            timelineProtectionState = timelineProtectionState,
-                            isLastOutgoingMessage = state.isLastOutgoingMessage(timelineItem.identifier()),
-                            focusedEventId = state.focusedEventId,
-                            displayThreadSummaries = state.displayThreadSummaries,
-                            selectionData = TimelineItemSelectionData(
-                                isSelectionModeActive = isSelectionModeActive,
-                                progress = selectionProgressProvider,
-                                isSelected = state.isSelected(timelineItem),
-                                canBeSelected = state.canSelect(timelineItem),
-                            ),
-                            onUserDataClick = onUserDataClick,
-                            onLinkClick = onLinkClick,
-                            onLinkLongClick = ::onLinkLongClick,
-                            onContentClick = { event ->
-                                if (state.canSelect(event)) onToggleSelection(event) else onContentClick(event)
-                            },
-                            onGalleryItemClick = onGalleryItemClick,
-                            onLongClick = { event ->
-                                if (state.canSelect(event)) onToggleSelection(event) else onMessageLongClick(event)
-                            },
-                            inReplyToClick = ::inReplyToClick,
-                            onReactionClick = onReactionClick,
-                            onReactionLongClick = onReactionLongClick,
-                            onMoreReactionsClick = onMoreReactionsClick,
-                            onReadReceiptClick = onReadReceiptClick,
-                            onSwipeToReply = onSwipeToReply,
-                            onJoinCallClick = onJoinCallClick,
-                            eventSink = state.eventSink,
-                        )
+                        val failedLoadingIndicator = ((timelineItem as? TimelineItem.Virtual)?.model as? TimelineItemLoadingIndicatorModel)
+                            ?.takeIf { it.direction in state.paginationFailures }
+                        if (failedLoadingIndicator != null) {
+                            TimelineLoadMoreFailedIndicator(
+                                onRetryClick = { state.eventSink(TimelineEvent.RetryLoadMore(failedLoadingIndicator.direction)) },
+                            )
+                        } else {
+                            TimelineItemRow(
+                                timelineItem = timelineItem,
+                                timelineMode = state.timelineMode,
+                                timelineRoomInfo = state.timelineRoomInfo,
+                                timelineProtectionState = timelineProtectionState,
+                                isLastOutgoingMessage = state.isLastOutgoingMessage(timelineItem.identifier()),
+                                focusedEventId = state.focusedEventId,
+                                displayThreadSummaries = state.displayThreadSummaries,
+                                selectionData = TimelineItemSelectionData(
+                                    isSelectionModeActive = isSelectionModeActive,
+                                    progress = selectionProgressProvider,
+                                    isSelected = state.isSelected(timelineItem),
+                                    canBeSelected = state.canSelect(timelineItem),
+                                ),
+                                onUserDataClick = onUserDataClick,
+                                onLinkClick = onLinkClick,
+                                onLinkLongClick = ::onLinkLongClick,
+                                onContentClick = { event ->
+                                    if (state.canSelect(event)) onToggleSelection(event) else onContentClick(event)
+                                },
+                                onGalleryItemClick = onGalleryItemClick,
+                                onLongClick = { event ->
+                                    if (state.canSelect(event)) onToggleSelection(event) else onMessageLongClick(event)
+                                },
+                                inReplyToClick = ::inReplyToClick,
+                                onReactionClick = onReactionClick,
+                                onReactionLongClick = onReactionLongClick,
+                                onMoreReactionsClick = onMoreReactionsClick,
+                                onReadReceiptClick = onReadReceiptClick,
+                                onSwipeToReply = onSwipeToReply,
+                                onJoinCallClick = onJoinCallClick,
+                                eventSink = state.eventSink,
+                            )
+                        }
                     }
                 }
 

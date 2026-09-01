@@ -61,6 +61,7 @@ import io.element.android.libraries.matrix.api.room.powerlevels.permissionsAsSta
 import io.element.android.libraries.matrix.api.room.roomMembers
 import io.element.android.libraries.matrix.api.timeline.ReceiptType
 import io.element.android.libraries.matrix.api.timeline.Timeline
+import io.element.android.libraries.matrix.api.timeline.TimelineException
 import io.element.android.libraries.matrix.api.timeline.item.event.LocalEventSendState
 import io.element.android.libraries.matrix.api.timeline.item.event.TimelineItemEventOrigin
 import io.element.android.libraries.preferences.api.store.SessionPreferencesStore
@@ -168,6 +169,7 @@ class TimelinePresenter(
         val newEventState = remember { mutableStateOf<NewEventState>(NewEventState.None) }
         val messageShieldDialogData: MutableState<MessageShieldData?> = remember { mutableStateOf(null) }
         var sendFailureDialogState by remember { mutableStateOf<SendFailureDialogState>(SendFailureDialogState.Hidden) }
+        var paginationFailures by remember { mutableStateOf(persistentSetOf<Timeline.PaginationDirection>()) }
 
         // Forces [JumpToUnreadState.Hidden] until the next RoomInfo push. Set after a
         // [TimelineEvent.MarkAllAsRead] await completes so the FAB hides without waiting for
@@ -203,6 +205,14 @@ class TimelinePresenter(
 
         val timelineProtectionState = timelineProtectionPresenter.present()
 
+        suspend fun paginate(direction: Timeline.PaginationDirection) {
+            timelineController.paginate(direction).onFailure { error ->
+                if (error !is TimelineException.CannotPaginate) {
+                    paginationFailures = paginationFailures.adding(direction)
+                }
+            }
+        }
+
         fun handleEvent(event: TimelineEvent) {
             when (event) {
                 is TimelineEvent.LoadMore -> {
@@ -215,8 +225,17 @@ class TimelinePresenter(
                             return
                         }
                     }
+                    if (event.direction in paginationFailures) {
+                        return
+                    }
                     localScope.launch {
-                        timelineController.paginate(direction = event.direction)
+                        paginate(event.direction)
+                    }
+                }
+                is TimelineEvent.RetryLoadMore -> {
+                    paginationFailures = paginationFailures.removing(event.direction)
+                    localScope.launch {
+                        paginate(event.direction)
                     }
                 }
                 is TimelineEvent.OnScrollFinished -> {
@@ -532,6 +551,7 @@ class TimelinePresenter(
             jumpToUnread = jumpToUnread.value,
             selectionState = selectionState.value,
             useNewTimelineEventRenderer = useNewTimelineEventRenderer,
+            paginationFailures = paginationFailures,
             eventSink = ::handleEvent,
         )
     }
