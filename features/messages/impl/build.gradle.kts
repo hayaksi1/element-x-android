@@ -93,6 +93,7 @@ dependencies {
     testImplementation(projects.features.networkmonitor.test)
     testImplementation(projects.features.messages.test)
     testImplementation(projects.services.analytics.test)
+    testImplementation(projects.services.appnavstate.test)
     testImplementation(projects.services.toolbox.test)
     testImplementation(projects.libraries.featureflag.test)
     testImplementation(projects.libraries.mediaupload.impl)

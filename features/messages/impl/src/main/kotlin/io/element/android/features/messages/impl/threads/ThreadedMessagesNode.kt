@@ -18,6 +18,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import com.bumble.appyx.core.lifecycle.subscribe
@@ -54,6 +55,7 @@ import io.element.android.libraries.architecture.NodeInputs
 import io.element.android.libraries.architecture.Presenter
 import io.element.android.libraries.architecture.callback
 import io.element.android.libraries.architecture.inputs
+import io.element.android.libraries.designsystem.components.dialogs.ErrorDialog
 import io.element.android.libraries.designsystem.utils.OnLifecycleEvent
 import io.element.android.libraries.di.RoomScope
 import io.element.android.libraries.emoji.api.picker.EmojiPickerRenderer
@@ -68,9 +70,11 @@ import io.element.android.libraries.matrix.api.permalink.PermalinkParser
 import io.element.android.libraries.matrix.api.room.CreateTimelineParams
 import io.element.android.libraries.matrix.api.room.JoinedRoom
 import io.element.android.libraries.matrix.api.room.alias.matches
+import io.element.android.libraries.matrix.api.room.errors.FocusEventException
 import io.element.android.libraries.matrix.api.timeline.Timeline
 import io.element.android.libraries.matrix.api.timeline.item.TimelineItemDebugInfo
 import io.element.android.libraries.matrix.ui.model.getBestName
+import io.element.android.libraries.ui.strings.CommonStrings
 import io.element.android.libraries.ui.utils.a11y.hasExternalKeyboard
 import io.element.android.libraries.ui.utils.a11y.isTalkbackActive
 import io.element.android.services.analytics.api.AnalyticsService
@@ -78,6 +82,7 @@ import io.element.android.services.appnavstate.api.AppNavigationStateService
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.launch
+import timber.log.Timber
 
 @ContributesNode(RoomScope::class)
 @AssistedInject
@@ -106,26 +111,28 @@ class ThreadedMessagesNode(
 
     private var timelineController: TimelineController? by mutableStateOf(null)
     private var presenter: Presenter<MessagesState>? by mutableStateOf(null)
+    private var presenterFailure: Throwable? by mutableStateOf(null)
 
     /**
      * This should be fast to load, but not faster than several UI frames, which will cause ANRs.
      * We'll load the [presenter] in an async way to prevent this.
      */
-    private suspend fun createPresenter(): Presenter<MessagesState> {
-        val threadedTimeline = room.createTimeline(CreateTimelineParams.Threaded(threadRootEventId = inputs.threadRootEventId)).getOrThrow()
-        val timelineController = TimelineController(room, threadedTimeline)
-        this.timelineController = timelineController
-        return presenterFactory.create(
-            navigator = this,
-            composerPresenter = messageComposerPresenterFactory.create(timelineController, this, threadRoot = inputs.threadRootEventId),
-            timelinePresenter = timelinePresenterFactory.create(timelineController = timelineController, this),
-            // TODO add special processor for threaded timeline
-            actionListPresenter = actionListPresenterFactory.create(
-                postProcessor = TimelineItemActionPostProcessor.Default,
-                timelineMode = timelineController.mainTimelineMode(),
-            ),
-            timelineController = timelineController,
-        )
+    private suspend fun createPresenter(): Result<Presenter<MessagesState>> {
+        return room.createTimeline(CreateTimelineParams.Threaded(threadRootEventId = inputs.threadRootEventId)).map { threadedTimeline ->
+            val timelineController = TimelineController(room, threadedTimeline)
+            this.timelineController = timelineController
+            presenterFactory.create(
+                navigator = this,
+                composerPresenter = messageComposerPresenterFactory.create(timelineController, this, threadRoot = inputs.threadRootEventId),
+                timelinePresenter = timelinePresenterFactory.create(timelineController = timelineController, this),
+                // TODO add special processor for threaded timeline
+                actionListPresenter = actionListPresenterFactory.create(
+                    postProcessor = TimelineItemActionPostProcessor.Default,
+                    timelineMode = timelineController.mainTimelineMode(),
+                ),
+                timelineController = timelineController,
+            )
+        }
     }
 
     interface Callback : Plugin {
@@ -154,7 +161,12 @@ class ThreadedMessagesNode(
             onCreate = {
                 analyticsService.capture(room.toAnalyticsViewRoom())
                 lifecycleScope.launch {
-                    presenter = createPresenter()
+                    createPresenter()
+                        .onSuccess { presenter = it }
+                        .onFailure { error ->
+                            Timber.e(error, "Failed to open thread ${inputs.threadRootEventId}")
+                            presenterFailure = error
+                        }
                 }
             },
             onStart = {
@@ -264,6 +276,14 @@ class ThreadedMessagesNode(
         val activity = requireNotNull(LocalActivity.current)
         val isDark = ElementTheme.isLightTheme.not()
         val canUseOverlay = !isTalkbackActive() && !hasExternalKeyboard()
+        presenterFailure?.let { error ->
+            ErrorDialog(
+                content = stringResource(
+                    if (error is FocusEventException.EventNotFound) CommonStrings.error_message_not_found else CommonStrings.error_unknown
+                ),
+                onSubmit = ::navigateUp,
+            )
+        }
         CompositionLocalProvider(
             LocalTimelineItemPresenterFactories provides timelineItemPresenterFactories,
         ) {
