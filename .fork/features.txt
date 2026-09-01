@@ -28,6 +28,8 @@ search/backfill-sweep
 search/matrix-layer
 feat/timber-throwable-logging
 feat/fork-misc
+feat/single-initial-value
+feat/thread-timeline-errors
 #
 # Deliberately NOT listed (branches still exist, nothing was deleted):
 #   tmp-7538                      scratch branch owned by another session
