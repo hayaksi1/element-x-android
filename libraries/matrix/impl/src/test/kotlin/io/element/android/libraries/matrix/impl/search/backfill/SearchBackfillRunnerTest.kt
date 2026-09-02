@@ -12,11 +12,6 @@ import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.matrix.api.search.RoomSweepOutcome
 import io.element.android.libraries.matrix.api.search.SearchBackfillCursor
 import io.element.android.libraries.matrix.api.search.SearchBackfillStore
-import io.element.android.libraries.matrix.api.timeline.Timeline
-import io.element.android.libraries.matrix.test.FakeMatrixClient
-import io.element.android.libraries.matrix.test.room.FakeBaseRoom
-import io.element.android.libraries.matrix.test.room.FakeJoinedRoom
-import io.element.android.libraries.matrix.test.timeline.FakeTimeline
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
@@ -101,6 +96,22 @@ class SearchBackfillRunnerTest {
     }
 
     @Test
+    fun `a room the SDK cannot open is recorded as failed and the sweep continues`() = runTest {
+        val healthy = fakeTimeline(reachStartAfter = 1)
+        val runner = SearchBackfillRunner(
+            store = InMemoryStore(),
+            roomsProvider = { listOf(A_ROOM, B_ROOM) },
+            openTimeline = { roomId -> if (roomId == A_ROOM) error("no timeline for you") else healthy },
+            currentTimeMillis = { 0L },
+        )
+
+        val cursor = runner.runOnce()
+
+        assertThat(cursor.outcomes[A_ROOM.value]).isEqualTo(RoomSweepOutcome.FAILED)
+        assertThat(cursor.outcomes[B_ROOM.value]).isEqualTo(RoomSweepOutcome.REACHED_START)
+    }
+
+    @Test
     fun `an empty queue asks for another execution instead of reporting completion`() = runTest {
         // A headless start right after the caches were cleared can see an empty room list. Reading
         // that as "all done" would park the sweep until the next app start with nothing indexed.
@@ -124,23 +135,18 @@ class SearchBackfillRunnerTest {
     }
 
     @Test
-    fun `the room is always released, including when pagination fails`() = runTest {
+    fun `the timeline is always released, including when pagination fails`() = runTest {
         // 200 rooms of un-closed Rust handles would be a slow leak with no symptom until it hurts.
-        val baseRoom = FakeBaseRoom()
-        val client = FakeMatrixClient().apply {
-            givenGetRoomResult(A_ROOM, FakeJoinedRoom(baseRoom = baseRoom, liveTimeline = fakeTimeline(failEvery = true)))
-        }
-        val runner = SearchBackfillRunner(
-            client = client,
-            store = InMemoryStore(),
-            roomsProvider = { listOf(A_ROOM) },
+        val timeline = fakeTimeline(failEvery = true)
+        val runner = runner(
+            rooms = listOf(A_ROOM),
+            timelines = mapOf(A_ROOM to timeline),
             budget = SearchBackfillBudget(maxFailuresPerRoom = 1),
-            currentTimeMillis = { 0L },
         )
 
         runner.runOnce()
 
-        baseRoom.assertDestroyed()
+        assertThat(timeline.isClosed).isTrue()
     }
 
     @Test
@@ -172,14 +178,10 @@ class SearchBackfillRunnerTest {
                 index = 1,
             )
         )
-        val client = FakeMatrixClient().apply {
-            givenGetRoomResult(A_ROOM, FakeJoinedRoom(baseRoom = FakeBaseRoom(), liveTimeline = first))
-            givenGetRoomResult(B_ROOM, FakeJoinedRoom(baseRoom = FakeBaseRoom(), liveTimeline = second))
-        }
         val runner = SearchBackfillRunner(
-            client = client,
             store = store,
             roomsProvider = { error("must not rebuild the queue while one is in progress") },
+            openTimeline = mapOf(A_ROOM to first, B_ROOM to second)::get,
             currentTimeMillis = { 0L },
         )
 
@@ -196,9 +198,9 @@ class SearchBackfillRunnerTest {
             SearchBackfillCursor(generation = 4, queue = listOf(A_ROOM.value), index = 1)
         )
         val runner = SearchBackfillRunner(
-            client = FakeMatrixClient(),
             store = store,
             roomsProvider = { listOf(B_ROOM) },
+            openTimeline = { null },
             currentTimeMillis = { 0L },
         )
 
@@ -213,9 +215,9 @@ class SearchBackfillRunnerTest {
         val drained = SearchBackfillCursor(generation = 4, queue = listOf(A_ROOM.value), index = 1, finishedAt = 42L)
         val store = InMemoryStore(drained)
         val runner = SearchBackfillRunner(
-            client = FakeMatrixClient(),
             store = store,
             roomsProvider = { error("must not build a new queue after the previous one drained") },
+            openTimeline = { error("must not touch any room after the previous generation drained") },
             currentTimeMillis = { 0L },
         )
 
@@ -230,11 +232,9 @@ class SearchBackfillRunnerTest {
         val store = InMemoryStore(SearchBackfillCursor(generation = 1, queue = emptyList(), finishedAt = 42L))
         val timeline = fakeTimeline(reachStartAfter = 1)
         val runner = SearchBackfillRunner(
-            client = FakeMatrixClient().apply {
-                givenGetRoomResult(A_ROOM, FakeJoinedRoom(baseRoom = FakeBaseRoom(), liveTimeline = timeline))
-            },
             store = store,
             roomsProvider = { listOf(A_ROOM) },
+            openTimeline = { timeline },
             currentTimeMillis = { 0L },
         )
 
@@ -242,6 +242,64 @@ class SearchBackfillRunnerTest {
 
         assertThat(cursor.generation).isEqualTo(2)
         assertThat(timeline.paginateCallCount).isEqualTo(1)
+    }
+
+    @Test
+    fun `the room on screen is moved behind the others and left for later while it stays open`() = runTest {
+        val onScreen = fakeTimeline(reachStartAfter = 1)
+        val other = fakeTimeline(reachStartAfter = 1)
+        val runner = runner(
+            rooms = listOf(A_ROOM, B_ROOM),
+            timelines = mapOf(A_ROOM to onScreen, B_ROOM to other),
+            visibleRoomId = { A_ROOM },
+        )
+
+        val cursor = runner.runOnce()
+
+        assertThat(onScreen.paginateCallCount).isEqualTo(0)
+        assertThat(other.paginateCallCount).isEqualTo(1)
+        assertThat(cursor.queue).isEqualTo(listOf(B_ROOM.value, A_ROOM.value))
+        assertThat(cursor.index).isEqualTo(1)
+        assertThat(cursor.needsAnotherExecution).isTrue()
+    }
+
+    @Test
+    fun `a room opened while it is being swept is left for later`() = runTest {
+        val opened = fakeTimeline(reachStartAfter = Int.MAX_VALUE)
+        val other = fakeTimeline(reachStartAfter = 1)
+        val runner = runner(
+            rooms = listOf(A_ROOM, B_ROOM),
+            timelines = mapOf(A_ROOM to opened, B_ROOM to other),
+            visibleRoomId = { if (opened.paginateCallCount >= 2) A_ROOM else null },
+        )
+
+        val cursor = runner.runOnce()
+
+        assertThat(opened.paginateCallCount).isEqualTo(2)
+        assertThat(opened.isClosed).isTrue()
+        assertThat(other.paginateCallCount).isEqualTo(1)
+        assertThat(cursor.queue).isEqualTo(listOf(B_ROOM.value, A_ROOM.value))
+        assertThat(cursor.pagesIssued).isEqualTo(3)
+        assertThat(cursor.isDrained).isFalse()
+    }
+
+    @Test
+    fun `the room on screen is swept once it is closed`() = runTest {
+        var visible: RoomId? = A_ROOM
+        val onScreen = fakeTimeline(reachStartAfter = 1)
+        val other = fakeTimeline(reachStartAfter = 1)
+        val runner = runner(
+            rooms = listOf(A_ROOM, B_ROOM),
+            timelines = mapOf(A_ROOM to onScreen, B_ROOM to other),
+            visibleRoomId = { visible.also { visible = null } },
+        )
+
+        val cursor = runner.runOnce()
+
+        assertThat(other.paginateCallCount).isEqualTo(1)
+        assertThat(onScreen.paginateCallCount).isEqualTo(1)
+        assertThat(cursor.isDrained).isTrue()
+        assertThat(cursor.outcomes.keys).containsExactly(A_ROOM.value, B_ROOM.value)
     }
 
     @Test
@@ -270,13 +328,9 @@ class SearchBackfillRunnerTest {
         // Advances 40s per reading, so the 1-minute deadline trips after the first room.
         var now = 0L
         val runner = SearchBackfillRunner(
-            client = FakeMatrixClient().apply {
-                timelines.forEach { (roomId, timeline) ->
-                    givenGetRoomResult(roomId, FakeJoinedRoom(baseRoom = FakeBaseRoom(), liveTimeline = timeline))
-                }
-            },
             store = InMemoryStore(),
             roomsProvider = { timelines.keys.toList() },
+            openTimeline = timelines::get,
             budget = SearchBackfillBudget(executionDeadline = 1.minutes),
             currentTimeMillis = { now.also { now += 40_000 } },
         )
@@ -294,11 +348,9 @@ class SearchBackfillRunnerTest {
         val slow = fakeTimeline(reachStartAfter = Int.MAX_VALUE)
         var now = 0L
         val runner = SearchBackfillRunner(
-            client = FakeMatrixClient().apply {
-                givenGetRoomResult(A_ROOM, FakeJoinedRoom(baseRoom = FakeBaseRoom(), liveTimeline = slow))
-            },
             store = InMemoryStore(),
             roomsProvider = { listOf(A_ROOM) },
+            openTimeline = { slow },
             budget = SearchBackfillBudget(maxPagesPerRoom = 100, maxRoomDuration = 10.seconds),
             currentTimeMillis = { now.also { now += 4_000 } },
         )
@@ -329,16 +381,13 @@ private fun runner(
     timelines: Map<RoomId, CountingTimeline>,
     budget: SearchBackfillBudget = SearchBackfillBudget(),
     store: SearchBackfillStore = InMemoryStore(),
+    visibleRoomId: () -> RoomId? = { null },
 ): SearchBackfillRunner {
-    val client = FakeMatrixClient().apply {
-        timelines.forEach { (roomId, timeline) ->
-            givenGetRoomResult(roomId, FakeJoinedRoom(baseRoom = FakeBaseRoom(), liveTimeline = timeline))
-        }
-    }
     return SearchBackfillRunner(
-        client = client,
         store = store,
         roomsProvider = { rooms },
+        openTimeline = timelines::get,
+        visibleRoomId = visibleRoomId,
         budget = budget,
         // Fixed clock: these tests assert page counts, never elapsed time.
         currentTimeMillis = { 0L },
@@ -352,24 +401,27 @@ private fun fakeTimeline(
 ): CountingTimeline = CountingTimeline(reachStartAfter, canPaginate, failEvery)
 
 /**
- * Wraps [FakeTimeline] to count pagination calls, which is the only thing these tests can observe.
+ * Counts pagination calls, which is the only thing these tests can observe.
  */
 private class CountingTimeline(
     private val reachStartAfter: Int,
-    canPaginate: Boolean,
+    override val hasMoreToLoad: Boolean,
     private val failEvery: Boolean,
-) : Timeline by FakeTimeline() {
+) : SweepTimeline {
     var paginateCallCount = 0
         private set
 
-    override val backwardPaginationStatus = MutableStateFlow(
-        Timeline.PaginationStatus(isPaginating = false, hasMoreToLoad = canPaginate)
-    )
+    var isClosed = false
+        private set
 
-    override suspend fun paginate(direction: Timeline.PaginationDirection): Result<Boolean> {
+    override suspend fun paginateBackwards(): Result<Boolean> {
         paginateCallCount++
         if (failEvery) return Result.failure(IllegalStateException("network"))
         return Result.success(paginateCallCount >= reachStartAfter)
+    }
+
+    override fun close() {
+        isClosed = true
     }
 }
 
