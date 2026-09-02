@@ -191,7 +191,7 @@ class SearchBackfillRunnerTest {
     }
 
     @Test
-    fun `a drained cursor starts a new generation`() = runTest {
+    fun `a drained cursor starts a new generation only when asked to`() = runTest {
         val store = InMemoryStore(
             SearchBackfillCursor(generation = 4, queue = listOf(A_ROOM.value), index = 1)
         )
@@ -202,10 +202,46 @@ class SearchBackfillRunnerTest {
             currentTimeMillis = { 0L },
         )
 
-        val cursor = runner.runOnce()
+        val cursor = runner.runOnce(restartWhenDrained = true)
 
         assertThat(cursor.generation).isEqualTo(5)
         assertThat(cursor.queue).isEqualTo(listOf(B_ROOM.value))
+    }
+
+    @Test
+    fun `a routine run leaves a drained generation alone`() = runTest {
+        val drained = SearchBackfillCursor(generation = 4, queue = listOf(A_ROOM.value), index = 1, finishedAt = 42L)
+        val store = InMemoryStore(drained)
+        val runner = SearchBackfillRunner(
+            client = FakeMatrixClient(),
+            store = store,
+            roomsProvider = { error("must not build a new queue after the previous one drained") },
+            currentTimeMillis = { 0L },
+        )
+
+        val cursor = runner.runOnce()
+
+        assertThat(cursor).isEqualTo(drained)
+        assertThat(store.writes).isEqualTo(0)
+    }
+
+    @Test
+    fun `a routine run retries a generation that found no rooms`() = runTest {
+        val store = InMemoryStore(SearchBackfillCursor(generation = 1, queue = emptyList(), finishedAt = 42L))
+        val timeline = fakeTimeline(reachStartAfter = 1)
+        val runner = SearchBackfillRunner(
+            client = FakeMatrixClient().apply {
+                givenGetRoomResult(A_ROOM, FakeJoinedRoom(baseRoom = FakeBaseRoom(), liveTimeline = timeline))
+            },
+            store = store,
+            roomsProvider = { listOf(A_ROOM) },
+            currentTimeMillis = { 0L },
+        )
+
+        val cursor = runner.runOnce()
+
+        assertThat(cursor.generation).isEqualTo(2)
+        assertThat(timeline.paginateCallCount).isEqualTo(1)
     }
 
     @Test
