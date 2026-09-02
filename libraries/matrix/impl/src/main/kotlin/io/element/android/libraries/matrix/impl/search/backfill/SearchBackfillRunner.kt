@@ -33,6 +33,11 @@ private const val LOG_TAG = "SearchBackfill"
  * outcome for a room into which it indexed exactly nothing. Nothing here can detect that; it is why
  * no state in this package can ever report completeness.
  *
+ * A generation is walked once. Once it has drained, a routine run leaves the stored cursor alone
+ * and does nothing; only [runOnce] with `restartWhenDrained` starts another walk. Every page a
+ * generation fetches is persisted into the SDK's event cache, which has no eviction, so a sweep
+ * that restarted by itself grew the cache without bound.
+ *
  * Deliberately a plain suspend class rather than a Worker: budgets and loop shape are then testable
  * without Robolectric, and the host decides scheduling.
  */
@@ -44,16 +49,21 @@ internal class SearchBackfillRunner(
     private val currentTimeMillis: () -> Long = System::currentTimeMillis,
 ) {
     /**
-     * Runs one execution: resumes the stored cursor, or starts a new generation when there is none
-     * or the previous one drained. Returns the cursor as persisted at the end.
+     * Runs one execution: resumes the stored cursor, or starts a new generation when there is none.
+     * A drained generation is returned untouched unless [restartWhenDrained]. Returns the cursor as
+     * persisted at the end.
      */
-    suspend fun runOnce(): SearchBackfillCursor {
+    suspend fun runOnce(restartWhenDrained: Boolean = false): SearchBackfillCursor {
         val startedAt = currentTimeMillis()
-        var cursor = resumeOrStartGeneration(startedAt)
+        var cursor = resumeOrStartGeneration(startedAt, restartWhenDrained)
 
         if (cursor.queue.isEmpty()) {
             Timber.tag(LOG_TAG).d("Nothing to sweep")
             return cursor.copy(finishedAt = currentTimeMillis()).also { store.setCursor(it) }
+        }
+        if (cursor.isDrained) {
+            Timber.tag(LOG_TAG).d("Generation ${cursor.generation} already drained, nothing more to do")
+            return cursor
         }
 
         var pagesThisExecution = 0
@@ -131,10 +141,13 @@ internal class SearchBackfillRunner(
         return SweepStep.Continue(updated, result.pagesIssued)
     }
 
-    private suspend fun resumeOrStartGeneration(startedAt: Long): SearchBackfillCursor {
+    private suspend fun resumeOrStartGeneration(startedAt: Long, restartWhenDrained: Boolean): SearchBackfillCursor {
         val stored = store.getCursor()
         if (stored != null && !stored.isDrained) {
             Timber.tag(LOG_TAG).d("Resuming generation ${stored.generation} at index ${stored.index}")
+            return stored
+        }
+        if (stored != null && stored.queue.isNotEmpty() && !restartWhenDrained) {
             return stored
         }
         val queue = roomsProvider()
