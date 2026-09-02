@@ -33,6 +33,7 @@ import io.element.android.libraries.matrix.api.MatrixClientProvider
 import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.matrix.api.core.SessionId
 import io.element.android.libraries.matrix.api.search.SearchBackfillCursor
+import io.element.android.libraries.matrix.impl.SEARCH_INDEX_DIRECTORY
 import io.element.android.libraries.workmanager.api.di.MetroWorkerFactory
 import io.element.android.libraries.workmanager.api.di.WorkerKey
 import kotlinx.coroutines.coroutineScope
@@ -41,6 +42,7 @@ import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
+import java.io.File
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
 
@@ -69,6 +71,7 @@ class SearchBackfillWorker(
         const val USER_INITIATED_PARAM = "user_initiated"
 
         private const val CHANNEL_ID = "message_search_index"
+        private const val SWEPT_MARKER = "backfill.swept"
         private const val PROGRESS_NOTIFICATION_ID_BASE = 6480
     }
 
@@ -104,6 +107,8 @@ class SearchBackfillWorker(
         // DataStore on the same file throws.
         val store = storeHolder.storeFor(sessionId)
 
+        val sweptMarker = File(File(client.sessionPaths.fileDirectory, SEARCH_INDEX_DIRECTORY), SWEPT_MARKER)
+
         // As a foreground service the sweep escapes WorkManager's ~10 minute background limit and
         // shows live progress in the shade. Promotion can be refused (e.g. this execution started
         // while the app was backgrounded, after a retry or a constraint delay, on API 31+).
@@ -131,7 +136,7 @@ class SearchBackfillWorker(
                 null
             }
 
-            val result = runCatchingExceptions { runner.runOnce() }
+            val result = runCatchingExceptions { runner.runOnce(restartWhenDrained = userInitiated || !sweptMarker.exists()) }
             progressUpdates?.cancel()
 
             result.fold(
@@ -142,6 +147,9 @@ class SearchBackfillWorker(
                         cursor.queue.size,
                         cursor.pagesIssued,
                     )
+                    if (cursor.isDrained && cursor.queue.isNotEmpty()) {
+                        runCatchingExceptions { sweptMarker.createNewFile() }
+                    }
                     if (userInitiated && cursor.isDrained && cursor.queue.isNotEmpty()) {
                         // Posted as its own notification, not an update of the progress one: the
                         // foreground notification is torn down with the worker, and the user who
