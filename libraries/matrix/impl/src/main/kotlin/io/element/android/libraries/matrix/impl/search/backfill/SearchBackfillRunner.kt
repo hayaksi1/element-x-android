@@ -7,12 +7,11 @@
 
 package io.element.android.libraries.matrix.impl.search.backfill
 
-import io.element.android.libraries.matrix.api.MatrixClient
+import io.element.android.libraries.core.extensions.runCatchingExceptions
 import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.matrix.api.search.RoomSweepOutcome
 import io.element.android.libraries.matrix.api.search.SearchBackfillCursor
 import io.element.android.libraries.matrix.api.search.SearchBackfillStore
-import io.element.android.libraries.matrix.api.timeline.Timeline
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -38,13 +37,18 @@ private const val LOG_TAG = "SearchBackfill"
  * generation fetches is persisted into the SDK's event cache, which has no eviction, so a sweep
  * that restarted by itself grew the cache without bound.
  *
+ * The room on screen is never swept while it is on screen. Back-pagination status is room-scoped
+ * in the SDK, so a page fetched here drives the open timeline's loading indicator, and the queue is
+ * ordered most-recently-active first, which makes the open room the usual first entry.
+ *
  * Deliberately a plain suspend class rather than a Worker: budgets and loop shape are then testable
  * without Robolectric, and the host decides scheduling.
  */
 internal class SearchBackfillRunner(
-    private val client: MatrixClient,
     private val store: SearchBackfillStore,
     private val roomsProvider: suspend () -> List<RoomId>,
+    private val openTimeline: suspend (RoomId) -> SweepTimeline?,
+    private val visibleRoomId: () -> RoomId? = { null },
     private val budget: SearchBackfillBudget = SearchBackfillBudget(),
     private val currentTimeMillis: () -> Long = System::currentTimeMillis,
 ) {
@@ -120,12 +124,13 @@ internal class SearchBackfillRunner(
 
         val roomId = cursor.roomAt(cursor.index) ?: return SweepStep.Stop(cursor)
         val result = sweepRoom(roomId, remainingPages = budget.maxPagesPerExecution - pagesThisExecution)
+        val outcome = result.outcome ?: return deferRoom(cursor, roomId, result.pagesIssued)
 
         val updated = cursor.copy(
             index = cursor.index + 1,
             pagesDone = cursor.pagesDone + (roomId.value to result.pagesIssued),
-            outcomes = cursor.outcomes + (roomId.value to result.outcome),
-            failures = if (result.outcome == RoomSweepOutcome.FAILED) {
+            outcomes = cursor.outcomes + (roomId.value to outcome),
+            failures = if (outcome == RoomSweepOutcome.FAILED) {
                 cursor.failures + (roomId.value to (cursor.failures[roomId.value] ?: 0) + 1)
             } else {
                 cursor.failures
@@ -139,6 +144,22 @@ internal class SearchBackfillRunner(
             delay(budget.delayBetweenRooms)
         }
         return SweepStep.Continue(updated, result.pagesIssued)
+    }
+
+    /**
+     * The room at the cursor is on screen: move it behind the rooms still waiting, or, when it is the
+     * last one, end this execution so the next one finds it again.
+     */
+    private suspend fun deferRoom(cursor: SearchBackfillCursor, roomId: RoomId, pagesIssued: Int): SweepStep {
+        val counted = cursor.copy(pagesIssued = cursor.pagesIssued + pagesIssued)
+        if (cursor.index == cursor.queue.lastIndex) {
+            Timber.tag(LOG_TAG).d("Room $roomId is on screen and last in the queue, stopping")
+            return SweepStep.Stop(counted)
+        }
+        Timber.tag(LOG_TAG).d("Room $roomId is on screen, moving it to the end of the queue")
+        val deferred = counted.copy(queue = cursor.queue.filterNot { it == roomId.value } + roomId.value)
+        store.setCursor(deferred)
+        return SweepStep.Continue(deferred, pagesIssued)
     }
 
     private suspend fun resumeOrStartGeneration(startedAt: Long, restartWhenDrained: Boolean): SearchBackfillCursor {
@@ -160,8 +181,12 @@ internal class SearchBackfillRunner(
     }
 
     private suspend fun sweepRoom(roomId: RoomId, remainingPages: Int): RoomResult {
-        val room = client.getJoinedRoom(roomId)
-        if (room == null) {
+        if (roomId == visibleRoomId()) return RoomResult(outcome = null, pagesIssued = 0)
+
+        val timeline = runCatchingExceptions { openTimeline(roomId) }
+            .onFailure { error -> Timber.tag(LOG_TAG).w(error, "Could not open $roomId for the sweep") }
+            .getOrElse { return RoomResult(RoomSweepOutcome.FAILED, pagesIssued = 0) }
+        if (timeline == null) {
             Timber.tag(LOG_TAG).d("Room $roomId is no longer joined, skipping")
             return RoomResult(RoomSweepOutcome.NOT_JOINED, pagesIssued = 0)
         }
@@ -171,19 +196,19 @@ internal class SearchBackfillRunner(
         var failures = 0
 
         return try {
-            val timeline = room.liveTimeline
             while (pages < budget.maxPagesPerRoom && pages < remainingPages) {
                 if (!currentCoroutineContext().isActive) break
+                if (roomId == visibleRoomId()) {
+                    return RoomResult(outcome = null, pages)
+                }
                 if (currentTimeMillis() - roomStartedAt >= budget.maxRoomDuration.inWholeMilliseconds) {
                     return RoomResult(RoomSweepOutcome.PAGE_CAP, pages)
                 }
-                // Mandatory: paginate() throws CannotPaginate when the timeline says it cannot, so
-                // calling it unguarded turns "nothing left to fetch" into a spurious failure.
-                if (!timeline.backwardPaginationStatus.value.canPaginate) {
+                if (!timeline.hasMoreToLoad) {
                     return RoomResult(RoomSweepOutcome.REACHED_START, pages)
                 }
 
-                val outcome = timeline.paginate(Timeline.PaginationDirection.BACKWARDS)
+                val outcome = timeline.paginateBackwards()
                 pages++
 
                 outcome.fold(
@@ -208,12 +233,13 @@ internal class SearchBackfillRunner(
             RoomResult(RoomSweepOutcome.PAGE_CAP, pages)
         } finally {
             // 200 rooms of un-closed Rust handles would be a slow leak, so this is not optional.
-            room.close()
+            timeline.close()
         }
     }
 
+    /** A null [outcome] means the room was not visited because it is on screen. */
     private data class RoomResult(
-        val outcome: RoomSweepOutcome,
+        val outcome: RoomSweepOutcome?,
         val pagesIssued: Int,
     )
 

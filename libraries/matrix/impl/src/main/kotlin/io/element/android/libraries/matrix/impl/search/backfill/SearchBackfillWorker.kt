@@ -33,9 +33,13 @@ import io.element.android.libraries.matrix.api.MatrixClientProvider
 import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.matrix.api.core.SessionId
 import io.element.android.libraries.matrix.api.search.SearchBackfillCursor
+import io.element.android.libraries.matrix.impl.RustMatrixClient
 import io.element.android.libraries.matrix.impl.SEARCH_INDEX_DIRECTORY
 import io.element.android.libraries.workmanager.api.di.MetroWorkerFactory
 import io.element.android.libraries.workmanager.api.di.WorkerKey
+import io.element.android.services.appnavstate.api.AppNavigationState
+import io.element.android.services.appnavstate.api.AppNavigationStateService
+import io.element.android.services.appnavstate.api.currentRoomId
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.firstOrNull
@@ -65,6 +69,7 @@ class SearchBackfillWorker(
     private val matrixClientProvider: MatrixClientProvider,
     private val featureFlagService: FeatureFlagService,
     private val storeHolder: SearchBackfillStoreHolder,
+    private val appNavigationStateService: AppNavigationStateService,
 ) : CoroutineWorker(context, params) {
     companion object {
         const val SESSION_ID_PARAM = "session_id"
@@ -103,6 +108,8 @@ class SearchBackfillWorker(
             return Result.success()
         }
 
+        val innerClient = (client as? RustMatrixClient)?.innerClient ?: return Result.failure()
+
         // Shared with the developer-settings progress UI — never construct a store here, a second
         // DataStore on the same file throws.
         val store = storeHolder.storeFor(sessionId)
@@ -118,9 +125,10 @@ class SearchBackfillWorker(
                 .isSuccess
 
         val runner = SearchBackfillRunner(
-            client = client,
             store = store,
             roomsProvider = { client.roomQueue() },
+            openTimeline = { roomId -> RustSweepTimeline.open(innerClient, roomId) },
+            visibleRoomId = { appNavigationStateService.appNavigationState.value.visibleRoomId() },
             // The generous budget is only safe under a foreground service; an unpromoted execution
             // is ordinary background work that WorkManager kills at ~10 minutes, so it must keep
             // the conservative budget and let Result.retry() cover the remainder.
@@ -200,6 +208,10 @@ class SearchBackfillWorker(
      * silently becomes "an arbitrary 200 rooms". If that branch turns out to be the one production
      * always takes, the prioritisation story is fiction and the log is how anyone would find out.
      */
+    private fun AppNavigationState.visibleRoomId(): RoomId? {
+        return if (isInForeground) navigationState.currentRoomId() else null
+    }
+
     private suspend fun MatrixClient.roomQueue(): List<RoomId> {
         val summaries = withTimeoutOrNull(ROOM_LIST_TIMEOUT_MILLIS) {
             roomListService.allRooms.summaries.firstOrNull { it.isNotEmpty() }
