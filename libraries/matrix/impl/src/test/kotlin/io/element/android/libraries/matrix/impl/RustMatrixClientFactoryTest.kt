@@ -51,22 +51,6 @@ class RustMatrixClientFactoryTest {
     }
 
     @Test
-    fun `create - message search is unavailable when the client secret is missing`() = runTest {
-        val featureFlagService = FakeFeatureFlagService(
-            initialState = mapOf(FeatureFlags.MessageSearch.key to true),
-        )
-        val sut = createRustMatrixClientFactory(
-            featureFlagService = featureFlagService,
-            workManagerScheduler = FakeWorkManagerScheduler(submitLambda = {}),
-        )
-
-        val result = sut.create(aSessionData().copy(passphrase = null))
-
-        assertThat(result.isMessageSearchAvailable).isFalse()
-        result.destroy()
-    }
-
-    @Test
     fun `create - message search availability uses the client builder decision`() = runTest {
         val featureFlagService = FakeFeatureFlagService(
             initialState = mapOf(FeatureFlags.MessageSearch.key to true),

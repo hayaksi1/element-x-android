@@ -59,7 +59,7 @@ class DefaultNotificationConversationServiceTest : RobolectricTest() {
         val context = InstrumentationRegistry.getInstrumentation().context
         val service = createService(context)
 
-        service.onSendMessage(
+        service.onMessageInRoom(
             sessionId = A_SESSION_ID,
             roomId = A_ROOM_ID,
             roomName = "Room title",
@@ -203,7 +203,7 @@ class DefaultNotificationConversationServiceTest : RobolectricTest() {
             appPreferencesStore = InMemoryAppPreferencesStore(isConversationNotificationsEnabled = false),
         )
 
-        service.onSendMessage(
+        service.onMessageInRoom(
             sessionId = A_SESSION_ID,
             roomId = A_ROOM_ID,
             roomName = "Room title",
