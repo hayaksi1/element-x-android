@@ -15,8 +15,9 @@ import android.os.Build
 import android.text.Layout
 import android.text.SpannableStringBuilder
 import android.text.Spanned
+import android.text.style.LeadingMarginSpan
 import android.text.style.LineHeightSpan
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
@@ -31,10 +32,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.core.content.getSystemService
@@ -47,45 +50,65 @@ import io.element.android.libraries.designsystem.utils.snackbar.LocalSnackbarDis
 import io.element.android.libraries.designsystem.utils.snackbar.SnackbarMessage
 import io.element.android.libraries.ui.strings.CommonStrings
 import io.element.android.wysiwyg.view.spans.CodeBlockSpan
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
 import org.jsoup.nodes.Document
 
 internal val CodeBlockHeaderHeight = 30.dp
-internal val CodeBlockFooterHeight = 40.dp
+internal val CodeBlockFooterHeight = 33.dp
 
-private val COPY_ICON_SIZE = 16.dp
+private val COPY_ICON_SIZE = 20.dp
 private val COPY_LABEL_SPACING = 8.dp
 private val CODE_BLOCK_HORIZONTAL_INSET = 12.dp
 private const val LANGUAGE_CLASS_PREFIX = "language-"
+private const val FALLBACK_REPLY_NODE_TAG = "mx-reply"
 
 /**
- * A code block found in a rendered message, together with the bounds of the box it is drawn in.
+ * What the chrome of a code block offers: the code its copy row puts on the clipboard, and the
+ * language its header is labelled with. Read off the message's own spans, so it is known before the
+ * message is measured.
+ */
+internal data class CodeBlockAction(
+    val code: String,
+    val language: String?,
+)
+
+/**
+ * The bounds of the box a code block is drawn in.
  *
  * The pixel values are in the coordinate space of the [Layout] the block was measured in, and
  * already include the space reserved by [withCodeBlockChrome].
  */
-internal data class CodeBlockOverlay(
-    val code: String,
-    val language: String?,
-    val blockTopPx: Int,
-    val blockBottomPx: Int,
-    val blockWidthPx: Int,
-)
+internal data class CodeBlockBounds(
+    val leftPx: Int,
+    val topPx: Int,
+    val bottomPx: Int,
+    val widthPx: Int,
+) {
+    companion object {
+        val Zero = CodeBlockBounds(leftPx = 0, topPx = 0, bottomPx = 0, widthPx = 0)
+    }
+}
 
 /**
  * The language of each code block in [document], in document order, or null where none is declared.
  *
  * The language only exists in the HTML (`<pre><code class="language-kotlin">`) and is dropped by the
- * time the DOM becomes spans, so it is read from the DOM and matched back up by position.
+ * time the DOM becomes spans, so it is read from the DOM and matched back up by position. A `pre`
+ * inside the rich-reply fallback produces no span, so those are skipped to keep the match aligned.
  */
 internal fun codeBlockLanguages(document: Document?): List<String?> {
     document ?: return emptyList()
-    return document.select("pre").map { pre ->
-        pre.selectFirst("code")
-            ?.classNames()
-            ?.firstOrNull { it.startsWith(LANGUAGE_CLASS_PREFIX) }
-            ?.removePrefix(LANGUAGE_CLASS_PREFIX)
-            ?.takeIf { it.isNotBlank() }
-    }
+    return document.select("pre")
+        .filterNot { pre -> pre.parents().any { it.tagName() == FALLBACK_REPLY_NODE_TAG } }
+        .map { pre ->
+            pre.selectFirst("code")
+                ?.classNames()
+                ?.firstOrNull { it.startsWith(LANGUAGE_CLASS_PREFIX) }
+                ?.removePrefix(LANGUAGE_CLASS_PREFIX)
+                ?.takeIf { it.isNotBlank() }
+        }
 }
 
 /**
@@ -131,66 +154,101 @@ internal fun hasCodeBlock(text: CharSequence): Boolean {
 }
 
 /**
- * Finds every code block in [text] and measures the box it is drawn in.
+ * Finds every code block in [text] and reads what its chrome offers.
  *
  * The blocks are returned in document order, which is also how [languages] is matched back on.
  */
-internal fun computeCodeBlockOverlays(
+internal fun codeBlockActions(
     text: CharSequence,
-    layout: Layout,
     languages: List<String?> = emptyList(),
-): List<CodeBlockOverlay> {
-    val spanned = text as? Spanned ?: return emptyList()
-    return spanned.getSpans(0, spanned.length, CodeBlockSpan::class.java)
-        .map { span -> spanned.getSpanStart(span) to spanned.getSpanEnd(span) }
-        .sortedBy { (start, _) -> start }
+): ImmutableList<CodeBlockAction> {
+    val spanned = text as? Spanned ?: return persistentListOf()
+    return spanned.codeBlockRanges()
         .mapIndexedNotNull { index, (start, end) ->
             if (start < 0 || end > spanned.length || start >= end) return@mapIndexedNotNull null
-            val firstLine = layout.getLineForOffset(start)
-            val lastLine = layout.getLineForOffset(end - 1)
-            CodeBlockOverlay(
+            CodeBlockAction(
                 code = spanned.subSequence(start, end).toString(),
                 language = languages.getOrNull(index),
-                blockTopPx = layout.getLineTop(firstLine),
-                blockBottomPx = layout.getLineBottom(lastLine),
-                // The block's background spans the text layout's full width, whatever its lines hold.
-                blockWidthPx = layout.width,
             )
         }
+        .toImmutableList()
 }
+
+/**
+ * Measures the box each code block in [text] is drawn in, in the same order as [codeBlockActions].
+ */
+internal fun computeCodeBlockBounds(
+    text: CharSequence,
+    layout: Layout,
+): ImmutableList<CodeBlockBounds> {
+    val spanned = text as? Spanned ?: return persistentListOf()
+    return spanned.codeBlockRanges()
+        .mapNotNull { (start, end) ->
+            if (start < 0 || end > spanned.length || start >= end) return@mapNotNull null
+            val firstLine = layout.getLineForOffset(start)
+            val lastLine = layout.getLineForOffset(end - 1)
+            val marginPx = spanned.getSpans(start, end, LeadingMarginSpan::class.java)
+                .filter { it !is CodeBlockSpan && spanned.getSpanStart(it) <= start && start < spanned.getSpanEnd(it) }
+                .sumOf { it.getLeadingMargin(true) }
+            val isRtl = layout.getParagraphDirection(firstLine) == Layout.DIR_RIGHT_TO_LEFT
+            CodeBlockBounds(
+                leftPx = if (isRtl) 0 else marginPx,
+                topPx = layout.getLineTop(firstLine),
+                bottomPx = layout.getLineBottom(lastLine),
+                widthPx = layout.width - marginPx,
+            )
+        }
+        .toImmutableList()
+}
+
+private fun Spanned.codeBlockRanges(): List<Pair<Int, Int>> =
+    getSpans(0, length, CodeBlockSpan::class.java)
+        .map { span -> getSpanStart(span) to getSpanEnd(span) }
+        .sortedBy { (start, _) -> start }
 
 /**
  * Draws the chrome of a code block: a language label and separator at the top, and a copy row at the
  * bottom, both inside the block's own box and within the space [withCodeBlockChrome] reserved.
+ *
+ * [boundsAt] is read from the placement and measure lambdas and never during composition. The bounds
+ * are produced during the TextView's measure pass, so a composition that depended on them would both
+ * draw the chrome a frame behind the text and recompose from inside the layout phase — and that
+ * recomposition rebuilds the display text, which calls setText, which drops the TextView's Layout.
+ * EditorStyledTextView skips a code block's background whenever it draws without a Layout, so the box
+ * would then stay missing until something invalidated the view again. Reading in the layout phase
+ * instead sees the value the TextView sibling has just written, in the same frame.
  */
 @Composable
 internal fun BoxScope.CodeBlockCopyButtons(
-    overlays: List<CodeBlockOverlay>,
+    actions: ImmutableList<CodeBlockAction>,
+    boundsAt: (Int) -> CodeBlockBounds,
+    onLongClick: (() -> Unit)?,
 ) {
-    if (overlays.isEmpty()) return
+    if (actions.isEmpty()) return
     val context = LocalContext.current
     val snackbarDispatcher = LocalSnackbarDispatcher.current
-    val copyLabel = stringResource(CommonStrings.action_copy_code)
-    val density = LocalDensity.current
-    for (overlay in overlays) {
-        val blockWidth = with(density) { overlay.blockWidthPx.toDp() }
+    val copyLabel = stringResource(CommonStrings.action_copy)
+    val fontScale = LocalDensity.current.fontScale
+    for ((index, action) in actions.withIndex()) {
         val separatorColor = ElementTheme.colors.borderInteractiveSecondary
 
-        if (overlay.language != null) {
+        if (action.language != null) {
             Column(
                 modifier = Modifier
                     .align(Alignment.TopStart)
-                    .offset { IntOffset(x = 0, y = overlay.blockTopPx) }
-                    .width(blockWidth)
-                    .height(CodeBlockHeaderHeight),
+                    .offset { boundsAt(index).let { IntOffset(x = it.leftPx, y = it.topPx) } }
+                    .blockWidth { boundsAt(index).widthPx }
+                    .height(CodeBlockHeaderHeight * fontScale),
             ) {
                 Text(
                     modifier = Modifier
                         .weight(1f)
                         .padding(horizontal = CODE_BLOCK_HORIZONTAL_INSET),
-                    text = overlay.language,
+                    text = action.language,
                     style = ElementTheme.typography.fontBodySmMedium,
                     color = ElementTheme.colors.textSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
                 HorizontalDivider(color = separatorColor)
             }
@@ -200,24 +258,30 @@ internal fun BoxScope.CodeBlockCopyButtons(
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .offset {
-                    IntOffset(x = 0, y = overlay.blockBottomPx - CodeBlockFooterHeight.roundToPx())
+                    boundsAt(index).let {
+                        IntOffset(x = it.leftPx, y = it.bottomPx - (CodeBlockFooterHeight * fontScale).roundToPx())
+                    }
                 }
-                .width(blockWidth)
-                .height(CodeBlockFooterHeight),
+                .blockWidth { boundsAt(index).widthPx }
+                .height(CodeBlockFooterHeight * fontScale),
         ) {
             HorizontalDivider(color = separatorColor)
             Row(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .clickable(role = Role.Button, onClickLabel = copyLabel) {
-                        context.getSystemService<ClipboardManager>()
-                            ?.setPrimaryClip(ClipData.newPlainText("", overlay.code))
-                        // Android 13+ shows its own clipboard confirmation.
-                        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-                            snackbarDispatcher.post(SnackbarMessage(CommonStrings.common_copied_to_clipboard))
-                        }
-                    },
+                    .combinedClickable(
+                        role = Role.Button,
+                        onClickLabel = copyLabel,
+                        onLongClick = onLongClick,
+                        onClick = {
+                            context.getSystemService<ClipboardManager>()
+                                ?.setPrimaryClip(ClipData.newPlainText("", action.code))
+                            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+                                snackbarDispatcher.post(SnackbarMessage(CommonStrings.common_copied_to_clipboard))
+                            }
+                        },
+                    ),
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -225,16 +289,25 @@ internal fun BoxScope.CodeBlockCopyButtons(
                     modifier = Modifier.size(COPY_ICON_SIZE),
                     imageVector = CompoundIcons.Copy(),
                     contentDescription = null,
-                    tint = ElementTheme.colors.textSecondary,
+                    tint = ElementTheme.colors.iconSecondary,
                 )
                 Spacer(modifier = Modifier.width(COPY_LABEL_SPACING))
                 Text(
                     text = copyLabel,
-                    style = ElementTheme.typography.fontBodySmMedium,
+                    style = ElementTheme.typography.fontBodyMdRegular,
                     color = ElementTheme.colors.textSecondary,
                 )
             }
         }
+    }
+}
+
+/** Measures to a width only known at layout time, so the chrome can track the block within a frame. */
+private fun Modifier.blockWidth(widthPx: () -> Int): Modifier = layout { measurable, constraints ->
+    val width = widthPx().coerceAtLeast(0)
+    val placeable = measurable.measure(constraints.copy(minWidth = width, maxWidth = width))
+    layout(placeable.width, placeable.height) {
+        placeable.place(0, 0)
     }
 }
 
