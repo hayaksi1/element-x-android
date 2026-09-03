@@ -1,0 +1,55 @@
+From 0b89553e7624a03a3178bdaeb81d2a53bcabc08f Mon Sep 17 00:00:00 2001
+From: hayaksi1 <193020925+hayaksi1@users.noreply.github.com>
+Date: Thu, 3 Sep 2026 12:21:54 +0300
+Subject: [PATCH] Gate the notification shortcut id on the conversation
+ preference everywhere
+
+feat/fork-misc sets the conversation shortcut id on every messages
+notification, threads and updates included, while
+fix/7471-conversation-notifications gates upstream's non-thread call on
+the conversation notifications preference. The merge keeps both, so the
+unconditional call wins and the preference never takes effect. One call
+on the returned builder, gated on the preference, gives both branches
+what they want.
+
+Fork-Feature: fork-tooling
+---
+ .../factories/NotificationCreator.kt              | 15 +++++----------
+ 1 file changed, 5 insertions(+), 10 deletions(-)
+
+diff --git a/libraries/push/impl/src/main/kotlin/io/element/android/libraries/push/impl/notifications/factories/NotificationCreator.kt b/libraries/push/impl/src/main/kotlin/io/element/android/libraries/push/impl/notifications/factories/NotificationCreator.kt
+index e176cea56d..a7255f1d98 100755
+--- a/libraries/push/impl/src/main/kotlin/io/element/android/libraries/push/impl/notifications/factories/NotificationCreator.kt
++++ b/libraries/push/impl/src/main/kotlin/io/element/android/libraries/push/impl/notifications/factories/NotificationCreator.kt
+@@ -175,15 +175,6 @@ class DefaultNotificationCreator(
+                 .clearActions()
+         } else {
+             NotificationCompat.Builder(context, channelId)
+-                // ID of the corresponding shortcut, for conversation features under API 30+
+-                // Must match those created in the ShortcutInfoCompat.Builder()
+-                // for the notification to appear as a "Conversation":
+-                // https://developer.android.com/develop/ui/views/notifications/conversations
+-                .apply {
+-                    if (threadId == null && appPreferencesStore.isConversationNotificationsEnabledFlow().first()) {
+-                        setShortcutId(createShortcutId(roomInfo.sessionId, roomInfo.roomId))
+-                    }
+-                }
+                 .setGroupSummary(false)
+                 // In order to avoid notification making sound twice (due to the summary notification)
+                 .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)
+@@ -206,7 +197,11 @@ class DefaultNotificationCreator(
+             // Must match those created in the ShortcutInfoCompat.Builder()
+             // for the notification to appear as a "Conversation":
+             // https://developer.android.com/develop/ui/views/notifications/conversations
+-            .setShortcutId(createShortcutId(roomInfo.sessionId, roomInfo.roomId))
++            .apply {
++                if (appPreferencesStore.isConversationNotificationsEnabledFlow().first()) {
++                    setShortcutId(createShortcutId(roomInfo.sessionId, roomInfo.roomId))
++                }
++            }
+             .setCategory(category)
+             .setNumber(events.size)
+             .setOnlyAlertOnce(roomInfo.isUpdated || newEvents.isEmpty())
+-- 
+2.52.0
+
