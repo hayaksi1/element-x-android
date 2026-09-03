@@ -1,6 +1,6 @@
-From ada4d9080be0ebbb5f3643039407a7ae9a40afa6 Mon Sep 17 00:00:00 2001
+From 1b24e50bc88f4e34cea1bffcd5a02edc56ccb383 Mon Sep 17 00:00:00 2001
 From: hayaksi1 <193020925+hayaksi1@users.noreply.github.com>
-Date: Thu, 3 Sep 2026 10:14:12 +0300
+Date: Thu, 3 Sep 2026 10:27:03 +0300
 Subject: [PATCH] Re-record the goldens of the views several branches change at
  once
 
@@ -8,11 +8,11 @@ The snapshot policy keeps the first branch's golden when two branches
 record the same view, so every view touched by more than one branch
 fails verification on the integrated tree: notification, advanced and
 developer settings, the room list, the messages screen, the space view
-and a few single previews. Recorded on master after integration.
+and the login mode screen. Recorded on master after integration.
 
-The share location, PIN entry, QR code, blocked users and user status
-goldens are the known render drift of this machine against upstream's
-recordings; they are recorded here so the local gate is green.
+Views that render differently from run to run on this machine (share
+location, PIN entry, QR code, blocked users, user status, the verified
+user send failure sheet and a few others) keep upstream's goldens.
 
 Fork-Feature: fork-tooling
 ---
@@ -33,32 +33,6 @@ Fork-Feature: fork-tooling
  .../images/features.home.impl_HomeView_Night_3_en.png         | 4 ++--
  .../images/features.home.impl_HomeView_Night_5_en.png         | 4 ++--
  .../images/features.home.impl_HomeView_Night_9_en.png         | 4 ++--
- ...krequests.impl.banner_KnockRequestsBannerView_Day_5_en.png | 4 ++--
- ...equests.impl.banner_KnockRequestsBannerView_Night_5_en.png | 4 ++--
- ...knewdevice.impl.screens.qrcode_ShowQrCodeView_Day_0_en.png | 4 ++--
- ...ewdevice.impl.screens.qrcode_ShowQrCodeView_Night_0_en.png | 4 ++--
- ...eatures.location.impl.share_ShareLocationView_Day_0_en.png | 4 ++--
- ...eatures.location.impl.share_ShareLocationView_Day_1_en.png | 4 ++--
- ...eatures.location.impl.share_ShareLocationView_Day_2_en.png | 4 ++--
- ...eatures.location.impl.share_ShareLocationView_Day_3_en.png | 4 ++--
- ...eatures.location.impl.share_ShareLocationView_Day_4_en.png | 4 ++--
- ...eatures.location.impl.share_ShareLocationView_Day_5_en.png | 4 ++--
- ...eatures.location.impl.share_ShareLocationView_Day_6_en.png | 4 ++--
- ...eatures.location.impl.share_ShareLocationView_Day_7_en.png | 4 ++--
- ...eatures.location.impl.share_ShareLocationView_Day_8_en.png | 4 ++--
- ...eatures.location.impl.share_ShareLocationView_Day_9_en.png | 4 ++--
- ...tures.location.impl.share_ShareLocationView_Night_0_en.png | 4 ++--
- ...tures.location.impl.share_ShareLocationView_Night_1_en.png | 4 ++--
- ...tures.location.impl.share_ShareLocationView_Night_2_en.png | 4 ++--
- ...tures.location.impl.share_ShareLocationView_Night_3_en.png | 4 ++--
- ...tures.location.impl.share_ShareLocationView_Night_4_en.png | 4 ++--
- ...tures.location.impl.share_ShareLocationView_Night_5_en.png | 4 ++--
- ...tures.location.impl.share_ShareLocationView_Night_6_en.png | 4 ++--
- ...tures.location.impl.share_ShareLocationView_Night_7_en.png | 4 ++--
- ...tures.location.impl.share_ShareLocationView_Night_8_en.png | 4 ++--
- ...tures.location.impl.share_ShareLocationView_Night_9_en.png | 4 ++--
- ....lockscreen.impl.components_PinEntryTextField_Day_0_en.png | 4 ++--
- ...ockscreen.impl.components_PinEntryTextField_Night_0_en.png | 4 ++--
  .../features.login.impl.login_LoginModeView_Day_6_en.png      | 4 ++--
  .../features.login.impl.login_LoginModeView_Night_6_en.png    | 4 ++--
  .../images/features.messages.impl_MessagesViewA11y_en.png     | 4 ++--
@@ -109,8 +83,6 @@ Fork-Feature: fork-tooling
  ...eferences.impl.advanced_AdvancedSettingsViewLight_7_en.png | 4 ++--
  ...eferences.impl.advanced_AdvancedSettingsViewLight_8_en.png | 4 ++--
  ...eferences.impl.advanced_AdvancedSettingsViewLight_9_en.png | 4 ++--
- ...references.impl.blockedusers_BlockedUsersView_Day_4_en.png | 4 ++--
- ...ferences.impl.blockedusers_BlockedUsersView_Night_5_en.png | 4 ++--
  ...ferences.impl.developer_DeveloperSettingsView_Day_0_en.png | 4 ++--
  ...erences.impl.developer_DeveloperSettingsView_Day_10_en.png | 3 +++
  ...ferences.impl.developer_DeveloperSettingsView_Day_1_en.png | 4 ++--
@@ -171,10 +143,6 @@ Fork-Feature: fork-tooling
  ...impl.notifications_NotificationSettingsView_Night_7_en.png | 4 ++--
  ...impl.notifications_NotificationSettingsView_Night_8_en.png | 4 ++--
  ...impl.notifications_NotificationSettingsView_Night_9_en.png | 4 ++--
- ...es.preferences.impl.userstatus_UserStatusView_Day_6_en.png | 4 ++--
- ....preferences.impl.userstatus_UserStatusView_Night_5_en.png | 4 ++--
- ...bermoderation.impl_RoomMemberModerationView_Night_5_en.png | 4 ++--
- ...bermoderation.impl_RoomMemberModerationView_Night_7_en.png | 4 ++--
  .../images/features.space.impl.root_SpaceView_Day_0_en.png    | 4 ++--
  .../images/features.space.impl.root_SpaceView_Day_1_en.png    | 4 ++--
  .../images/features.space.impl.root_SpaceView_Day_2_en.png    | 4 ++--
@@ -187,7 +155,7 @@ Fork-Feature: fork-tooling
  .../images/features.space.impl.root_SpaceView_Night_3_en.png  | 4 ++--
  .../images/features.space.impl.root_SpaceView_Night_4_en.png  | 4 ++--
  .../images/features.space.impl.root_SpaceView_Night_5_en.png  | 4 ++--
- 171 files changed, 350 insertions(+), 326 deletions(-)
+ 139 files changed, 286 insertions(+), 262 deletions(-)
  create mode 100644 tests/uitests/src/test/snapshots/images/features.preferences.impl.advanced_AdvancedSettingsViewBlack_10_en.png
  create mode 100644 tests/uitests/src/test/snapshots/images/features.preferences.impl.advanced_AdvancedSettingsViewBlack_11_en.png
  create mode 100644 tests/uitests/src/test/snapshots/images/features.preferences.impl.advanced_AdvancedSettingsViewDark_10_en.png
@@ -367,266 +335,6 @@ index 042afef2d1..1c07d6de60 100644
 -size 81441
 +oid sha256:09e18d592e3a164031f1f594a52efc805a6907de2edf810238c65e8916bc7203
 +size 81301
-diff --git a/tests/uitests/src/test/snapshots/images/features.knockrequests.impl.banner_KnockRequestsBannerView_Day_5_en.png b/tests/uitests/src/test/snapshots/images/features.knockrequests.impl.banner_KnockRequestsBannerView_Day_5_en.png
-index 5fe8e62f96..ae365f5143 100644
---- a/tests/uitests/src/test/snapshots/images/features.knockrequests.impl.banner_KnockRequestsBannerView_Day_5_en.png
-+++ b/tests/uitests/src/test/snapshots/images/features.knockrequests.impl.banner_KnockRequestsBannerView_Day_5_en.png
-@@ -1,3 +1,3 @@
- version https://git-lfs.github.com/spec/v1
--oid sha256:b2e211a700dfcefab1927926ecd2ab1eee2ceaed6980657e1bad1e70bbc69dd5
--size 29522
-+oid sha256:645349979f0789dd674b9efcaee305a35955725c5c4d24599984aefc3a61b18f
-+size 32005
-diff --git a/tests/uitests/src/test/snapshots/images/features.knockrequests.impl.banner_KnockRequestsBannerView_Night_5_en.png b/tests/uitests/src/test/snapshots/images/features.knockrequests.impl.banner_KnockRequestsBannerView_Night_5_en.png
-index 33110584a9..f0bfd0f2b4 100644
---- a/tests/uitests/src/test/snapshots/images/features.knockrequests.impl.banner_KnockRequestsBannerView_Night_5_en.png
-+++ b/tests/uitests/src/test/snapshots/images/features.knockrequests.impl.banner_KnockRequestsBannerView_Night_5_en.png
-@@ -1,3 +1,3 @@
- version https://git-lfs.github.com/spec/v1
--oid sha256:dbdf9740221b82aaaf332c95e7299594f0b4fdd258b2e9c733133bdd4a01f692
--size 28378
-+oid sha256:e82c6e4ff563e7ae870431528d9413ac915e16ca0151aa3c86ff5081bfc72478
-+size 27563
-diff --git a/tests/uitests/src/test/snapshots/images/features.linknewdevice.impl.screens.qrcode_ShowQrCodeView_Day_0_en.png b/tests/uitests/src/test/snapshots/images/features.linknewdevice.impl.screens.qrcode_ShowQrCodeView_Day_0_en.png
-index 23bb00edfe..48598e410f 100644
---- a/tests/uitests/src/test/snapshots/images/features.linknewdevice.impl.screens.qrcode_ShowQrCodeView_Day_0_en.png
-+++ b/tests/uitests/src/test/snapshots/images/features.linknewdevice.impl.screens.qrcode_ShowQrCodeView_Day_0_en.png
-@@ -1,3 +1,3 @@
- version https://git-lfs.github.com/spec/v1
--oid sha256:7270b97b04cd403a5d5e34b55b3303be08497fcb5d750d024565ffa17d20802c
--size 31808
-+oid sha256:5c79c83bde346bec65f67c34805407e46b351b2c91772c13e0a6c23ae09bf7e8
-+size 30345
-diff --git a/tests/uitests/src/test/snapshots/images/features.linknewdevice.impl.screens.qrcode_ShowQrCodeView_Night_0_en.png b/tests/uitests/src/test/snapshots/images/features.linknewdevice.impl.screens.qrcode_ShowQrCodeView_Night_0_en.png
-index 9945685453..d22d7f98cf 100644
---- a/tests/uitests/src/test/snapshots/images/features.linknewdevice.impl.screens.qrcode_ShowQrCodeView_Night_0_en.png
-+++ b/tests/uitests/src/test/snapshots/images/features.linknewdevice.impl.screens.qrcode_ShowQrCodeView_Night_0_en.png
-@@ -1,3 +1,3 @@
- version https://git-lfs.github.com/spec/v1
--oid sha256:29ee97865bc634eb1f30d6866a0a2badc91b5453ded11d7f4905c46db9c0c324
--size 29775
-+oid sha256:ff17ff66d5c92ab19ce8064e2e14326e9f2921c1b7313a3974547b2932cb7fb1
-+size 32295
-diff --git a/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Day_0_en.png b/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Day_0_en.png
-index 374acc4a7a..33ef3511ec 100644
---- a/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Day_0_en.png
-+++ b/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Day_0_en.png
-@@ -1,3 +1,3 @@
- version https://git-lfs.github.com/spec/v1
--oid sha256:f879dd8636314113c9962bedae376f34057fd7af62a3725ef9aca7913ef08abc
--size 20453
-+oid sha256:8f03643af6b4643c0fbfee2d98138aa0350d0fb541de0a8a627570030a8f3812
-+size 20466
-diff --git a/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Day_1_en.png b/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Day_1_en.png
-index 60bf32612b..b1bdcee7a4 100644
---- a/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Day_1_en.png
-+++ b/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Day_1_en.png
-@@ -1,3 +1,3 @@
- version https://git-lfs.github.com/spec/v1
--oid sha256:e44d67574a6d3df53f9c9a6d588461dda932cc77142c07605e2a53a0f7c33819
--size 36440
-+oid sha256:f53a6b803268437c30350857951422dc1723a38922db4441a97bcb926a0e63ff
-+size 38724
-diff --git a/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Day_2_en.png b/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Day_2_en.png
-index a91262bdf2..b597367206 100644
---- a/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Day_2_en.png
-+++ b/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Day_2_en.png
-@@ -1,3 +1,3 @@
- version https://git-lfs.github.com/spec/v1
--oid sha256:a1482966c7528de972c7a9af647eb249329777b4f60f05ffd1794a1cdc8115dd
--size 34889
-+oid sha256:77ce52ef94d449d8eb37a8d84b297800a1663bc38dc27e2ea87e6f7da373195b
-+size 37222
-diff --git a/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Day_3_en.png b/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Day_3_en.png
-index caa435aca2..56bc529007 100644
---- a/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Day_3_en.png
-+++ b/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Day_3_en.png
-@@ -1,3 +1,3 @@
- version https://git-lfs.github.com/spec/v1
--oid sha256:455ad29386413801da964f034b284c3693ed2281510cfdb0e6a0e50478904098
--size 32472
-+oid sha256:76c4f1674cda818e0684869050fbad2cb31c02146726d1ee5e57481940218d29
-+size 30363
-diff --git a/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Day_4_en.png b/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Day_4_en.png
-index 374acc4a7a..33ef3511ec 100644
---- a/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Day_4_en.png
-+++ b/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Day_4_en.png
-@@ -1,3 +1,3 @@
- version https://git-lfs.github.com/spec/v1
--oid sha256:f879dd8636314113c9962bedae376f34057fd7af62a3725ef9aca7913ef08abc
--size 20453
-+oid sha256:8f03643af6b4643c0fbfee2d98138aa0350d0fb541de0a8a627570030a8f3812
-+size 20466
-diff --git a/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Day_5_en.png b/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Day_5_en.png
-index 740c6fd618..be619b419b 100644
---- a/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Day_5_en.png
-+++ b/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Day_5_en.png
-@@ -1,3 +1,3 @@
- version https://git-lfs.github.com/spec/v1
--oid sha256:0ca62fd1055aef95b255d40b7f8933e455a7fd7014c96e9e5eef04a9cff5549a
--size 22324
-+oid sha256:fc017e7707b83549cda8c06ffe8466596372132ba0b58dd91cfb20c451b6a417
-+size 22303
-diff --git a/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Day_6_en.png b/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Day_6_en.png
-index 380f1ec5b2..201c56516e 100644
---- a/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Day_6_en.png
-+++ b/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Day_6_en.png
-@@ -1,3 +1,3 @@
- version https://git-lfs.github.com/spec/v1
--oid sha256:1ddc6b2ec2417a2794e9ca0bfd88fae8f63e6d6f567582498157720092acd957
--size 26734
-+oid sha256:2f5ca554e1ae330865af0d267934d8d1c6dfe42cc3958db3b15b13d376e8721c
-+size 26667
-diff --git a/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Day_7_en.png b/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Day_7_en.png
-index 75f447d578..3d4aa9edc5 100644
---- a/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Day_7_en.png
-+++ b/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Day_7_en.png
-@@ -1,3 +1,3 @@
- version https://git-lfs.github.com/spec/v1
--oid sha256:a205abcee059aef3f902cac7716a5bb53127b98ab29d97b0b44cbaa6ba5cdabe
--size 42394
-+oid sha256:fd18d8bb6e61f616451439dff8690afc7473461c87adf11bb9870319d8e06fc4
-+size 38447
-diff --git a/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Day_8_en.png b/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Day_8_en.png
-index d4f298adb5..fb4db2984e 100644
---- a/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Day_8_en.png
-+++ b/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Day_8_en.png
-@@ -1,3 +1,3 @@
- version https://git-lfs.github.com/spec/v1
--oid sha256:d9a51a8b9c8799af008fca5e684c1fd107b6240f0e5f273b1559022c70ce5e31
--size 46363
-+oid sha256:f8c9a2dd2c3677281b6486af6a0b8a5405dc59bff0390b6ce1bca1cc63d88b0d
-+size 42546
-diff --git a/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Day_9_en.png b/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Day_9_en.png
-index f6c445eee1..d194937309 100644
---- a/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Day_9_en.png
-+++ b/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Day_9_en.png
-@@ -1,3 +1,3 @@
- version https://git-lfs.github.com/spec/v1
--oid sha256:dbb35e33035a9c22164128414bde7f6df848193040eef3bd7f073b0b182a7306
--size 21670
-+oid sha256:ebeb2f14074a9bc91dc892bfa056c9c67e83a64c64d645c77d312d64895e3815
-+size 21611
-diff --git a/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Night_0_en.png b/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Night_0_en.png
-index c07cad6219..70de0a28d5 100644
---- a/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Night_0_en.png
-+++ b/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Night_0_en.png
-@@ -1,3 +1,3 @@
- version https://git-lfs.github.com/spec/v1
--oid sha256:8bd18f0f95a41705cb18e753f7b99492aeba1a994cb02c95275bd7c14b5d983a
--size 19886
-+oid sha256:dc9a8778869e47b9874c4300cac52045c4be5fac6590acbaa719a065249ed3f5
-+size 19856
-diff --git a/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Night_1_en.png b/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Night_1_en.png
-index 21eb862eda..d9f4faabc7 100644
---- a/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Night_1_en.png
-+++ b/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Night_1_en.png
-@@ -1,3 +1,3 @@
- version https://git-lfs.github.com/spec/v1
--oid sha256:e0cd7909eb2cce4ce2ad297791527468a18b43343c4f4c7b1bb7ab5ade6cfc9d
--size 36959
-+oid sha256:124381cc86542b2704b619e798f62f58dc7f3b95ab8a1c4eec3fa4b849462f9e
-+size 34867
-diff --git a/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Night_2_en.png b/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Night_2_en.png
-index 91d309165f..432cbde734 100644
---- a/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Night_2_en.png
-+++ b/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Night_2_en.png
-@@ -1,3 +1,3 @@
- version https://git-lfs.github.com/spec/v1
--oid sha256:33c7e31962e562c4217629795ad0d79be10add9723e657f1a8dc3c4c16ac4ed4
--size 35476
-+oid sha256:f373df8ce07aa19d467d43306f5a8d6c78915e4e166e08e39bb39cb303b5faec
-+size 33305
-diff --git a/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Night_3_en.png b/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Night_3_en.png
-index b9e79d2337..317a87e2e5 100644
---- a/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Night_3_en.png
-+++ b/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Night_3_en.png
-@@ -1,3 +1,3 @@
- version https://git-lfs.github.com/spec/v1
--oid sha256:8721e0c604b0e12ba22db934ab93794e6c2143d1b4bc4e2f3d297f9121c1e688
--size 29233
-+oid sha256:ebbeb66a3f67e48668cadb96069f50feba5f4346119ea62c9dfd83ffd621b7b2
-+size 31182
-diff --git a/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Night_4_en.png b/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Night_4_en.png
-index c07cad6219..70de0a28d5 100644
---- a/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Night_4_en.png
-+++ b/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Night_4_en.png
-@@ -1,3 +1,3 @@
- version https://git-lfs.github.com/spec/v1
--oid sha256:8bd18f0f95a41705cb18e753f7b99492aeba1a994cb02c95275bd7c14b5d983a
--size 19886
-+oid sha256:dc9a8778869e47b9874c4300cac52045c4be5fac6590acbaa719a065249ed3f5
-+size 19856
-diff --git a/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Night_5_en.png b/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Night_5_en.png
-index 46f4412ab9..d261494eb8 100644
---- a/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Night_5_en.png
-+++ b/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Night_5_en.png
-@@ -1,3 +1,3 @@
- version https://git-lfs.github.com/spec/v1
--oid sha256:299310684787f8c18e4219e69125ce48d32d229b4bb3087da7e102aa87ea1ac7
--size 21599
-+oid sha256:8a3d7220c216b6fee2384ba2cb263903a8cfa45f3f97302c722188a4a827c575
-+size 21630
-diff --git a/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Night_6_en.png b/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Night_6_en.png
-index 259466128e..56ef074549 100644
---- a/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Night_6_en.png
-+++ b/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Night_6_en.png
-@@ -1,3 +1,3 @@
- version https://git-lfs.github.com/spec/v1
--oid sha256:11c3fe98b80dd8823e3eeafccda7aa5430dc6a691d2568f2a186c14f6a340360
--size 25824
-+oid sha256:24b8f832cbaa9aaad66187255adcefbb2d7c4407b911c2675a261b6f480aa277
-+size 25858
-diff --git a/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Night_7_en.png b/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Night_7_en.png
-index 5732afb34a..e66ccc603d 100644
---- a/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Night_7_en.png
-+++ b/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Night_7_en.png
-@@ -1,3 +1,3 @@
- version https://git-lfs.github.com/spec/v1
--oid sha256:dfaee97064c6391c9e611e30bfb36d3abb8d10d2e3312cd21afa3b2b362637cf
--size 36805
-+oid sha256:1e31aa9639a3805e3644fadbb01ab3503aedee068655920555a4817ae38b6376
-+size 40312
-diff --git a/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Night_8_en.png b/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Night_8_en.png
-index 549c353b64..f2f4d7c766 100644
---- a/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Night_8_en.png
-+++ b/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Night_8_en.png
-@@ -1,3 +1,3 @@
- version https://git-lfs.github.com/spec/v1
--oid sha256:2b56fa8390836f84984130ac90af3a8e2244ab06d1460133883aa266e73b4567
--size 40742
-+oid sha256:77e1a15b548d944e57b7d71229c28692e32ad9340d04ec0c43c52dafe16e3ae1
-+size 44172
-diff --git a/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Night_9_en.png b/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Night_9_en.png
-index 1cf67b2855..dcf2ab131b 100644
---- a/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Night_9_en.png
-+++ b/tests/uitests/src/test/snapshots/images/features.location.impl.share_ShareLocationView_Night_9_en.png
-@@ -1,3 +1,3 @@
- version https://git-lfs.github.com/spec/v1
--oid sha256:e68d95e8c4734d26e0853c886f8253c3ff21508fdf97dac8879e67d25a683e06
--size 19899
-+oid sha256:cab8ea5b016f20de07dd0134836c42f9fd51562837fe4da2be8a8d38ca1f95f8
-+size 19914
-diff --git a/tests/uitests/src/test/snapshots/images/features.lockscreen.impl.components_PinEntryTextField_Day_0_en.png b/tests/uitests/src/test/snapshots/images/features.lockscreen.impl.components_PinEntryTextField_Day_0_en.png
-index 72c3e43f5a..3a22d6959f 100644
---- a/tests/uitests/src/test/snapshots/images/features.lockscreen.impl.components_PinEntryTextField_Day_0_en.png
-+++ b/tests/uitests/src/test/snapshots/images/features.lockscreen.impl.components_PinEntryTextField_Day_0_en.png
-@@ -1,3 +1,3 @@
- version https://git-lfs.github.com/spec/v1
--oid sha256:24edc821b92f0686eb1cdc3a8214adacf490f9f586637e7c23adeaf904e6704a
--size 16292
-+oid sha256:2046f1225b2f58812502196f4b7d1c7a4d87f740b32e40dd82762fade1c42ea2
-+size 16167
-diff --git a/tests/uitests/src/test/snapshots/images/features.lockscreen.impl.components_PinEntryTextField_Night_0_en.png b/tests/uitests/src/test/snapshots/images/features.lockscreen.impl.components_PinEntryTextField_Night_0_en.png
-index 5c49c08509..10223f5bf6 100644
---- a/tests/uitests/src/test/snapshots/images/features.lockscreen.impl.components_PinEntryTextField_Night_0_en.png
-+++ b/tests/uitests/src/test/snapshots/images/features.lockscreen.impl.components_PinEntryTextField_Night_0_en.png
-@@ -1,3 +1,3 @@
- version https://git-lfs.github.com/spec/v1
--oid sha256:58a6cbe83f86bbd32c8576a4d62a26794560f53b60c9bf5dc74aa0dd50e2dc87
--size 16238
-+oid sha256:62384687c273cb57dbd25bfaa558d83e3efc527fc4dfff4aca8bf85ab1ce9e4b
-+size 16446
 diff --git a/tests/uitests/src/test/snapshots/images/features.login.impl.login_LoginModeView_Day_6_en.png b/tests/uitests/src/test/snapshots/images/features.login.impl.login_LoginModeView_Day_6_en.png
 index 4c68cd74a9..ce3af23d54 100644
 --- a/tests/uitests/src/test/snapshots/images/features.login.impl.login_LoginModeView_Day_6_en.png
@@ -1121,26 +829,6 @@ index 64f4deb42c..d2605b47e6 100644
 -size 64786
 +oid sha256:1655551ca9ece2c4a00d62f8d4d22684d73076a9b4f600a0ad2a8ede2af58615
 +size 69626
-diff --git a/tests/uitests/src/test/snapshots/images/features.preferences.impl.blockedusers_BlockedUsersView_Day_4_en.png b/tests/uitests/src/test/snapshots/images/features.preferences.impl.blockedusers_BlockedUsersView_Day_4_en.png
-index 7cca911c45..074820e157 100644
---- a/tests/uitests/src/test/snapshots/images/features.preferences.impl.blockedusers_BlockedUsersView_Day_4_en.png
-+++ b/tests/uitests/src/test/snapshots/images/features.preferences.impl.blockedusers_BlockedUsersView_Day_4_en.png
-@@ -1,3 +1,3 @@
- version https://git-lfs.github.com/spec/v1
--oid sha256:26e14b77fa3c3aeaea58782309e6de8b9047e07945009322990ebf5f4c283309
--size 52770
-+oid sha256:7caacb336793b8ae4b83e9a10a82325e25e8b3c036f881898ed28688250eb6e0
-+size 55744
-diff --git a/tests/uitests/src/test/snapshots/images/features.preferences.impl.blockedusers_BlockedUsersView_Night_5_en.png b/tests/uitests/src/test/snapshots/images/features.preferences.impl.blockedusers_BlockedUsersView_Night_5_en.png
-index 616c06bf46..36d19c6b72 100644
---- a/tests/uitests/src/test/snapshots/images/features.preferences.impl.blockedusers_BlockedUsersView_Night_5_en.png
-+++ b/tests/uitests/src/test/snapshots/images/features.preferences.impl.blockedusers_BlockedUsersView_Night_5_en.png
-@@ -1,3 +1,3 @@
- version https://git-lfs.github.com/spec/v1
--oid sha256:0ce2519906f1aaf34700ca9ba4bdeaa72030f1f5aff3f7e24352a1435ac67d98
--size 53966
-+oid sha256:7dfa2767c55a81d3f121b8fa55443b7b05f9369e91639b80e0be349863799ad7
-+size 55438
 diff --git a/tests/uitests/src/test/snapshots/images/features.preferences.impl.developer_DeveloperSettingsView_Day_0_en.png b/tests/uitests/src/test/snapshots/images/features.preferences.impl.developer_DeveloperSettingsView_Day_0_en.png
 index 62db66bd61..b80c5a22a8 100644
 --- a/tests/uitests/src/test/snapshots/images/features.preferences.impl.developer_DeveloperSettingsView_Day_0_en.png
@@ -1739,46 +1427,6 @@ index 6e6f7eb4b3..b353789ed6 100644
 -size 43533
 +oid sha256:4c383ca82018f74a445b61447d269198fec3321c934ccc96678239b261fe89e4
 +size 46611
-diff --git a/tests/uitests/src/test/snapshots/images/features.preferences.impl.userstatus_UserStatusView_Day_6_en.png b/tests/uitests/src/test/snapshots/images/features.preferences.impl.userstatus_UserStatusView_Day_6_en.png
-index fdd8fcd5a5..7c422591ad 100644
---- a/tests/uitests/src/test/snapshots/images/features.preferences.impl.userstatus_UserStatusView_Day_6_en.png
-+++ b/tests/uitests/src/test/snapshots/images/features.preferences.impl.userstatus_UserStatusView_Day_6_en.png
-@@ -1,3 +1,3 @@
- version https://git-lfs.github.com/spec/v1
--oid sha256:22678a2a8505e1d9d5bfcb44459b6fac69c11a4bf72fae09c48ffa2e54f5a110
--size 12128
-+oid sha256:2e16fc1daa0f284c442f66591e1d1f59161272a67998d26740b0b403bfe82495
-+size 11866
-diff --git a/tests/uitests/src/test/snapshots/images/features.preferences.impl.userstatus_UserStatusView_Night_5_en.png b/tests/uitests/src/test/snapshots/images/features.preferences.impl.userstatus_UserStatusView_Night_5_en.png
-index f6e27475da..acb8afa74a 100644
---- a/tests/uitests/src/test/snapshots/images/features.preferences.impl.userstatus_UserStatusView_Night_5_en.png
-+++ b/tests/uitests/src/test/snapshots/images/features.preferences.impl.userstatus_UserStatusView_Night_5_en.png
-@@ -1,3 +1,3 @@
- version https://git-lfs.github.com/spec/v1
--oid sha256:9ee89826c8aa2ac0371ed31959243f62bf9968806a7b27117cd7b4d849423a33
--size 11667
-+oid sha256:bed7565420e11c43acc06896ef298683d2f2dd1dc16c430eab7018e9ead9937a
-+size 11652
-diff --git a/tests/uitests/src/test/snapshots/images/features.roommembermoderation.impl_RoomMemberModerationView_Night_5_en.png b/tests/uitests/src/test/snapshots/images/features.roommembermoderation.impl_RoomMemberModerationView_Night_5_en.png
-index d47bf90664..4ae7279fe7 100644
---- a/tests/uitests/src/test/snapshots/images/features.roommembermoderation.impl_RoomMemberModerationView_Night_5_en.png
-+++ b/tests/uitests/src/test/snapshots/images/features.roommembermoderation.impl_RoomMemberModerationView_Night_5_en.png
-@@ -1,3 +1,3 @@
- version https://git-lfs.github.com/spec/v1
--oid sha256:520cae2544153ba45f8fe4b021286c2d22da06aa1b60be7f1b13879723ff994c
--size 3664
-+oid sha256:410a8596d4c70b9a3856d959d6d71ade8e831e8581ff410c9900957a93b3eb50
-+size 8114
-diff --git a/tests/uitests/src/test/snapshots/images/features.roommembermoderation.impl_RoomMemberModerationView_Night_7_en.png b/tests/uitests/src/test/snapshots/images/features.roommembermoderation.impl_RoomMemberModerationView_Night_7_en.png
-index a87d89c701..d47bf90664 100644
---- a/tests/uitests/src/test/snapshots/images/features.roommembermoderation.impl_RoomMemberModerationView_Night_7_en.png
-+++ b/tests/uitests/src/test/snapshots/images/features.roommembermoderation.impl_RoomMemberModerationView_Night_7_en.png
-@@ -1,3 +1,3 @@
- version https://git-lfs.github.com/spec/v1
--oid sha256:0f3a0cb5d9bae6725a1c527f3d9575aabf85d3edf63a28d9faa23f4f0b65e2d0
--size 7624
-+oid sha256:520cae2544153ba45f8fe4b021286c2d22da06aa1b60be7f1b13879723ff994c
-+size 3664
 diff --git a/tests/uitests/src/test/snapshots/images/features.space.impl.root_SpaceView_Day_0_en.png b/tests/uitests/src/test/snapshots/images/features.space.impl.root_SpaceView_Day_0_en.png
 index 1ba6334833..76d786aa96 100644
 --- a/tests/uitests/src/test/snapshots/images/features.space.impl.root_SpaceView_Day_0_en.png
