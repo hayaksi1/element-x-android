@@ -39,6 +39,7 @@ data class TimelineState(
     val displayJumpToUnread: Boolean,
     val jumpToUnread: JumpToUnreadState,
     val paginationFailures: ImmutableSet<Timeline.PaginationDirection>,
+    val canJumpBack: Boolean,
     val eventSink: (TimelineEvent) -> Unit,
 ) {
     private val lastTimelineEvent = timelineItems.firstOrNull { it is TimelineItem.Event } as? TimelineItem.Event

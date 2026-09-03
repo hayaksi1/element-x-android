@@ -181,7 +181,11 @@ fun TimelineView(
     val toastMessage = stringResource(CommonStrings.common_copied_to_clipboard)
     val view = LocalView.current
     fun inReplyToClick(eventId: EventId) {
-        state.eventSink(TimelineEvent.FocusOnEvent(eventId))
+        state.eventSink(TimelineEvent.FocusOnEvent(eventId, fromReply = true))
+    }
+
+    fun onJumpBack() {
+        state.eventSink(TimelineEvent.JumpBack)
     }
 
     fun onLinkLongClick(link: Link) {
@@ -295,7 +299,9 @@ fun TimelineView(
                 focusRequestState = state.focusRequestState,
                 displayJumpToUnread = state.displayJumpToUnread,
                 jumpToUnread = state.jumpToUnread,
+                canJumpBack = state.canJumpBack,
                 onScrollFinishAt = ::onScrollFinishAt,
+                onJumpBack = ::onJumpBack,
                 onJumpToLive = ::onJumpToLive,
                 onFocusEventRender = ::onFocusEventRender,
                 onMarkAllAsRead = ::onMarkAllAsRead,
@@ -380,7 +386,9 @@ private fun BoxScope.TimelineScrollHelper(
     focusRequestState: FocusRequestState,
     displayJumpToUnread: Boolean,
     jumpToUnread: JumpToUnreadState,
+    canJumpBack: Boolean,
     onScrollFinishAt: (Int) -> Unit,
+    onJumpBack: () -> Unit,
     onJumpToLive: () -> Unit,
     onFocusEventRender: () -> Unit,
     onMarkAllAsRead: () -> Unit,
@@ -484,6 +492,16 @@ private fun BoxScope.TimelineScrollHelper(
             .align(Alignment.BottomEnd)
             .padding(end = 24.dp, bottom = 16.dp)
     ) {
+        JumpToPositionButton(
+            icon = CompoundIcons.Restart(),
+            contentDescription = stringResource(id = R.string.a11y_jump_back_to_previous_position),
+            modifier = Modifier.padding(bottom = 12.dp),
+            isVisible = canJumpBack,
+            hasUnread = false,
+            onClick = onJumpBack,
+            onMarkAsRead = {},
+            testTag = TestTags.jumpBackButton,
+        )
         JumpToPositionButton(
             icon = CompoundIcons.ChevronUp(),
             contentDescription = stringResource(id = CommonStrings.a11y_jump_to_unread_messages),
@@ -666,6 +684,7 @@ internal fun TimelineViewPreview(
 private fun TimelineViewWithReadMarker(
     hasUnreadAbove: Boolean,
     hasUnreadBelow: Boolean,
+    canJumpBack: Boolean = false,
 ) {
     val timelineItems = persistentListOf<TimelineItem>(
         aTimelineItemEvent(isMine = false),
@@ -687,6 +706,7 @@ private fun TimelineViewWithReadMarker(
                 // view. The actual scroll target doesn't matter for a static preview.
                 jumpToUnread = if (hasUnreadAbove) JumpToUnreadState.InWindow(timelineItems.size) else JumpToUnreadState.Hidden,
                 newEventState = if (hasUnreadBelow) NewEventState.FromOther else NewEventState.None,
+                canJumpBack = canJumpBack,
             ),
             timelineProtectionState = aTimelineProtectionState(),
             onUserDataClick = {},
@@ -757,6 +777,12 @@ internal fun TimelineViewWithReadMarkerJumpToUnreadIndicatorOnlyPreview() = Elem
 @Composable
 internal fun TimelineViewWithReadMarkerBothIndicatorsPreview() = ElementPreview {
     TimelineViewWithReadMarker(hasUnreadAbove = true, hasUnreadBelow = true)
+}
+
+@PreviewsDayNight
+@Composable
+internal fun TimelineViewWithJumpBackPreview() = ElementPreview {
+    TimelineViewWithReadMarker(hasUnreadAbove = true, hasUnreadBelow = true, canJumpBack = true)
 }
 
 /**
