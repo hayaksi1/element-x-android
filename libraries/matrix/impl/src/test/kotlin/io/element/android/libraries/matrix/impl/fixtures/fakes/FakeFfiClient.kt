@@ -102,6 +102,7 @@ class FakeFfiClient(
     }
 
     override fun subscribeToIgnoredUsers(listener: IgnoredUsersListener): TaskHandle {
+        listener.call(emptyList())
         return FakeFfiTaskHandle()
     }
 

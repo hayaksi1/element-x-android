@@ -109,6 +109,7 @@ class InMemorySessionPreferencesStore(
     }
 
     override fun getSelectedRoomListFilters(): Flow<Set<String>> = selectedRoomListFilters
+
     override suspend fun setMarkdownEnabled(enabled: Boolean) {
         isMarkdownEnabled.tryEmit(enabled)
     }

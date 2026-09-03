@@ -214,12 +214,6 @@ private fun NotificationSettingsContentView(
 //                )
             PreferenceSwitch(
                 modifier = Modifier,
-                title = stringResource(id = R.string.screen_notification_settings_invite_for_me_label),
-                isChecked = matrixSettings.inviteForMeNotificationsEnabled,
-                onCheckedChange = onInviteForMeNotificationsChange
-            )
-            PreferenceSwitch(
-                modifier = Modifier,
                 title = stringResource(id = R.string.screen_notification_settings_conversations_label),
                 subtitle = stringResource(id = R.string.screen_notification_settings_conversations_description),
                 isChecked = state.appSettings.conversationNotificationsEnabled,

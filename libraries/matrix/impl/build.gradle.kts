@@ -41,6 +41,7 @@ dependencies {
     implementation(projects.libraries.sessionStorage.api)
     implementation(projects.libraries.workmanager.api)
     implementation(projects.services.analytics.api)
+    implementation(projects.services.appnavstate.api)
     implementation(projects.services.toolbox.api)
     api(projects.libraries.matrix.api)
     implementation(projects.libraries.core)

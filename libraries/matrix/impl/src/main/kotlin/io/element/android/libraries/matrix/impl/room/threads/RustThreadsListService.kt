@@ -72,10 +72,7 @@ class RustThreadsListService(
                 override fun onUpdate(state: ThreadListPaginationState) {
                     trySend(state.map())
                 }
-            }).also {
-                // Send the initial state
-                trySend(inner.paginationState().map())
-            }
+            })
         }
     }
 

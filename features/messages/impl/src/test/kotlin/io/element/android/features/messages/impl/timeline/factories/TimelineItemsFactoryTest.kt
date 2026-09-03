@@ -9,51 +9,51 @@ package io.element.android.features.messages.impl.timeline.factories
 
 import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
-import io.element.android.features.messages.impl.fixtures.aTimelineItemsFactory
-import io.element.android.features.messages.impl.timeline.model.TimelineItem
-import io.element.android.features.messages.impl.timeline.model.TimelineItemGroupPosition
-import io.element.android.features.messages.impl.timeline.model.TimelineItemThreadInfo
-import io.element.android.features.messages.impl.timeline.model.event.TimelineItemTextContent
-import io.element.android.libraries.architecture.AsyncData
-import io.element.android.libraries.matrix.api.core.UniqueId
-import io.element.android.libraries.matrix.api.timeline.MatrixTimelineItem
-import io.element.android.libraries.matrix.api.timeline.item.EventThreadInfo
-import io.element.android.libraries.matrix.api.timeline.item.ThreadSummary
-import io.element.android.libraries.matrix.api.timeline.item.event.OtherMessageType
-import io.element.android.libraries.matrix.api.timeline.item.event.ProfileDetails
-import io.element.android.libraries.matrix.api.timeline.item.event.Receipt
-import io.element.android.libraries.matrix.test.A_THREAD_ID
-import io.element.android.libraries.matrix.test.A_USER_ID
-import io.element.android.libraries.matrix.test.A_USER_ID_2
-import io.element.android.libraries.matrix.test.A_USER_ID_3
-import io.element.android.libraries.matrix.test.room.aRoomMember
-import io.element.android.libraries.matrix.test.timeline.aMessageContent
-import io.element.android.libraries.matrix.test.timeline.aRedactedContent
-import io.element.android.libraries.matrix.test.timeline.anEventTimelineItem
-import kotlinx.collections.immutable.persistentListOf
-import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.runTest
-import org.junit.Test
 import io.element.android.features.messages.impl.fixtures.aTimelineItemContentFactory
+import io.element.android.features.messages.impl.fixtures.aTimelineItemsFactory
 import io.element.android.features.messages.impl.messagesummary.FakeMessageSummaryFormatter
 import io.element.android.features.messages.impl.timeline.factories.event.TimelineItemEventFactory
 import io.element.android.features.messages.impl.timeline.factories.virtual.TimelineItemDaySeparatorFactory
 import io.element.android.features.messages.impl.timeline.factories.virtual.TimelineItemVirtualFactory
 import io.element.android.features.messages.impl.timeline.groups.TimelineItemGrouper
+import io.element.android.features.messages.impl.timeline.model.TimelineItem
+import io.element.android.features.messages.impl.timeline.model.TimelineItemGroupPosition
+import io.element.android.features.messages.impl.timeline.model.TimelineItemThreadInfo
+import io.element.android.features.messages.impl.timeline.model.event.TimelineItemRoomMembershipContent
 import io.element.android.features.messages.impl.timeline.model.event.TimelineItemStateContent
+import io.element.android.features.messages.impl.timeline.model.event.TimelineItemTextContent
+import io.element.android.libraries.architecture.AsyncData
 import io.element.android.libraries.dateformatter.test.FakeDateFormatter
 import io.element.android.libraries.eventformatter.api.TimelineEventFormatter
+import io.element.android.libraries.matrix.api.core.UniqueId
 import io.element.android.libraries.matrix.api.core.UserId
+import io.element.android.libraries.matrix.api.timeline.MatrixTimelineItem
+import io.element.android.libraries.matrix.api.timeline.item.EventThreadInfo
+import io.element.android.libraries.matrix.api.timeline.item.ThreadSummary
 import io.element.android.libraries.matrix.api.timeline.item.event.EventContent
 import io.element.android.libraries.matrix.api.timeline.item.event.MembershipChange
+import io.element.android.libraries.matrix.api.timeline.item.event.OtherMessageType
+import io.element.android.libraries.matrix.api.timeline.item.event.OtherState
+import io.element.android.libraries.matrix.api.timeline.item.event.ProfileDetails
+import io.element.android.libraries.matrix.api.timeline.item.event.Receipt
 import io.element.android.libraries.matrix.api.timeline.item.event.RoomMembershipContent
+import io.element.android.libraries.matrix.api.timeline.item.event.StateContent
+import io.element.android.libraries.matrix.test.A_THREAD_ID
+import io.element.android.libraries.matrix.test.A_USER_ID
+import io.element.android.libraries.matrix.test.A_USER_ID_2
+import io.element.android.libraries.matrix.test.A_USER_ID_3
 import io.element.android.libraries.matrix.test.FakeMatrixClient
 import io.element.android.libraries.matrix.test.permalink.FakePermalinkParser
+import io.element.android.libraries.matrix.test.room.aRoomMember
+import io.element.android.libraries.matrix.test.timeline.aMessageContent
+import io.element.android.libraries.matrix.test.timeline.aRedactedContent
+import io.element.android.libraries.matrix.test.timeline.anEventTimelineItem
 import io.element.android.libraries.matrix.test.timeline.item.event.aRoomMembershipContent
 import io.element.android.tests.testutils.testCoroutineDispatchers
-import io.element.android.libraries.matrix.api.timeline.item.event.OtherState
-import io.element.android.libraries.matrix.api.timeline.item.event.StateContent
-import io.element.android.features.messages.impl.timeline.model.event.TimelineItemRoomMembershipContent
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.runTest
+import org.junit.Test
 
 private const val A_STATE_EVENT_BODY = "a state event"
 
@@ -339,7 +339,6 @@ class TimelineItemsFactoryTest {
         }
     }
 
-
     @Test
     fun `a state event which cannot be formatted is not rendered`() = runTest {
         val sut = aBlankStateFactory()
@@ -431,7 +430,6 @@ class TimelineItemsFactoryTest {
         }
     }
 
-
     @Test
     fun `a custom state event is not emitted and does not split the group around it`() = runTest {
         val factory = aTimelineItemsFactory(
@@ -484,7 +482,6 @@ class TimelineItemsFactoryTest {
         }
     }
 
-
     @Test
     fun `removed messages are left out when the user has turned them off`() = runTest {
         val factory = aTimelineItemsFactory(
@@ -524,7 +521,6 @@ class TimelineItemsFactoryTest {
             cancelAndIgnoreRemainingEvents()
         }
     }
-
 
     @Test
     fun `a membership event that changed nothing is not rendered`() = runTest {

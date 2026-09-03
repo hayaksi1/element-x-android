@@ -85,6 +85,19 @@ class RustThreadsListServiceTest {
     }
 
     @Test
+    fun `the initial pagination state is delivered once`() = runTest {
+        val inner = FakeFfiThreadListService(
+            paginationState = { ThreadListPaginationState.Idle(endReached = true) },
+        )
+        val service = createThreadsListService(inner = inner)
+
+        service.subscribeToPaginationUpdates().test {
+            assertThat(awaitItem()).isEqualTo(ThreadListPaginationStatus.Idle(hasMoreToLoad = false))
+            expectNoEvents()
+        }
+    }
+
+    @Test
     fun `paginate calls the FFI method`() = runTest {
         val paginateRecorder = lambdaRecorder<Unit> {}
         val inner = FakeFfiThreadListService(paginate = paginateRecorder)

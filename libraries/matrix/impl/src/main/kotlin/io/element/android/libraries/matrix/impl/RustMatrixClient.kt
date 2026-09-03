@@ -296,9 +296,6 @@ class RustMatrixClient(
     }
 
     override val ignoredUsersFlow = mxCallbackFlow<ImmutableList<UserId>> {
-        // Fetch the initial value manually, the SDK won't return it automatically
-        channel.trySend(innerClient.ignoredUsers().map(::UserId).toImmutableList())
-
         innerClient.subscribeToIgnoredUsers(object : IgnoredUsersListener {
             override fun call(ignoredUserIds: List<String>) {
                 channel.trySend(ignoredUserIds.map(::UserId).toImmutableList())

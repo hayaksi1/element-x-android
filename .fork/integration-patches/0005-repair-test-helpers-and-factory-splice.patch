@@ -1,0 +1,149 @@
+From 5f57926fb80dfbdd453c42ce40cc605a144c2598 Mon Sep 17 00:00:00 2001
+From: hayaksi1 <193020925+hayaksi1@users.noreply.github.com>
+Date: Thu, 3 Sep 2026 09:45:15 +0300
+Subject: [PATCH] Repair the test helpers and the factory splice the rebuild
+ leaves behind
+
+Four fork test files lose helpers every rebuild: MessagesPresenterTest's
+aJoinedRoomWithInfo, ThreadedMessagesNodeTest's caption parameter on the
+fake callback, DefaultVoiceMessageComposerPresenterTest's use of the old
+FakeVoiceRecorder call assertions, and DeveloperSettingsViewTest's plural
+event name plus a taller qualifier for the push history row. The merge of
+search/room-search-screen also splices two lines of the branch's older
+index-deletion block into RustMatrixClientFactory's coverage bootstrap,
+cleanly and without a conflict, so rerere cannot catch it.
+
+Fork-Feature: fork-tooling
+---
+ .../messages/impl/MessagesPresenterTest.kt     | 18 +++++++++++++++++-
+ .../impl/threads/ThreadedMessagesNodeTest.kt   |  2 +-
+ ...DefaultVoiceMessageComposerPresenterTest.kt |  8 ++++++--
+ .../developer/DeveloperSettingsViewTest.kt     |  6 +++---
+ .../matrix/impl/RustMatrixClientFactory.kt     |  2 --
+ 5 files changed, 27 insertions(+), 9 deletions(-)
+
+diff --git a/features/messages/impl/src/test/kotlin/io/element/android/features/messages/impl/MessagesPresenterTest.kt b/features/messages/impl/src/test/kotlin/io/element/android/features/messages/impl/MessagesPresenterTest.kt
+index 61c1ed93aa..393b3b2bc1 100644
+--- a/features/messages/impl/src/test/kotlin/io/element/android/features/messages/impl/MessagesPresenterTest.kt
++++ b/features/messages/impl/src/test/kotlin/io/element/android/features/messages/impl/MessagesPresenterTest.kt
+@@ -1501,7 +1501,6 @@ class MessagesPresenterTest {
+         }
+     }
+ 
+-
+     @Test
+     fun `present - a group room reports how many members it has`() = runTest {
+         val presenter = createMessagesPresenter(
+@@ -1548,6 +1547,23 @@ class MessagesPresenterTest {
+         canPinUnpin = canPinUnpin,
+     )
+ 
++    private fun aJoinedRoomWithInfo(roomInfo: RoomInfo): FakeJoinedRoom {
++        return FakeJoinedRoom(
++            baseRoom = FakeBaseRoom(
++                roomPermissions = FakeRoomPermissions(
++                    canSendState = { true },
++                    canSendMessage = { true },
++                    canRedactOther = true,
++                    canRedactOwn = true,
++                    canPinUnpin = true,
++                ),
++            ).apply {
++                givenRoomInfo(roomInfo)
++            },
++            typingNoticeResult = { Result.success(Unit) },
++        )
++    }
++
+     private fun TestScope.createMessagesPresenter(
+         coroutineDispatchers: CoroutineDispatchers = testCoroutineDispatchers(),
+         timeline: Timeline = FakeTimeline(),
+diff --git a/features/messages/impl/src/test/kotlin/io/element/android/features/messages/impl/threads/ThreadedMessagesNodeTest.kt b/features/messages/impl/src/test/kotlin/io/element/android/features/messages/impl/threads/ThreadedMessagesNodeTest.kt
+index 841d8ab6dd..c41e4d5eb8 100644
+--- a/features/messages/impl/src/test/kotlin/io/element/android/features/messages/impl/threads/ThreadedMessagesNodeTest.kt
++++ b/features/messages/impl/src/test/kotlin/io/element/android/features/messages/impl/threads/ThreadedMessagesNodeTest.kt
+@@ -133,7 +133,7 @@ class ThreadedMessagesNodeTest : RobolectricTest() {
+ private class FakeThreadedMessagesNodeCallback : ThreadedMessagesNode.Callback {
+     override fun handleEventClick(timelineMode: Timeline.Mode, event: TimelineItem.Event, canUseOverlay: Boolean) = false
+     override fun handleGalleryItemClick(timelineMode: Timeline.Mode, event: TimelineItem.Event, galleryItemIndex: Int, canUseOverlay: Boolean) = false
+-    override fun navigateToPreviewAttachments(attachments: ImmutableList<Attachment>, inReplyToEventId: EventId?) = Unit
++    override fun navigateToPreviewAttachments(attachments: ImmutableList<Attachment>, inReplyToEventId: EventId?, caption: String?) = Unit
+     override fun navigateToRoomMemberDetails(userId: UserId) = Unit
+     override fun handlePermalinkClick(data: PermalinkData) = Unit
+     override fun navigateToEventDebugInfo(eventId: EventId?, debugInfo: TimelineItemDebugInfo) = Unit
+diff --git a/features/messages/impl/src/test/kotlin/io/element/android/features/messages/impl/voicemessages/composer/DefaultVoiceMessageComposerPresenterTest.kt b/features/messages/impl/src/test/kotlin/io/element/android/features/messages/impl/voicemessages/composer/DefaultVoiceMessageComposerPresenterTest.kt
+index d9865f4304..0074be9a79 100644
+--- a/features/messages/impl/src/test/kotlin/io/element/android/features/messages/impl/voicemessages/composer/DefaultVoiceMessageComposerPresenterTest.kt
++++ b/features/messages/impl/src/test/kotlin/io/element/android/features/messages/impl/voicemessages/composer/DefaultVoiceMessageComposerPresenterTest.kt
+@@ -144,9 +144,10 @@ class DefaultVoiceMessageComposerPresenterTest {
+             initialState.eventSink(VoiceMessageComposerEvent.RecorderEvent(VoiceMessageRecorderEvent.Start))
+             initialState.eventSink(VoiceMessageComposerEvent.RecorderEvent(VoiceMessageRecorderEvent.Start))
+ 
++            skipItems(1)
+             val finalState = awaitItem()
+             assertThat(finalState.voiceMessageState).isEqualTo(RECORDING_STATE)
+-            voiceRecorder.assertCalls(started = 1)
++            startRecordResult.assertions().isCalledOnce()
+ 
+             testPauseAndDestroy(finalState)
+         }
+@@ -162,9 +163,12 @@ class DefaultVoiceMessageComposerPresenterTest {
+             awaitItem().eventSink(VoiceMessageComposerEvent.RecorderEvent(VoiceMessageRecorderEvent.Cancel))
+             awaitItem().eventSink(VoiceMessageComposerEvent.RecorderEvent(VoiceMessageRecorderEvent.Start))
+ 
++            skipItems(1)
+             val finalState = awaitItem()
+             assertThat(finalState.voiceMessageState).isEqualTo(RECORDING_STATE)
+-            voiceRecorder.assertCalls(started = 2, stopped = 1, deleted = 1)
++            startRecordResult.assertions().isCalledExactly(2)
++            stopRecordResult.assertions().isCalledOnce().with(value(true))
++            deleteRecordingResult.assertions().isCalledOnce()
+ 
+             testPauseAndDestroy(finalState)
+         }
+diff --git a/features/preferences/impl/src/test/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsViewTest.kt b/features/preferences/impl/src/test/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsViewTest.kt
+index 3637fec704..fa7924d41e 100644
+--- a/features/preferences/impl/src/test/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsViewTest.kt
++++ b/features/preferences/impl/src/test/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsViewTest.kt
+@@ -42,7 +42,7 @@ class DeveloperSettingsViewTest : RobolectricTest() {
+         }
+     }
+ 
+-    @Config(qualifiers = "h2400dp")
++    @Config(qualifiers = "h3000dp")
+     @Test
+     fun `clicking on push history notification invokes the expected callback`() = runAndroidComposeUiTest {
+         val eventsRecorder = EventsRecorder<DeveloperSettingsEvent>(expectEvents = false)
+@@ -87,14 +87,14 @@ class DeveloperSettingsViewTest : RobolectricTest() {
+ 
+     @Test
+     fun `clicking on the developer options switch emits the expected event`() = runAndroidComposeUiTest {
+-        val eventsRecorder = EventsRecorder<DeveloperSettingsEvents>()
++        val eventsRecorder = EventsRecorder<DeveloperSettingsEvent>()
+         setDeveloperSettingsView(
+             state = aDeveloperSettingsState(
+                 eventSink = eventsRecorder
+             ),
+         )
+         onNodeWithText("On").performClick()
+-        eventsRecorder.assertSingle(DeveloperSettingsEvents.SetShowDeveloperSettings(false))
++        eventsRecorder.assertSingle(DeveloperSettingsEvent.SetShowDeveloperSettings(false))
+     }
+ 
+     @Config(qualifiers = "h2400dp")
+diff --git a/libraries/matrix/impl/src/main/kotlin/io/element/android/libraries/matrix/impl/RustMatrixClientFactory.kt b/libraries/matrix/impl/src/main/kotlin/io/element/android/libraries/matrix/impl/RustMatrixClientFactory.kt
+index 8833f5285b..aceab39883 100644
+--- a/libraries/matrix/impl/src/main/kotlin/io/element/android/libraries/matrix/impl/RustMatrixClientFactory.kt
++++ b/libraries/matrix/impl/src/main/kotlin/io/element/android/libraries/matrix/impl/RustMatrixClientFactory.kt
+@@ -115,8 +115,6 @@ class RustMatrixClientFactory(
+             if (!coverageEstablished) {
+                 Timber.tag("RustMatrixClient").w("Could not delete the event cache store, will retry on the next start")
+             }
+-            Timber.tag("RustMatrixClient").i("Message search is disabled, deleting the stale search index")
+-            indexDirectory.deleteRecursively()
+         }
+ 
+         val client = getBaseClientBuilder(
+-- 
+2.52.0
+

@@ -401,7 +401,6 @@ class AdvancedSettingsPresenterTest {
         }
     }
 
-
     @Test
     fun `present - hide space rooms off on`() = runTest {
         val presenter = createAdvancedSettingsPresenter()

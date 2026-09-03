@@ -49,6 +49,7 @@ sealed interface TimelineEvent {
     data class ComputeVerifiedUserSendFailure(val event: TimelineItem.Event) : TimelineItemEvent
     data class ShowShieldDialog(val messageShieldData: MessageShieldData) : TimelineItemEvent
     data class LoadMore(val direction: Timeline.PaginationDirection) : TimelineItemEvent
+    data class RetryLoadMore(val direction: Timeline.PaginationDirection) : TimelineEvent
     data class OpenThread(val threadRootEventId: ThreadId, val focusedEvent: EventId?) : TimelineItemEvent
 
     /**
@@ -61,9 +62,9 @@ sealed interface TimelineEvent {
      */
     sealed interface TimelineItemPollEvent : TimelineItemEvent
 
-    data class SelectPollAnswer(
+    data class SendPollResponse(
         val pollStartId: EventId,
-        val answerId: String
+        val answerIds: List<String>
     ) : TimelineItemPollEvent
 
     data class EndPoll(

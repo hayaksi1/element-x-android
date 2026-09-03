@@ -38,6 +38,7 @@ import androidx.compose.foundation.layout.plus
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
@@ -67,6 +68,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.rememberNestedScrollInteropConnection
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -85,6 +87,7 @@ import io.element.android.features.messages.impl.link.LinkActionsView
 import io.element.android.features.messages.impl.timeline.components.FloatingDateBadgeOverlay
 import io.element.android.features.messages.impl.timeline.components.TimelineItemRow
 import io.element.android.features.messages.impl.timeline.components.toText
+import io.element.android.features.messages.impl.timeline.components.virtual.TimelineLoadMoreFailedIndicator
 import io.element.android.features.messages.impl.timeline.di.LocalTimelineItemPresenterFactories
 import io.element.android.features.messages.impl.timeline.di.aFakeTimelineItemPresenterFactories
 import io.element.android.features.messages.impl.timeline.focus.FocusRequestStateView
@@ -92,6 +95,7 @@ import io.element.android.features.messages.impl.timeline.model.NewEventState
 import io.element.android.features.messages.impl.timeline.model.TimelineItem
 import io.element.android.features.messages.impl.timeline.model.event.TimelineItemEventContent
 import io.element.android.features.messages.impl.timeline.model.event.TimelineItemEventContentPreviewParam
+import io.element.android.features.messages.impl.timeline.model.virtual.TimelineItemLoadingIndicatorModel
 import io.element.android.features.messages.impl.timeline.protection.TimelineProtectionState
 import io.element.android.features.messages.impl.timeline.protection.aTimelineProtectionState
 import io.element.android.libraries.designsystem.atomic.atoms.UnreadIndicatorAtom
@@ -103,6 +107,7 @@ import io.element.android.libraries.designsystem.theme.components.Icon
 import io.element.android.libraries.designsystem.theme.components.Text
 import io.element.android.libraries.designsystem.utils.animateScrollToItemCenter
 import io.element.android.libraries.matrix.api.core.EventId
+import io.element.android.libraries.matrix.api.core.ThreadId
 import io.element.android.libraries.matrix.api.timeline.Timeline
 import io.element.android.libraries.matrix.api.user.MatrixUser
 import io.element.android.libraries.testtags.TestTag
@@ -110,7 +115,10 @@ import io.element.android.libraries.testtags.TestTags
 import io.element.android.libraries.testtags.testTag
 import io.element.android.libraries.ui.strings.CommonStrings
 import io.element.android.wysiwyg.link.Link
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.ImmutableSet
 import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
@@ -197,6 +205,8 @@ fun TimelineView(
         state.eventSink(TimelineEvent.LoadMore(Timeline.PaginationDirection.BACKWARDS))
     }
 
+    val isEmptyThread = state.timelineMode is Timeline.Mode.Thread && !state.hasAnyEvent
+
     // Animate alpha when timeline is first displayed, to avoid flashes or glitching when viewing rooms
     AnimatedVisibility(visible = true, enter = fadeIn()) {
         Box(modifier) {
@@ -214,30 +224,62 @@ fun TimelineView(
                     contentType = { timelineItem -> timelineItem.contentType() },
                     key = { timelineItem -> timelineItem.identifier() },
                 ) { timelineItem ->
-                    TimelineItemRow(
-                        timelineItem = timelineItem,
-                        timelineMode = state.timelineMode,
-                        timelineRoomInfo = state.timelineRoomInfo,
-                        timelineProtectionState = timelineProtectionState,
-                        isLastOutgoingMessage = state.isLastOutgoingMessage(timelineItem.identifier()),
-                        focusedEventId = state.focusedEventId,
-                        displayThreadSummaries = state.displayThreadSummaries,
-                        onUserDataClick = onUserDataClick,
-                        onLinkClick = onLinkClick,
-                        onLinkLongClick = ::onLinkLongClick,
-                        onContentClick = onContentClick,
-                        onGalleryItemClick = onGalleryItemClick,
-                        onLongClick = onMessageLongClick,
-                        inReplyToClick = ::inReplyToClick,
-                        onReactionClick = onReactionClick,
-                        onReactionLongClick = onReactionLongClick,
-                        onMoreReactionsClick = onMoreReactionsClick,
-                        onReadReceiptClick = onReadReceiptClick,
-                        onSwipeToReply = onSwipeToReply,
-                        onJoinCallClick = onJoinCallClick,
-                        eventSink = state.eventSink,
-                    )
+                    val emptyThreadRowModifier = if (isEmptyThread) {
+                        Modifier
+                            .fillParentMaxHeight()
+                            .wrapContentHeight(Alignment.CenterVertically)
+                    } else {
+                        Modifier
+                    }
+                    val failedLoadingIndicator = ((timelineItem as? TimelineItem.Virtual)?.model as? TimelineItemLoadingIndicatorModel)
+                        ?.takeIf { it.direction in state.paginationFailures }
+                    if (failedLoadingIndicator != null) {
+                        TimelineLoadMoreFailedIndicator(
+                            onRetryClick = { state.eventSink(TimelineEvent.RetryLoadMore(failedLoadingIndicator.direction)) },
+                            modifier = emptyThreadRowModifier,
+                        )
+                    } else {
+                        TimelineItemRow(
+                            timelineItem = timelineItem,
+                            timelineMode = state.timelineMode,
+                            timelineRoomInfo = state.timelineRoomInfo,
+                            timelineProtectionState = timelineProtectionState,
+                            isLastOutgoingMessage = state.isLastOutgoingMessage(timelineItem.identifier()),
+                            focusedEventId = state.focusedEventId,
+                            displayThreadSummaries = state.displayThreadSummaries,
+                            onUserDataClick = onUserDataClick,
+                            onLinkClick = onLinkClick,
+                            onLinkLongClick = ::onLinkLongClick,
+                            onContentClick = onContentClick,
+                            onGalleryItemClick = onGalleryItemClick,
+                            onLongClick = onMessageLongClick,
+                            inReplyToClick = ::inReplyToClick,
+                            onReactionClick = onReactionClick,
+                            onReactionLongClick = onReactionLongClick,
+                            onMoreReactionsClick = onMoreReactionsClick,
+                            onReadReceiptClick = onReadReceiptClick,
+                            onSwipeToReply = onSwipeToReply,
+                            onJoinCallClick = onJoinCallClick,
+                            eventSink = state.eventSink,
+                            modifier = emptyThreadRowModifier,
+                        )
+                    }
                 }
+            }
+
+            AnimatedVisibility(
+                visible = isEmptyThread && state.timelineItems.isEmpty(),
+                modifier = Modifier.align(Alignment.Center),
+                enter = fadeIn(),
+                exit = fadeOut(),
+            ) {
+                Text(
+                    text = stringResource(R.string.screen_room_timeline_empty_thread),
+                    modifier = Modifier.padding(horizontal = 32.dp),
+                    style = ElementTheme.typography.fontBodyMdRegular,
+                    color = ElementTheme.colors.textSecondary,
+                    textAlign = TextAlign.Center,
+                )
             }
 
             FocusRequestStateView(
@@ -685,6 +727,47 @@ private fun TimelineViewWithReadMarker(
             onJoinCallClick = { },
         )
     }
+}
+
+@Composable
+private fun TimelineViewInThread(
+    timelineItems: ImmutableList<TimelineItem>,
+    paginationFailures: ImmutableSet<Timeline.PaginationDirection> = persistentSetOf(),
+) {
+    CompositionLocalProvider(
+        LocalTimelineItemPresenterFactories provides aFakeTimelineItemPresenterFactories(),
+    ) {
+        TimelineView(
+            state = aTimelineState(
+                timelineItems = timelineItems,
+                timelineMode = Timeline.Mode.Thread(ThreadId("\$aThreadId")),
+                paginationFailures = paginationFailures,
+            ),
+            timelineProtectionState = aTimelineProtectionState(),
+            onUserDataClick = {},
+            onLinkClick = {},
+            onContentClick = {},
+            onGalleryItemClick = { _, _ -> },
+            onMessageLongClick = {},
+            onSwipeToReply = {},
+            onReactionClick = { _, _ -> },
+            onReactionLongClick = { _, _ -> },
+            onMoreReactionsClick = {},
+            onReadReceiptClick = {},
+            onJoinCallClick = {},
+        )
+    }
+}
+
+@PreviewsDayNight
+@Composable
+internal fun TimelineViewInThreadPreview(
+    @PreviewParameter(ThreadTimelinePreviewStatePreviewParam::class) state: ThreadTimelinePreviewState
+) = ElementPreview {
+    TimelineViewInThread(
+        timelineItems = state.timelineItems,
+        paginationFailures = state.paginationFailures,
+    )
 }
 
 @PreviewsDayNight

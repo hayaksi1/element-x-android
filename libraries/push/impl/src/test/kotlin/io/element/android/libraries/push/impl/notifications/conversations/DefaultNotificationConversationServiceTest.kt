@@ -23,6 +23,7 @@ import io.element.android.libraries.matrix.test.A_SESSION_ID
 import io.element.android.libraries.matrix.test.A_SESSION_ID_2
 import io.element.android.libraries.matrix.test.FakeMatrixClientProvider
 import io.element.android.libraries.matrix.ui.media.test.FakeImageLoaderHolder
+import io.element.android.libraries.preferences.test.InMemoryAppPreferencesStore
 import io.element.android.libraries.push.impl.notifications.factories.FakeIntentProvider
 import io.element.android.libraries.push.impl.notifications.shortcut.createShortcutId
 import io.element.android.libraries.push.test.notifications.push.FakeNotificationBitmapLoader
@@ -34,7 +35,6 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
 import org.robolectric.annotation.Config
-import io.element.android.libraries.preferences.test.InMemoryAppPreferencesStore
 @Config(sdk = [Build.VERSION_CODES.TIRAMISU])
 class DefaultNotificationConversationServiceTest : RobolectricTest() {
     @Test
@@ -59,7 +59,7 @@ class DefaultNotificationConversationServiceTest : RobolectricTest() {
         val context = InstrumentationRegistry.getInstrumentation().context
         val service = createService(context)
 
-        service.onSendMessage(
+        service.onMessageInRoom(
             sessionId = A_SESSION_ID,
             roomId = A_ROOM_ID,
             roomName = "Room title",
@@ -195,7 +195,6 @@ class DefaultNotificationConversationServiceTest : RobolectricTest() {
         assertThat(shortcuts.first().id).startsWith(A_SESSION_ID_2.value)
     }
 
-
     @Test
     fun `onSendMessage adds no shortcut when conversation notifications are off`() = runTest {
         val context = InstrumentationRegistry.getInstrumentation().context
@@ -204,7 +203,7 @@ class DefaultNotificationConversationServiceTest : RobolectricTest() {
             appPreferencesStore = InMemoryAppPreferencesStore(isConversationNotificationsEnabled = false),
         )
 
-        service.onSendMessage(
+        service.onMessageInRoom(
             sessionId = A_SESSION_ID,
             roomId = A_ROOM_ID,
             roomName = "Room title",

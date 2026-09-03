@@ -107,6 +107,7 @@ class DefaultSessionPreferencesStore(
 
     override suspend fun setSelectedRoomListFilters(filters: Set<String>) = update(selectedRoomListFilters, filters)
     override fun getSelectedRoomListFilters(): Flow<Set<String>> = get(selectedRoomListFilters) { emptySet() }
+
     override suspend fun setMarkdownEnabled(enabled: Boolean) = update(markdownEnabled, enabled)
     override fun isMarkdownEnabled(): Flow<Boolean> = get(markdownEnabled) { true }
 

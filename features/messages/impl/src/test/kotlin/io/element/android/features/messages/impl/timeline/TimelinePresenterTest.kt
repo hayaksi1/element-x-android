@@ -47,6 +47,7 @@ import io.element.android.libraries.matrix.api.room.tombstone.PredecessorRoom
 import io.element.android.libraries.matrix.api.timeline.MatrixTimelineItem
 import io.element.android.libraries.matrix.api.timeline.ReceiptType
 import io.element.android.libraries.matrix.api.timeline.Timeline
+import io.element.android.libraries.matrix.api.timeline.TimelineException
 import io.element.android.libraries.matrix.api.timeline.item.event.EventReaction
 import io.element.android.libraries.matrix.api.timeline.item.event.LocalEventSendState
 import io.element.android.libraries.matrix.api.timeline.item.event.ReactionSender
@@ -55,6 +56,7 @@ import io.element.android.libraries.matrix.api.timeline.item.event.TimelineItemE
 import io.element.android.libraries.matrix.api.timeline.item.virtual.VirtualTimelineItem
 import io.element.android.libraries.matrix.test.AN_EVENT_ID
 import io.element.android.libraries.matrix.test.AN_EVENT_ID_2
+import io.element.android.libraries.matrix.test.AN_EXCEPTION
 import io.element.android.libraries.matrix.test.A_ROOM_ID
 import io.element.android.libraries.matrix.test.A_THREAD_ID
 import io.element.android.libraries.matrix.test.A_THREAD_ID_2
@@ -142,6 +144,66 @@ class TimelinePresenterTest {
                     listOf(value(Timeline.PaginationDirection.BACKWARDS)),
                     listOf(value(Timeline.PaginationDirection.FORWARDS))
                 )
+        }
+    }
+
+    @Test
+    fun `present - a failed load more is not retried automatically`() = runTest {
+        val paginateLambda = lambdaRecorder { _: Timeline.PaginationDirection ->
+            Result.failure<Boolean>(AN_EXCEPTION)
+        }
+        val timeline = FakeTimeline().apply {
+            this.paginateLambda = paginateLambda
+        }
+        val presenter = createTimelinePresenter(timeline = timeline)
+        presenter.test {
+            val initialState = awaitFirstItem()
+            initialState.eventSink.invoke(TimelineEvent.LoadMore(Timeline.PaginationDirection.BACKWARDS))
+            initialState.eventSink.invoke(TimelineEvent.LoadMore(Timeline.PaginationDirection.BACKWARDS))
+            assert(paginateLambda).isCalledOnce()
+            val failedState = awaitItem()
+            assertThat(failedState.paginationFailures).containsExactly(Timeline.PaginationDirection.BACKWARDS)
+            failedState.eventSink.invoke(TimelineEvent.LoadMore(Timeline.PaginationDirection.BACKWARDS))
+            assert(paginateLambda).isCalledOnce()
+        }
+    }
+
+    @Test
+    fun `present - retry load more clears the failure and paginates again`() = runTest {
+        val paginateLambda = lambdaRecorder { _: Timeline.PaginationDirection ->
+            Result.failure<Boolean>(AN_EXCEPTION)
+        }
+        val timeline = FakeTimeline().apply {
+            this.paginateLambda = paginateLambda
+        }
+        val presenter = createTimelinePresenter(timeline = timeline)
+        presenter.test {
+            val initialState = awaitFirstItem()
+            initialState.eventSink.invoke(TimelineEvent.LoadMore(Timeline.PaginationDirection.BACKWARDS))
+            val failedState = awaitItem()
+            assertThat(failedState.paginationFailures).containsExactly(Timeline.PaginationDirection.BACKWARDS)
+            failedState.eventSink.invoke(TimelineEvent.RetryLoadMore(Timeline.PaginationDirection.BACKWARDS))
+            assertThat(awaitItem().paginationFailures).isEmpty()
+            assertThat(awaitItem().paginationFailures).containsExactly(Timeline.PaginationDirection.BACKWARDS)
+            assert(paginateLambda).isCalledExactly(2)
+        }
+    }
+
+    @Test
+    fun `present - a load more rejected with CannotPaginate can be retried automatically`() = runTest {
+        val paginateLambda = lambdaRecorder { _: Timeline.PaginationDirection ->
+            Result.failure<Boolean>(TimelineException.CannotPaginate)
+        }
+        val timeline = FakeTimeline().apply {
+            this.paginateLambda = paginateLambda
+        }
+        val presenter = createTimelinePresenter(timeline = timeline)
+        presenter.test {
+            val initialState = awaitFirstItem()
+            initialState.eventSink.invoke(TimelineEvent.LoadMore(Timeline.PaginationDirection.BACKWARDS))
+            initialState.eventSink.invoke(TimelineEvent.LoadMore(Timeline.PaginationDirection.BACKWARDS))
+            assert(paginateLambda).isCalledExactly(2)
+            assertThat(initialState.paginationFailures).isEmpty()
         }
     }
 
@@ -952,14 +1014,14 @@ class TimelinePresenterTest {
     }
 
     @Test
-    fun `present - PollAnswerSelected event`() = runTest {
+    fun `present - SendPollResponse event`() = runTest {
         val sendPollResponseAction = FakeSendPollResponseAction()
         val presenter = createTimelinePresenter(
             sendPollResponseAction = sendPollResponseAction,
         )
         presenter.test {
             val initialState = awaitFirstItem()
-            initialState.eventSink.invoke(TimelineEvent.SelectPollAnswer(AN_EVENT_ID, "anAnswerId"))
+            initialState.eventSink.invoke(TimelineEvent.SendPollResponse(AN_EVENT_ID, listOf("anAnswerId")))
         }
         delay(1)
         sendPollResponseAction.verifyExecutionCount(1)

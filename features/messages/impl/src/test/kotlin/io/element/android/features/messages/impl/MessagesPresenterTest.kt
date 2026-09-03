@@ -65,6 +65,7 @@ import io.element.android.libraries.matrix.api.encryption.identity.IdentityState
 import io.element.android.libraries.matrix.api.media.MediaSource
 import io.element.android.libraries.matrix.api.permalink.PermalinkParser
 import io.element.android.libraries.matrix.api.room.MessageEventType
+import io.element.android.libraries.matrix.api.room.RoomInfo
 import io.element.android.libraries.matrix.api.room.RoomMembersState
 import io.element.android.libraries.matrix.api.room.RoomMembershipState
 import io.element.android.libraries.matrix.api.room.StateEventType
@@ -128,7 +129,6 @@ import org.junit.Rule
 import org.junit.Test
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
-import io.element.android.libraries.matrix.api.room.RoomInfo
 
 @Suppress("LargeClass")
 class MessagesPresenterTest {
@@ -1501,7 +1501,6 @@ class MessagesPresenterTest {
         }
     }
 
-
     @Test
     fun `present - a group room reports how many members it has`() = runTest {
         val presenter = createMessagesPresenter(
@@ -1547,6 +1546,23 @@ class MessagesPresenterTest {
         canRedactOwn = canRedactOwn,
         canPinUnpin = canPinUnpin,
     )
+
+    private fun aJoinedRoomWithInfo(roomInfo: RoomInfo): FakeJoinedRoom {
+        return FakeJoinedRoom(
+            baseRoom = FakeBaseRoom(
+                roomPermissions = FakeRoomPermissions(
+                    canSendState = { true },
+                    canSendMessage = { true },
+                    canRedactOther = true,
+                    canRedactOwn = true,
+                    canPinUnpin = true,
+                ),
+            ).apply {
+                givenRoomInfo(roomInfo)
+            },
+            typingNoticeResult = { Result.success(Unit) },
+        )
+    }
 
     private fun TestScope.createMessagesPresenter(
         coroutineDispatchers: CoroutineDispatchers = testCoroutineDispatchers(),
