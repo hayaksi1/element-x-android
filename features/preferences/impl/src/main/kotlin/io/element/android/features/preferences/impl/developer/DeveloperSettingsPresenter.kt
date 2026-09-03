@@ -18,7 +18,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.toArgb
-import dev.zacsweers.metro.Inject
+import dev.zacsweers.metro.Assisted
+import dev.zacsweers.metro.AssistedFactory
+import dev.zacsweers.metro.AssistedInject
 import io.element.android.features.enterprise.api.EnterpriseService
 import io.element.android.features.preferences.impl.developer.appsettings.AppDeveloperSettingsState
 import io.element.android.features.preferences.impl.tasks.ClearCacheUseCase
@@ -32,12 +34,15 @@ import io.element.android.libraries.architecture.AsyncData
 import io.element.android.libraries.architecture.Presenter
 import io.element.android.libraries.architecture.runCatchingUpdatingState
 import io.element.android.libraries.core.data.ByteUnit
+import io.element.android.libraries.core.extensions.runCatchingExceptions
 import io.element.android.libraries.core.meta.BuildMeta
 import io.element.android.libraries.featureflag.api.FeatureFlagService
 import io.element.android.libraries.featureflag.api.FeatureFlags
 import io.element.android.libraries.matrix.api.MatrixClient
 import io.element.android.libraries.matrix.api.analytics.GetDatabaseSizesUseCase
+import io.element.android.libraries.matrix.api.core.DeviceId
 import io.element.android.libraries.matrix.api.core.SessionId
+import io.element.android.libraries.matrix.api.notificationsettings.NotificationSettingsService
 import io.element.android.libraries.matrix.api.search.MessageSearchIndexer
 import io.element.android.libraries.matrix.api.search.MessageSearchSweepActivity
 import io.element.android.libraries.matrix.api.search.SearchBackfillCursor
@@ -45,11 +50,16 @@ import kotlinx.collections.immutable.ImmutableMap
 import kotlinx.collections.immutable.toImmutableMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 
-@Inject
+@AssistedInject
 class DeveloperSettingsPresenter(
+    @Assisted private val navigator: DeveloperSettingsNavigator,
     private val appDeveloperSettingsPresenter: Presenter<AppDeveloperSettingsState>,
     private val sessionId: SessionId,
+    private val deviceId: DeviceId,
     private val computeCacheSizeUseCase: ComputeCacheSizeUseCase,
     private val clearCacheUseCase: ClearCacheUseCase,
     private val enterpriseService: EnterpriseService,
@@ -62,7 +72,13 @@ class DeveloperSettingsPresenter(
     private val messageSearchIndexer: MessageSearchIndexer,
     private val showDeveloperSettingsProvider: ShowDeveloperSettingsProvider,
     private val buildMeta: BuildMeta,
+    private val notificationSettingsService: NotificationSettingsService,
 ) : Presenter<DeveloperSettingsState> {
+    @AssistedFactory
+    fun interface Factory {
+        fun create(navigator: DeveloperSettingsNavigator): DeveloperSettingsPresenter
+    }
+
     @Composable
     override fun present(): DeveloperSettingsState {
         val cacheSize = remember {
@@ -75,6 +91,9 @@ class DeveloperSettingsPresenter(
             mutableStateOf<AsyncAction<Unit>>(AsyncAction.Uninitialized)
         }
         val markAllRoomsAsReadAction = remember {
+            mutableStateOf<AsyncAction<Unit>>(AsyncAction.Uninitialized)
+        }
+        val pushRulesAction = remember {
             mutableStateOf<AsyncAction<Unit>>(AsyncAction.Uninitialized)
         }
         var showColorPicker by remember {
@@ -106,10 +125,10 @@ class DeveloperSettingsPresenter(
         )
         val showDeveloperSettings by showDeveloperSettingsProvider.showDeveloperSettings.collectAsState()
 
-        fun handleEvent(event: DeveloperSettingsEvents) {
+        fun handleEvent(event: DeveloperSettingsEvent) {
             when (event) {
-                DeveloperSettingsEvents.ClearCache -> coroutineScope.clearCache(clearCacheAction)
-                is DeveloperSettingsEvents.ChangeBrandColor -> coroutineScope.launch {
+                DeveloperSettingsEvent.ClearCache -> coroutineScope.clearCache(clearCacheAction)
+                is DeveloperSettingsEvent.ChangeBrandColor -> coroutineScope.launch {
                     showColorPicker = false
                     val color = event.color
                         ?.toArgb()
@@ -118,16 +137,16 @@ class DeveloperSettingsPresenter(
                         ?.padStart(7, '#')
                     enterpriseService.overrideBrandColor(sessionId, color)
                 }
-                is DeveloperSettingsEvents.SetShowDeveloperSettings -> {
+                is DeveloperSettingsEvent.SetShowDeveloperSettings -> {
                     showDeveloperSettingsProvider.setShowDeveloperSettings(event.show)
                 }
-                is DeveloperSettingsEvents.SetShowColorPicker -> {
+                is DeveloperSettingsEvent.SetShowColorPicker -> {
                     showColorPicker = event.show
                 }
-                DeveloperSettingsEvents.VacuumStores -> coroutineScope.launch {
+                DeveloperSettingsEvent.VacuumStores -> coroutineScope.launch {
                     vacuumStoresUseCase()
                 }
-                is DeveloperSettingsEvents.MarkAllRoomsAsRead -> {
+                is DeveloperSettingsEvent.MarkAllRoomsAsRead -> {
                     if (event.needsConfirmation) {
                         markAllRoomsAsReadAction.value = AsyncAction.ConfirmingNoParams
                     } else {
@@ -136,13 +155,17 @@ class DeveloperSettingsPresenter(
                         )
                     }
                 }
-                DeveloperSettingsEvents.DismissMarkAllRoomsAsReadConfirmation -> {
+                DeveloperSettingsEvent.DismissMarkAllRoomsAsReadConfirmation -> {
                     markAllRoomsAsReadAction.value = AsyncAction.Uninitialized
                 }
-                DeveloperSettingsEvents.StartSearchIndexing -> coroutineScope.launch {
+                DeveloperSettingsEvent.OpenPushRules -> coroutineScope.openPushRules(pushRulesAction)
+                DeveloperSettingsEvent.DismissPushRulesError -> {
+                    pushRulesAction.value = AsyncAction.Uninitialized
+                }
+                DeveloperSettingsEvent.StartSearchIndexing -> coroutineScope.launch {
                     messageSearchIndexer.startUserInitiatedSweep(sessionId)
                 }
-                DeveloperSettingsEvents.CancelSearchIndexing -> {
+                DeveloperSettingsEvent.CancelSearchIndexing -> {
                     messageSearchIndexer.cancelSweep(sessionId)
                 }
             }
@@ -156,9 +179,11 @@ class DeveloperSettingsPresenter(
             databaseSizes = databaseSizes.value,
             clearCacheAction = clearCacheAction.value,
             markAllRoomsAsReadAction = markAllRoomsAsReadAction.value,
+            pushRulesAction = pushRulesAction.value,
             isEnterpriseBuild = buildMeta.isEnterpriseBuild,
             showColorPicker = showColorPicker,
             messageSearchIndexStatus = messageSearchIndexStatus,
+            deviceId = deviceId,
             eventSink = ::handleEvent,
         )
     }
@@ -234,4 +259,40 @@ class DeveloperSettingsPresenter(
             markAllRoomsAsRead().getOrThrow()
         }.runCatchingUpdatingState(state = markAllRoomsAsReadAction)
     }
+
+    private fun CoroutineScope.openPushRules(pushRulesAction: MutableState<AsyncAction<Unit>>) = launch {
+        pushRulesAction.value = AsyncAction.Loading
+        notificationSettingsService.getRawPushRules()
+            .onSuccess { content ->
+                pushRulesAction.value = AsyncAction.Uninitialized
+                navigator.openPushRules(
+                    filename = pushRulesFilename(),
+                    content = content.orEmpty().prettyPrintJson(),
+                )
+            }
+            .onFailure {
+                pushRulesAction.value = AsyncAction.Failure(it)
+            }
+    }
+
+    /**
+     * The user id contains a colon, which is not a valid character for a file name on all the file systems,
+     * so replace it by an underscore.
+     */
+    private fun pushRulesFilename() = "push_rules${sessionId.value.replace(':', '_')}.json"
 }
+
+@OptIn(ExperimentalSerializationApi::class)
+private val prettyPrintJson = Json {
+    prettyPrint = true
+    // Keep the indentation small, for a better rendering on mobile.
+    prettyPrintIndent = "  "
+}
+
+/**
+ * Pretty print this json content, so that it is readable when rendered.
+ * Return the content as is if it is not valid json.
+ */
+private fun String.prettyPrintJson(): String = runCatchingExceptions {
+    prettyPrintJson.encodeToString(JsonElement.serializer(), prettyPrintJson.parseToJsonElement(this))
+}.getOrDefault(this)

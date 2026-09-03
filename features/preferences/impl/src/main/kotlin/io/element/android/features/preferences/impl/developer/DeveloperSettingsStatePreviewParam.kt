@@ -13,9 +13,10 @@ import io.element.android.features.preferences.impl.developer.appsettings.AppDev
 import io.element.android.features.preferences.impl.developer.appsettings.anAppDeveloperSettingsState
 import io.element.android.libraries.architecture.AsyncAction
 import io.element.android.libraries.architecture.AsyncData
+import io.element.android.libraries.matrix.api.core.DeviceId
 import kotlinx.collections.immutable.persistentMapOf
 
-open class DeveloperSettingsStateProvider : PreviewParameterProvider<DeveloperSettingsState> {
+open class DeveloperSettingsStatePreviewParam : PreviewParameterProvider<DeveloperSettingsState> {
     override val values: Sequence<DeveloperSettingsState>
         get() = sequenceOf(
             aDeveloperSettingsState(),
@@ -35,6 +36,7 @@ open class DeveloperSettingsStateProvider : PreviewParameterProvider<DeveloperSe
                 showColorPicker = false,
             ),
             aDeveloperSettingsState(
+                pushRulesAction = AsyncAction.Failure(Exception("A failure")),
                 messageSearchIndexStatus = MessageSearchIndexStatus.Idle,
             ),
             aDeveloperSettingsState(
@@ -63,10 +65,12 @@ fun aDeveloperSettingsState(
     appDeveloperSettingsState: AppDeveloperSettingsState = anAppDeveloperSettingsState(),
     clearCacheAction: AsyncAction<Unit> = AsyncAction.Uninitialized,
     markAllRoomsAsReadAction: AsyncAction<Unit> = AsyncAction.Uninitialized,
+    pushRulesAction: AsyncAction<Unit> = AsyncAction.Uninitialized,
     isEnterpriseBuild: Boolean = false,
     showColorPicker: Boolean = false,
     messageSearchIndexStatus: MessageSearchIndexStatus = MessageSearchIndexStatus.Hidden,
-    eventSink: (DeveloperSettingsEvents) -> Unit = {},
+    deviceId: DeviceId = DeviceId("ILAKNDNASDLK"),
+    eventSink: (DeveloperSettingsEvent) -> Unit = {},
 ) = DeveloperSettingsState(
     showDeveloperSettings = showDeveloperSettings,
     appDeveloperSettingsState = appDeveloperSettingsState,
@@ -74,8 +78,10 @@ fun aDeveloperSettingsState(
     databaseSizes = AsyncData.Success(persistentMapOf("state_store" to "1.2MB")),
     clearCacheAction = clearCacheAction,
     markAllRoomsAsReadAction = markAllRoomsAsReadAction,
+    pushRulesAction = pushRulesAction,
     isEnterpriseBuild = isEnterpriseBuild,
     showColorPicker = showColorPicker,
     messageSearchIndexStatus = messageSearchIndexStatus,
+    deviceId = deviceId,
     eventSink = eventSink,
 )
