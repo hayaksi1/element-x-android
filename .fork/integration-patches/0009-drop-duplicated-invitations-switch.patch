@@ -1,0 +1,63 @@
+From f63d5e60fb08ce10474cf424f895733452046ab5 Mon Sep 17 00:00:00 2001
+From: hayaksi1 <193020925+hayaksi1@users.noreply.github.com>
+Date: Thu, 3 Sep 2026 10:24:17 +0300
+Subject: [PATCH] Drop the invitations switch the conversation notifications
+ merge re-inserts
+
+fix/7471-conversation-notifications adds its switch right below the
+invitations toggle in the additional settings section, while the fork
+had already moved that toggle up with the other notification settings.
+The merge keeps the branch's context as an addition, so the screen shows
+the invitations switch twice and NotificationSettingsViewTest finds two
+matching nodes.
+
+The two media compression tests in AdvancedSettingsViewTest get the same
+tall qualifier as their siblings: the fork's extra rows push that row
+below the default test viewport.
+
+Fork-Feature: fork-tooling
+---
+ .../impl/notifications/NotificationSettingsView.kt          | 6 ------
+ .../preferences/impl/advanced/AdvancedSettingsViewTest.kt   | 2 ++
+ 2 files changed, 2 insertions(+), 6 deletions(-)
+
+diff --git a/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/notifications/NotificationSettingsView.kt b/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/notifications/NotificationSettingsView.kt
+index 8cc249387b..f1e54e3e11 100644
+--- a/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/notifications/NotificationSettingsView.kt
++++ b/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/notifications/NotificationSettingsView.kt
+@@ -212,12 +212,6 @@ private fun NotificationSettingsContentView(
+ //                    switchAlignment = Alignment.Top,
+ //                    onCheckedChange = onCallsNotificationsChanged
+ //                )
+-            PreferenceSwitch(
+-                modifier = Modifier,
+-                title = stringResource(id = R.string.screen_notification_settings_invite_for_me_label),
+-                isChecked = matrixSettings.inviteForMeNotificationsEnabled,
+-                onCheckedChange = onInviteForMeNotificationsChange
+-            )
+             PreferenceSwitch(
+                 modifier = Modifier,
+                 title = stringResource(id = R.string.screen_notification_settings_conversations_label),
+diff --git a/features/preferences/impl/src/test/kotlin/io/element/android/features/preferences/impl/advanced/AdvancedSettingsViewTest.kt b/features/preferences/impl/src/test/kotlin/io/element/android/features/preferences/impl/advanced/AdvancedSettingsViewTest.kt
+index 52af7d5927..6cbb3edfed 100644
+--- a/features/preferences/impl/src/test/kotlin/io/element/android/features/preferences/impl/advanced/AdvancedSettingsViewTest.kt
++++ b/features/preferences/impl/src/test/kotlin/io/element/android/features/preferences/impl/advanced/AdvancedSettingsViewTest.kt
+@@ -114,6 +114,7 @@ class AdvancedSettingsViewTest : RobolectricTest() {
+     }
+ 
+     @Test
++    @Config(qualifiers = "h1080dp")
+     fun `clicking on media to enable compression emits the expected event`() = runAndroidComposeUiTest {
+         val eventsRecorder = EventsRecorder<AdvancedSettingsEvent>()
+         val analyticsService = FakeAnalyticsService()
+@@ -135,6 +136,7 @@ class AdvancedSettingsViewTest : RobolectricTest() {
+     }
+ 
+     @Test
++    @Config(qualifiers = "h1080dp")
+     fun `clicking on media to disable compression emits the expected event`() = runAndroidComposeUiTest {
+         val eventsRecorder = EventsRecorder<AdvancedSettingsEvent>()
+         val analyticsService = FakeAnalyticsService()
+-- 
+2.52.0
+
