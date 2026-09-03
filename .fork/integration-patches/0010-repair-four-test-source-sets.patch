@@ -1,0 +1,135 @@
+From fb96f6e68f780e5be65f4a9c48418588f0904569 Mon Sep 17 00:00:00 2001
+From: hayaksi1 <193020925+hayaksi1@users.noreply.github.com>
+Date: Thu, 3 Sep 2026 12:09:59 +0300
+Subject: [PATCH] Repair four test source sets the merges leave broken
+
+DefaultShareIntentHandlerTest carries its helper, the failing-grant
+context, the zip provider and the companion twice, once from each of
+two share branches. AndroidMediaPreProcessorTest declares the mimeType
+parameter of its process helper twice for the same reason.
+DefaultNotificationConversationServiceTest still calls onSendMessage in
+two tests that arrived from other branches after
+fix/1586-publish-conversation-shortcut renamed it to onMessageInRoom.
+
+RustMatrixClientFactoryTest's "unavailable when the client secret is
+missing" case describes the factory gating search on the secret; on
+master that decision belongs to the client builder, which the sibling
+test already covers, so the stale assertion goes.
+
+Fork-Feature: fork-tooling
+---
+ .../impl/DefaultShareIntentHandlerTest.kt     | 34 -------------------
+ .../impl/RustMatrixClientFactoryTest.kt       | 16 ---------
+ .../impl/AndroidMediaPreProcessorTest.kt      |  1 -
+ ...aultNotificationConversationServiceTest.kt |  4 +--
+ 4 files changed, 2 insertions(+), 53 deletions(-)
+
+diff --git a/features/share/impl/src/test/kotlin/io/element/android/features/share/impl/DefaultShareIntentHandlerTest.kt b/features/share/impl/src/test/kotlin/io/element/android/features/share/impl/DefaultShareIntentHandlerTest.kt
+index cc36e61ec0..d81bbe053d 100644
+--- a/features/share/impl/src/test/kotlin/io/element/android/features/share/impl/DefaultShareIntentHandlerTest.kt
++++ b/features/share/impl/src/test/kotlin/io/element/android/features/share/impl/DefaultShareIntentHandlerTest.kt
+@@ -296,40 +296,6 @@ class DefaultShareIntentHandlerTest : RobolectricTest() {
+         override fun update(uri: Uri, values: ContentValues?, selection: String?, selectionArgs: Array<out String>?) = 0
+     }
+ 
+-    private companion object {
+-        const val A_PACKAGE_NAME = "io.element.android.x"
+-        const val AN_ACTIVITY_NAME = "io.element.android.x.MainActivity"
+-    }
+-    private fun createDefaultShareIntentHandler() = DefaultShareIntentHandler(
+-        context = RuntimeEnvironment.getApplication(),
+-    )
+-
+-    private class FailingGrantUriPermissionContext(context: Context) : ContextWrapper(context) {
+-        override fun grantUriPermission(toPackage: String, uri: Uri, modeFlags: Int) {
+-            error("Unable to grant Uri permission")
+-        }
+-    }
+-
+-    private class ZipContentProvider : ContentProvider() {
+-        override fun onCreate() = true
+-
+-        override fun getType(uri: Uri) = "application/zip"
+-
+-        override fun query(
+-            uri: Uri,
+-            projection: Array<out String>?,
+-            selection: String?,
+-            selectionArgs: Array<out String>?,
+-            sortOrder: String?,
+-        ): Cursor? = null
+-
+-        override fun insert(uri: Uri, values: ContentValues?): Uri? = null
+-
+-        override fun delete(uri: Uri, selection: String?, selectionArgs: Array<out String>?) = 0
+-
+-        override fun update(uri: Uri, values: ContentValues?, selection: String?, selectionArgs: Array<out String>?) = 0
+-    }
+-
+     private companion object {
+         const val A_PACKAGE_NAME = "io.element.android.x"
+         const val AN_ACTIVITY_NAME = "io.element.android.x.MainActivity"
+diff --git a/libraries/matrix/impl/src/test/kotlin/io/element/android/libraries/matrix/impl/RustMatrixClientFactoryTest.kt b/libraries/matrix/impl/src/test/kotlin/io/element/android/libraries/matrix/impl/RustMatrixClientFactoryTest.kt
+index 0e605a86e7..3ea93c9d47 100644
+--- a/libraries/matrix/impl/src/test/kotlin/io/element/android/libraries/matrix/impl/RustMatrixClientFactoryTest.kt
++++ b/libraries/matrix/impl/src/test/kotlin/io/element/android/libraries/matrix/impl/RustMatrixClientFactoryTest.kt
+@@ -50,22 +50,6 @@ class RustMatrixClientFactoryTest {
+         result.destroy()
+     }
+ 
+-    @Test
+-    fun `create - message search is unavailable when the client secret is missing`() = runTest {
+-        val featureFlagService = FakeFeatureFlagService(
+-            initialState = mapOf(FeatureFlags.MessageSearch.key to true),
+-        )
+-        val sut = createRustMatrixClientFactory(
+-            featureFlagService = featureFlagService,
+-            workManagerScheduler = FakeWorkManagerScheduler(submitLambda = {}),
+-        )
+-
+-        val result = sut.create(aSessionData().copy(passphrase = null))
+-
+-        assertThat(result.isMessageSearchAvailable).isFalse()
+-        result.destroy()
+-    }
+-
+     @Test
+     fun `create - message search availability uses the client builder decision`() = runTest {
+         val featureFlagService = FakeFeatureFlagService(
+diff --git a/libraries/mediaupload/impl/src/test/kotlin/io/element/android/libraries/mediaupload/impl/AndroidMediaPreProcessorTest.kt b/libraries/mediaupload/impl/src/test/kotlin/io/element/android/libraries/mediaupload/impl/AndroidMediaPreProcessorTest.kt
+index b21157a109..6bc56cbfb3 100644
+--- a/libraries/mediaupload/impl/src/test/kotlin/io/element/android/libraries/mediaupload/impl/AndroidMediaPreProcessorTest.kt
++++ b/libraries/mediaupload/impl/src/test/kotlin/io/element/android/libraries/mediaupload/impl/AndroidMediaPreProcessorTest.kt
+@@ -85,7 +85,6 @@ class AndroidMediaPreProcessorTest : RobolectricTest() {
+         mimeType: String = asset.mimeType,
+         sdkIntVersion: Int = Build.VERSION_CODES.P,
+         deleteOriginal: Boolean = false,
+-        mimeType: String = asset.mimeType,
+     ): MediaUploadInfo {
+         val context = InstrumentationRegistry.getInstrumentation().context
+         val deleteCallback = lambdaRecorder<Uri?, Unit> {}
+diff --git a/libraries/push/impl/src/test/kotlin/io/element/android/libraries/push/impl/notifications/conversations/DefaultNotificationConversationServiceTest.kt b/libraries/push/impl/src/test/kotlin/io/element/android/libraries/push/impl/notifications/conversations/DefaultNotificationConversationServiceTest.kt
+index 0135fc02ba..b4b284225e 100644
+--- a/libraries/push/impl/src/test/kotlin/io/element/android/libraries/push/impl/notifications/conversations/DefaultNotificationConversationServiceTest.kt
++++ b/libraries/push/impl/src/test/kotlin/io/element/android/libraries/push/impl/notifications/conversations/DefaultNotificationConversationServiceTest.kt
+@@ -59,7 +59,7 @@ class DefaultNotificationConversationServiceTest : RobolectricTest() {
+         val context = InstrumentationRegistry.getInstrumentation().context
+         val service = createService(context)
+ 
+-        service.onSendMessage(
++        service.onMessageInRoom(
+             sessionId = A_SESSION_ID,
+             roomId = A_ROOM_ID,
+             roomName = "Room title",
+@@ -203,7 +203,7 @@ class DefaultNotificationConversationServiceTest : RobolectricTest() {
+             appPreferencesStore = InMemoryAppPreferencesStore(isConversationNotificationsEnabled = false),
+         )
+ 
+-        service.onSendMessage(
++        service.onMessageInRoom(
+             sessionId = A_SESSION_ID,
+             roomId = A_ROOM_ID,
+             roomName = "Room title",
+-- 
+2.52.0
+
