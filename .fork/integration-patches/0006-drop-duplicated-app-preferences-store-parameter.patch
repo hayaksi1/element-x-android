@@ -1,0 +1,31 @@
+From c12ade094091966b0dbf89ec4f5acd12a03951e7 Mon Sep 17 00:00:00 2001
+From: hayaksi1 <193020925+hayaksi1@users.noreply.github.com>
+Date: Thu, 3 Sep 2026 09:53:07 +0300
+Subject: [PATCH] Drop the appPreferencesStore parameter the room list test
+ helper declares twice
+
+fix/6857-hide-space-rooms and the unread-activity branch each add the same
+appPreferencesStore parameter to createRoomListPresenter at a different
+position, and the merge keeps both because their contexts do not overlap.
+The presenter itself takes it once.
+
+Fork-Feature: fork-tooling
+---
+ .../android/features/home/impl/roomlist/RoomListPresenterTest.kt | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/features/home/impl/src/test/kotlin/io/element/android/features/home/impl/roomlist/RoomListPresenterTest.kt b/features/home/impl/src/test/kotlin/io/element/android/features/home/impl/roomlist/RoomListPresenterTest.kt
+index 78f59cbb6a..9a197e77ff 100644
+--- a/features/home/impl/src/test/kotlin/io/element/android/features/home/impl/roomlist/RoomListPresenterTest.kt
++++ b/features/home/impl/src/test/kotlin/io/element/android/features/home/impl/roomlist/RoomListPresenterTest.kt
+@@ -859,7 +859,6 @@ class RoomListPresenterTest {
+         featureFlagService: FeatureFlagService = FakeFeatureFlagService(),
+         appPreferencesStore: AppPreferencesStore = InMemoryAppPreferencesStore(),
+         markRoomAsRead: MarkRoomAsRead? = null,
+-        appPreferencesStore: AppPreferencesStore = InMemoryAppPreferencesStore(),
+     ) = RoomListPresenter(
+         client = client,
+         leaveRoomPresenter = { leaveRoomState },
+-- 
+2.52.0
+
