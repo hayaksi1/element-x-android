@@ -133,7 +133,7 @@ class ThreadedMessagesNodeTest : RobolectricTest() {
 private class FakeThreadedMessagesNodeCallback : ThreadedMessagesNode.Callback {
     override fun handleEventClick(timelineMode: Timeline.Mode, event: TimelineItem.Event, canUseOverlay: Boolean) = false
     override fun handleGalleryItemClick(timelineMode: Timeline.Mode, event: TimelineItem.Event, galleryItemIndex: Int, canUseOverlay: Boolean) = false
-    override fun navigateToPreviewAttachments(attachments: ImmutableList<Attachment>, inReplyToEventId: EventId?) = Unit
+    override fun navigateToPreviewAttachments(attachments: ImmutableList<Attachment>, inReplyToEventId: EventId?, caption: String?) = Unit
     override fun navigateToRoomMemberDetails(userId: UserId) = Unit
     override fun handlePermalinkClick(data: PermalinkData) = Unit
     override fun navigateToEventDebugInfo(eventId: EventId?, debugInfo: TimelineItemDebugInfo) = Unit
