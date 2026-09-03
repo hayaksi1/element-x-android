@@ -300,4 +300,38 @@ class DefaultShareIntentHandlerTest : RobolectricTest() {
         const val A_PACKAGE_NAME = "io.element.android.x"
         const val AN_ACTIVITY_NAME = "io.element.android.x.MainActivity"
     }
+    private fun createDefaultShareIntentHandler() = DefaultShareIntentHandler(
+        context = RuntimeEnvironment.getApplication(),
+    )
+
+    private class FailingGrantUriPermissionContext(context: Context) : ContextWrapper(context) {
+        override fun grantUriPermission(toPackage: String, uri: Uri, modeFlags: Int) {
+            error("Unable to grant Uri permission")
+        }
+    }
+
+    private class ZipContentProvider : ContentProvider() {
+        override fun onCreate() = true
+
+        override fun getType(uri: Uri) = "application/zip"
+
+        override fun query(
+            uri: Uri,
+            projection: Array<out String>?,
+            selection: String?,
+            selectionArgs: Array<out String>?,
+            sortOrder: String?,
+        ): Cursor? = null
+
+        override fun insert(uri: Uri, values: ContentValues?): Uri? = null
+
+        override fun delete(uri: Uri, selection: String?, selectionArgs: Array<out String>?) = 0
+
+        override fun update(uri: Uri, values: ContentValues?, selection: String?, selectionArgs: Array<out String>?) = 0
+    }
+
+    private companion object {
+        const val A_PACKAGE_NAME = "io.element.android.x"
+        const val AN_ACTIVITY_NAME = "io.element.android.x.MainActivity"
+    }
 }
