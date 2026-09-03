@@ -199,7 +199,6 @@ class DeveloperSettingsPresenterTest {
         }
     }
 
-
     @Test
     fun `present - message search index section is hidden while the flag is off`() = runTest {
         val presenter = createDeveloperSettingsPresenter()
@@ -350,7 +349,6 @@ class DeveloperSettingsPresenterTest {
             }
         }
     }
-
 
     @Test
     fun `present - turning the developer options switch off persists the choice`() = runTest {

@@ -12,9 +12,9 @@ import dev.zacsweers.metro.Inject
 import io.element.android.features.enterprise.api.ClientBuilderEnterpriseHook
 import io.element.android.libraries.androidutils.crypto.ClientSecret
 import io.element.android.libraries.core.coroutine.CoroutineDispatchers
-import io.element.android.libraries.core.extensions.runCatchingExceptions
 import io.element.android.libraries.core.data.ByteUnit
 import io.element.android.libraries.core.data.megaBytes
+import io.element.android.libraries.core.extensions.runCatchingExceptions
 import io.element.android.libraries.di.CacheDirectory
 import io.element.android.libraries.di.annotations.AppCoroutineScope
 import io.element.android.libraries.featureflag.api.FeatureFlagService
