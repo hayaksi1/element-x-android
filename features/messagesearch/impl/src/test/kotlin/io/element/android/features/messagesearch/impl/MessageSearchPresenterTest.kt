@@ -188,6 +188,36 @@ class MessageSearchPresenterTest {
     }
 
     @Test
+    fun `present - results are displayed newest first regardless of relevance order`() = runTest {
+        val messageSearch = FakeMessageSearch()
+        val presenter = createMessageSearchPresenter(messageSearch = messageSearch)
+        presenter.test {
+            awaitItem().also { state ->
+                state.eventSink(MessageSearchEvents.QueryChanged("hello"))
+            }
+            advanceUntilIdle()
+            // The SDK emits in relevance order; the screen must re-order by timestamp.
+            messageSearch.emitResults(
+                persistentListOf(
+                    aMessageSearchResult(eventId = EventId("\$older"), timestamp = 1_000L),
+                    aMessageSearchResult(eventId = EventId("\$newest"), timestamp = 3_000L),
+                    aMessageSearchResult(eventId = EventId("\$middle"), timestamp = 2_000L),
+                )
+            )
+            advanceUntilIdle()
+
+            expectMostRecentItem().also { state ->
+                assertThat(state.results.map { it.eventId }).containsExactly(
+                    EventId("\$newest"),
+                    EventId("\$middle"),
+                    EventId("\$older"),
+                ).inOrder()
+            }
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `present - a room-scoped search paginates to the end while its room has nothing to show`() = runTest {
         val messageSearch = FakeMessageSearch(controllablePagination = true)
         val presenter = createMessageSearchPresenter(roomId = A_ROOM_ID, messageSearch = messageSearch)
@@ -401,13 +431,14 @@ class MessageSearchPresenterTest {
 private fun aMessageSearchResult(
     eventId: EventId = EventId("\$anEventId"),
     roomId: RoomId = A_ROOM_ID,
+    timestamp: Long = 0L,
 ) = MessageSearchResult(
     roomId = roomId,
     eventId = eventId,
     senderId = A_USER_ID,
     senderProfile = ProfileDetails.Unavailable,
     content = aMessageContent(body = "hello world"),
-    timestamp = 0L,
+    timestamp = timestamp,
 )
 
 internal fun createMessageSearchPresenter(
