@@ -858,7 +858,6 @@ class RoomListPresenterTest {
         featureFlagService: FeatureFlagService = FakeFeatureFlagService(),
         appPreferencesStore: AppPreferencesStore = InMemoryAppPreferencesStore(),
         markRoomAsRead: MarkRoomAsRead? = null,
-        appPreferencesStore: AppPreferencesStore = InMemoryAppPreferencesStore(),
     ) = RoomListPresenter(
         client = client,
         leaveRoomPresenter = { leaveRoomState },
