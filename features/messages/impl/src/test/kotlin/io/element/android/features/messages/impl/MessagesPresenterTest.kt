@@ -1500,7 +1500,6 @@ class MessagesPresenterTest {
         }
     }
 
-
     @Test
     fun `present - a group room reports how many members it has`() = runTest {
         val presenter = createMessagesPresenter(
@@ -1546,6 +1545,23 @@ class MessagesPresenterTest {
         canRedactOwn = canRedactOwn,
         canPinUnpin = canPinUnpin,
     )
+
+    private fun aJoinedRoomWithInfo(roomInfo: RoomInfo): FakeJoinedRoom {
+        return FakeJoinedRoom(
+            baseRoom = FakeBaseRoom(
+                roomPermissions = FakeRoomPermissions(
+                    canSendState = { true },
+                    canSendMessage = { true },
+                    canRedactOther = true,
+                    canRedactOwn = true,
+                    canPinUnpin = true,
+                ),
+            ).apply {
+                givenRoomInfo(roomInfo)
+            },
+            typingNoticeResult = { Result.success(Unit) },
+        )
+    }
 
     private fun TestScope.createMessagesPresenter(
         coroutineDispatchers: CoroutineDispatchers = testCoroutineDispatchers(),
