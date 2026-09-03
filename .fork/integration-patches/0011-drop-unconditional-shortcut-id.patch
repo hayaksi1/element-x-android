@@ -1,0 +1,37 @@
+From 1b181bda9a70221a2368909cc2a4ea18cf415c25 Mon Sep 17 00:00:00 2001
+From: hayaksi1 <193020925+hayaksi1@users.noreply.github.com>
+Date: Thu, 3 Sep 2026 12:18:18 +0300
+Subject: [PATCH] Drop the unconditional shortcut id the notification creator
+ merge keeps
+
+Upstream sets the conversation shortcut id inside the builder's apply
+block, guarded by threadId, and fix/7471-conversation-notifications adds
+the conversation notifications preference to that guard. A branch based
+on the older layout still set the id unconditionally on the returned
+builder, and the merge keeps both, so the preference never takes effect
+and DefaultNotificationCreatorTest sees a shortcut id with it off.
+
+Fork-Feature: fork-tooling
+---
+ .../push/impl/notifications/factories/NotificationCreator.kt | 5 -----
+ 1 file changed, 5 deletions(-)
+
+diff --git a/libraries/push/impl/src/main/kotlin/io/element/android/libraries/push/impl/notifications/factories/NotificationCreator.kt b/libraries/push/impl/src/main/kotlin/io/element/android/libraries/push/impl/notifications/factories/NotificationCreator.kt
+index e176cea56d..5d7f8b0c55 100755
+--- a/libraries/push/impl/src/main/kotlin/io/element/android/libraries/push/impl/notifications/factories/NotificationCreator.kt
++++ b/libraries/push/impl/src/main/kotlin/io/element/android/libraries/push/impl/notifications/factories/NotificationCreator.kt
+@@ -202,11 +202,6 @@ class DefaultNotificationCreator(
+         val newEvents = messagingStyle.filterOutAlreadyDisplayedEvents(events)
+         messagingStyle.addMessagesFromEvents(newEvents, imageLoader)
+         return builder
+-            // ID of the corresponding shortcut, for conversation features under API 30+
+-            // Must match those created in the ShortcutInfoCompat.Builder()
+-            // for the notification to appear as a "Conversation":
+-            // https://developer.android.com/develop/ui/views/notifications/conversations
+-            .setShortcutId(createShortcutId(roomInfo.sessionId, roomInfo.roomId))
+             .setCategory(category)
+             .setNumber(events.size)
+             .setOnlyAlertOnce(roomInfo.isUpdated || newEvents.isEmpty())
+-- 
+2.52.0
+
