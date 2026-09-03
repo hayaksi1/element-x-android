@@ -21,6 +21,7 @@ open class AdvancedSettingsStatePreviewParam : PreviewParameterProvider<Advanced
             aAdvancedSettingsState(),
             aAdvancedSettingsState(isDeveloperModeEnabled = true),
             aAdvancedSettingsState(isSharePresenceEnabled = true),
+            aAdvancedSettingsState(isMarkdownEnabled = false),
             aAdvancedSettingsState(isRenderRedactedMessagesEnabled = false),
             aAdvancedSettingsState(mediaOptimizationState = MediaOptimizationState.AllMedia(isEnabled = true)),
             aAdvancedSettingsState(hideInviteAvatars = true),
@@ -37,6 +38,7 @@ open class AdvancedSettingsStatePreviewParam : PreviewParameterProvider<Advanced
 fun aAdvancedSettingsState(
     isDeveloperModeEnabled: Boolean = false,
     isSharePresenceEnabled: Boolean = false,
+    isMarkdownEnabled: Boolean = true,
     isRenderRedactedMessagesEnabled: Boolean = true,
     mediaOptimizationState: MediaOptimizationState = MediaOptimizationState.AllMedia(isEnabled = false),
     theme: ThemeOption = ThemeOption.System,
@@ -50,6 +52,7 @@ fun aAdvancedSettingsState(
 ) = AdvancedSettingsState(
     isDeveloperModeEnabled = isDeveloperModeEnabled,
     isSharePresenceEnabled = isSharePresenceEnabled,
+    isMarkdownEnabled = isMarkdownEnabled,
     isRenderRedactedMessagesEnabled = isRenderRedactedMessagesEnabled,
     mediaOptimizationState = mediaOptimizationState,
     theme = theme,
