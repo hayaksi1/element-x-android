@@ -1,0 +1,38 @@
+From d8b5348b81948f33ae9e8a1a20d463c2aa0eb86e Mon Sep 17 00:00:00 2001
+From: hayaksi1 <193020925+hayaksi1@users.noreply.github.com>
+Date: Sun, 20 Sep 2026 19:41:52 +0300
+Subject: [PATCH] Give the two media compression view tests the tall qualifier
+ their siblings use
+
+0009's invitations-switch deletion is already in the tree; the extra
+PreferenceSwitch next to conversations is gone. The two media compression
+tests still lack the h1080dp qualifier the fork's extra rows need.
+
+Fork-Feature: fork-tooling
+---
+ .../preferences/impl/advanced/AdvancedSettingsViewTest.kt       | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/features/preferences/impl/src/test/kotlin/io/element/android/features/preferences/impl/advanced/AdvancedSettingsViewTest.kt b/features/preferences/impl/src/test/kotlin/io/element/android/features/preferences/impl/advanced/AdvancedSettingsViewTest.kt
+index 52af7d5..6cbb3ed 100644
+--- a/features/preferences/impl/src/test/kotlin/io/element/android/features/preferences/impl/advanced/AdvancedSettingsViewTest.kt
++++ b/features/preferences/impl/src/test/kotlin/io/element/android/features/preferences/impl/advanced/AdvancedSettingsViewTest.kt
+@@ -114,6 +114,7 @@ class AdvancedSettingsViewTest : RobolectricTest() {
+     }
+ 
+     @Test
++    @Config(qualifiers = "h1080dp")
+     fun `clicking on media to enable compression emits the expected event`() = runAndroidComposeUiTest {
+         val eventsRecorder = EventsRecorder<AdvancedSettingsEvent>()
+         val analyticsService = FakeAnalyticsService()
+@@ -135,6 +136,7 @@ class AdvancedSettingsViewTest : RobolectricTest() {
+     }
+ 
+     @Test
++    @Config(qualifiers = "h1080dp")
+     fun `clicking on media to disable compression emits the expected event`() = runAndroidComposeUiTest {
+         val eventsRecorder = EventsRecorder<AdvancedSettingsEvent>()
+         val analyticsService = FakeAnalyticsService()
+-- 
+2.52.0
+

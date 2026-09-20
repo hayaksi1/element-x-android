@@ -1,0 +1,424 @@
+name: Fork sync
+
+# Conflicts are this job's EXPECTED output and exit 0 (green).
+# Red means the job itself broke.
+on:
+  schedule:
+    - cron: '0 3 * * *'      # detect, nightly
+  workflow_dispatch:
+    inputs:
+      skip_verify:
+        description: 'Skip Gradle gates (detect only)'
+        type: boolean
+        default: true
+      mode:
+        description: 'detect = screen branches only. rebuild = run the real integration.'
+        type: choice
+        options: [detect, rebuild]
+        default: detect
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: fork-sync
+  cancel-in-progress: false
+
+env:
+  ISSUE_TITLE: 'Fork sync: upstream merge conflicts'
+  ISSUE_LABEL: fork-sync
+
+jobs:
+  detect:
+    if: inputs.mode != 'rebuild'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history; LFS pointers only)
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+        env:
+          GIT_LFS_SKIP_SMUDGE: 1
+
+      # The enterprise submodule is private and deliberately absent.
+      # isEnterpriseBuild = File("enterprise/README.md").exists() -> false,
+      # which selects the FOSS build. No ssh-agent step, so nothing can fail.
+      - run: echo "::notice::FOSS build - enterprise submodule intentionally absent (no deploy key)"
+
+      - name: Add upstream remote
+        run: |
+          git remote add upstream https://github.com/element-hq/element-x-android.git || true
+          git fetch upstream --prune
+
+      # A runner is a fresh clone, so it has no .git/info/attributes. The
+      # committed .gitattributes declares merge=lfs on snapshot PNGs and no
+      # driver of that name exists at any scope, so git falls back to a TEXT
+      # merge of the LFS pointer. setup-local-git.sh installs merge=binary
+      # locally; this asserts it actually took effect before anything merges.
+      - name: Snapshot merge policy
+        run: |
+          .fork/setup-local-git.sh
+          # Detect must never RECORD a resolution nobody reviewed.
+          git config rerere.enabled false
+          git config rerere.autoUpdate false
+          for p in a/snapshots/x.png screenshots/x.png libraries/compound/screenshots/x.png; do
+            got=$(git check-attr merge -- "$p" | sed 's/.*: //')
+            [ "$got" = binary ] || {
+              echo "::error::snapshot merge policy not in effect for $p (merge=$got)"; exit 1; }
+          done
+          echo "::notice::snapshot merge policy asserted (merge=binary)"
+
+      # The only place CI moves a remote ref. develop is a mirror: this must be a
+      # fast-forward to exactly upstream/develop, nothing else, ever.
+      - name: Fast-forward the mirror
+        run: |
+          set -euo pipefail
+          old=$(git rev-parse origin/develop)
+          new=$(git rev-parse upstream/develop)
+          if ! git merge-base --is-ancestor "$old" "$new"; then
+            echo "::error::develop is not an ancestor of upstream/develop - it carries fork commits"
+            git log --oneline upstream/develop..origin/develop
+            exit 1
+          fi
+          if [ "$old" = "$new" ]; then
+            echo "::notice::develop already at $(git rev-parse --short "$new") - nothing to push"
+            exit 0
+          fi
+          echo "develop $(git rev-parse --short "$old") -> $(git rev-parse --short "$new")"
+          # Literal single refspec. No force, no lease, no loop: a fast-forward
+          # needs none, and a plain push fails loudly if the assumption broke.
+          git push origin "$new:refs/heads/develop"
+
+      # merge-tree does a real merge in the object database: no worktree, no
+      # checkout, no LFS smudge. It cannot replay rerere, so anything it flags
+      # is re-checked below with a real merge.
+      - name: Screen every branch for conflicts
+        id: screen
+        run: |
+          set -uo pipefail
+          : > conflicts.tsv
+          branches=$(sed -e 's/#.*//' -e 's/[[:space:]]*$//' \
+            .fork/features.txt .fork/pr-branches.txt | grep -v '^$' || true)
+          for b in $branches; do
+            git show-ref --verify --quiet "refs/remotes/origin/$b" || continue
+            if ! out=$(git merge-tree --write-tree --name-only \
+                       upstream/develop "origin/$b" 2>&1); then
+              paths=$(echo "$out" | tail -n +2 | grep -v '^$' \
+                      | grep -v '^Auto-merging' | grep -v '^CONFLICT' \
+                      | paste -sd, - || true)
+              printf '%s\t%s\n' "$b" "$paths" >> conflicts.tsv
+            fi
+          done
+          n=$(wc -l < conflicts.tsv)
+          echo "count=$n" >> "$GITHUB_OUTPUT"
+
+          # Branches on origin that are in NEITHER manifest are never merged and
+          # nothing said so. The seeded allowlist means only NEW ones surface.
+          : > unmanaged.txt
+          strip() { sed -e 's/#.*//' -e 's/[[:space:]]*$//' "$@" | grep -v '^$' || true; }
+          strip .fork/features.txt .fork/pr-branches.txt | sort -u > .managed
+          strip .fork/unmanaged-branches.txt 2>/dev/null | sort -u > .allowed || : > .allowed
+          git for-each-ref --format='%(refname)' refs/remotes/origin \
+            | sed 's|^refs/remotes/origin/||' | grep -vx 'HEAD' | sort -u \
+            | grep -vxE 'develop|master|feat/fork-tooling' \
+            | comm -23 - .managed | comm -23 - .allowed > unmanaged.txt || true
+          echo "unmanaged=$(wc -l < unmanaged.txt)" >> "$GITHUB_OUTPUT"
+          # Hash the SORTED branch list: unsorted would read as "changed" nightly.
+          echo "hash=$(cut -f1 conflicts.tsv | sort | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+
+      - name: Write job summary
+        run: |
+          n='${{ steps.screen.outputs.count }}'
+          if [ "$n" -eq 0 ]; then
+            echo "## All fork branches merge cleanly :white_check_mark:" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::warning title=Merge conflicts::$n fork branches conflict with upstream/develop"
+            {
+              echo "## Conflicting branches ($n)"
+              echo
+              echo "| branch | conflicted paths |"
+              echo "|---|---|"
+              while IFS=$'\t' read -r b p; do echo "| \`$b\` | $p |"; done < conflicts.tsv
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Report into the single tracking issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          if [ "$(gh api "repos/$GITHUB_REPOSITORY" --jq .has_issues)" != "true" ]; then
+            echo "::warning::Issues are disabled on this repository - skipping issue report."
+            echo "Enable with: gh api -X PATCH repos/$GITHUB_REPOSITORY -f has_issues=true"
+            exit 0
+          fi
+          gh label create "$ISSUE_LABEL" --description "Fork sync automation" --color ededed 2>/dev/null || true
+
+          n='${{ steps.screen.outputs.count }}'
+          hash='${{ steps.screen.outputs.hash }}'
+
+          # Filter by our own label, then exact-match the title. Never --search:
+          # it is fuzzy full-text and matches unrelated issues.
+          num=$(gh issue list --label "$ISSUE_LABEL" --state all --limit 100 \
+                  --json number,title,state \
+                  --jq "map(select(.title==\"$ISSUE_TITLE\")) | sort_by(.number) | .[-1] | .number // empty")
+          state=$(gh issue list --label "$ISSUE_LABEL" --state all --limit 100 \
+                  --json number,title,state \
+                  --jq "map(select(.title==\"$ISSUE_TITLE\")) | sort_by(.number) | .[-1] | .state // empty")
+
+          prev=""
+          if [ -n "$num" ]; then
+            prev=$(gh issue view "$num" --json body -q .body \
+                   | sed -n 's/.*fork-sync-state: \([0-9a-f]*\).*/\1/p' | head -1)
+          fi
+
+          {
+            echo "Upstream: \`$(git rev-parse --short upstream/develop)\`  •  updated $(date -u '+%Y-%m-%d %H:%M UTC')"
+            echo
+            if [ "$n" -eq 0 ]; then
+              echo "All fork branches merge cleanly onto \`upstream/develop\`."
+            else
+              echo "### $n branch(es) conflict"
+              echo
+              echo "| branch | conflicted paths |"
+              echo "|---|---|"
+              while IFS=$'\t' read -r b p; do echo "| \`$b\` | $p |"; done < conflicts.tsv
+              echo
+              echo "Resolve one with:"
+              echo '```bash'
+              echo "git checkout master && git merge --no-ff <branch>"
+              echo "# fix, then: git add <files> && git commit"
+              echo ".fork/sync-upstream.sh --continue"
+              echo '```'
+            fi
+            if [ -s unmanaged.txt ]; then
+              echo
+              echo "### Branches on \`origin\` in neither manifest"
+              echo
+              echo "They are never merged into \`master\`. Add each to \`.fork/features.txt\` or"
+              echo "\`.fork/pr-branches.txt\`, or acknowledge it in \`.fork/unmanaged-branches.txt\`."
+              echo
+              sed 's/^/- `/; s/$/`/' unmanaged.txt
+            fi
+            echo
+            echo "<!-- fork-sync-state: $hash -->"
+          } > body.md
+
+          # Gate on "is there anything to say", not on the conflict count. A new
+          # unmanaged branch is never merged into master and nothing else reports
+          # it, so gating on $n alone means the one signal that a branch is being
+          # silently skipped produces no issue at all.
+          u='${{ steps.screen.outputs.unmanaged }}'
+          if [ -z "$num" ]; then
+            if [ "$n" -gt 0 ] || [ "$u" -gt 0 ]; then
+              gh issue create --title "$ISSUE_TITLE" --body-file body.md --label "$ISSUE_LABEL"
+            fi
+          else
+            gh issue edit "$num" --body-file body.md
+            if [ "$n" -gt 0 ] && [ "$state" = "CLOSED" ]; then gh issue reopen "$num"; fi
+            if [ "$n" -gt 0 ] && [ "$hash" != "$prev" ]; then
+              gh issue comment "$num" --body "Conflict set changed. Now $n branch(es); see the issue body."
+            fi
+            # Closing needs BOTH clear: an issue closed while unmanaged branches
+            # remain would retract the only report of them.
+            if [ "$n" -eq 0 ] && [ "$u" -eq 0 ] && [ "$state" = "OPEN" ]; then
+              gh issue close "$num" --reason completed \
+                --comment "All fork branches merge cleanly as of \`$(git rev-parse --short upstream/develop)\`, and none is unmanaged."
+            fi
+          fi
+
+  # The rebuild the local script does, on a runner. It exists to answer one
+  # question the local machine cannot: what does a genuine, from-scratch
+  # integration actually produce, in an environment nobody has hand-tuned.
+  #
+  # It PUBLISHES NOTHING. --no-push is passed explicitly, and sync-upstream.sh
+  # additionally forces NO_PUSH under GITHUB_ACTIONS unless
+  # FORK_SYNC_AUTOPUBLISH=1, which is not set here. Two independent brakes,
+  # because a runner that can move develop is a runner that can break the
+  # mirror with nobody watching.
+  #
+  # Exit 3 is the EXPECTED outcome today: integration incomplete, so nothing is
+  # published. That is the script refusing correctly, not the job failing.
+  rebuild:
+    if: inputs.mode == 'rebuild'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    steps:
+      # Written to RUNNER_TEMP, not the workspace: actions/checkout wipes the
+      # workspace, so a baseline captured here and read back later is gone. That
+      # is exactly how the first real run failed.
+      - name: Record the starting headroom
+        run: |
+          df -h / | tee "$RUNNER_TEMP/disk-before.txt"
+          free -m  | tee "$RUNNER_TEMP/mem-before.txt"
+          nproc    | tee "$RUNNER_TEMP/nproc.txt"
+
+      - name: Checkout (full history; LFS pointers only)
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+        env:
+          GIT_LFS_SKIP_SMUDGE: 1
+
+      - run: echo "::notice::FOSS build - enterprise submodule intentionally absent"
+
+      - name: Identity and remotes
+        run: |
+          set -euo pipefail
+          git config user.name hayaksi1
+          git config user.email 193020925+hayaksi1@users.noreply.github.com
+          git remote add upstream https://github.com/element-hq/element-x-android.git || true
+          git fetch upstream --prune --tags
+          git fetch origin --prune
+
+      # The tooling on master is whatever the LAST rebuild baked in. This job is
+      # about the CURRENT tooling, so take .fork/ and the manifests from
+      # feat/fork-tooling explicitly rather than from the checked-out tree.
+      - name: Take the tooling from feat/fork-tooling, not from master
+        run: |
+          set -euo pipefail
+          git checkout --quiet -B feat/fork-tooling origin/feat/fork-tooling
+          echo "tooling at $(git rev-parse --short HEAD)"
+          echo "manifests: $(grep -cvE '^\s*(#|$)' .fork/features.txt) fork-only, $(grep -cvE '^\s*(#|$)' .fork/pr-branches.txt) pr-backed"
+
+      # A fresh clone has one local branch. integrate() looks up refs/heads/<b>
+      # and records missing-branch for anything absent, so every manifest branch
+      # needs a local ref before the run starts.
+      - name: Materialise every manifest branch locally
+        run: |
+          set -euo pipefail
+          n=0
+          for b in $(sed -e 's/#.*//' -e 's/[[:space:]]*$//' .fork/features.txt .fork/pr-branches.txt | grep -v '^$'); do
+            if git show-ref --verify --quiet "refs/remotes/origin/$b"; then
+              git update-ref "refs/heads/$b" "refs/remotes/origin/$b"; n=$((n+1))
+            else
+              echo "::warning::no origin ref for manifest entry $b"
+            fi
+          done
+          git update-ref refs/heads/develop refs/remotes/origin/develop
+          git update-ref refs/heads/master  refs/remotes/origin/master
+          echo "materialised $n manifest branch(es)"
+
+      # Installs the pre-commit guard, rerere, and merge=binary for snapshots,
+      # then ASSERTS the snapshot policy took effect. A runner is a fresh clone
+      # with no .git/info/attributes, and the committed .gitattributes names a
+      # merge driver that does not exist, so without this git text-merges LFS
+      # pointers into structurally valid garbage.
+      - name: Local git policy, asserted
+        run: |
+          set -euo pipefail
+          .fork/setup-local-git.sh
+          for p in a/snapshots/x.png screenshots/x.png libraries/compound/screenshots/x.png; do
+            got=$(git check-attr merge -- "$p" | sed 's/.*: //')
+            [ "$got" = binary ] || { echo "::error::snapshot merge policy not in effect for $p (merge=$got)"; exit 1; }
+          done
+          echo "::notice::snapshot merge policy asserted (merge=binary)"
+          echo "rerere.enabled=$(git config rerere.enabled) autoUpdate=$(git config rerere.autoUpdate)"
+
+      # rerere is CONSUMED here and never published: the run imports the
+      # committed cache so 87 recorded resolutions replay, and nothing in this
+      # job commits or pushes, so a resolution recorded on the runner cannot
+      # reach the repository. Asserted after the run rather than assumed.
+      - name: Run the rebuild (publishes nothing)
+        id: run
+        run: |
+          set -uo pipefail
+          set +e
+          args=(--no-push)
+          if [ "${{ inputs.skip_verify }}" = "true" ]; then
+            args+=(--skip-verify)
+            echo "::notice::Gradle gates skipped (skip_verify=true); this job never publishes"
+          fi
+          .fork/sync-upstream.sh "${args[@]}" 2>&1 | tee rebuild.log
+          rc=${PIPESTATUS[0]}
+          set -e
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          echo "::notice::sync-upstream.sh exited $rc (0 = complete, 3 = incomplete, 4 = gates; nothing published)"
+
+      - name: Assert nothing was published
+        if: always()
+        run: |
+          set -euo pipefail
+          git fetch origin --prune --quiet
+          for r in develop master; do
+            local_=$(git rev-parse "refs/remotes/origin/$r")
+            echo "origin/$r is $local_"
+          done
+          if grep -qE '^\s*(==>|)\s*pushing ' rebuild.log; then
+            echo "::error::the run reported pushing something. It must not."; exit 1
+          fi
+          echo "::notice::no push reported by the run"
+
+      - name: Failure rows into the job summary
+        if: always()
+        run: |
+          set -uo pipefail
+          {
+            echo "## Rebuild — exit ${{ steps.run.outputs.rc }}"
+            echo
+            echo "Tooling \`$(git rev-parse --short origin/feat/fork-tooling)\` · upstream \`$(git rev-parse --short upstream/develop)\`"
+            echo
+            if [ -s .fork/.report.incomplete ]; then
+              echo "### Incomplete rows ($(wc -l < .fork/.report.incomplete))"
+              echo
+              echo "| branch | kind | detail |"
+              echo "|---|---|---|"
+              while IFS=$'\t' read -r b k d; do echo "| \`$b\` | $k | $d |"; done < .fork/.report.incomplete
+              echo
+              echo "#### By kind"
+              cut -f2 .fork/.report.incomplete | sort | uniq -c | sed 's/^/    /'
+            else
+              echo "No incomplete rows."
+            fi
+            if [ -s .fork/.report.autoresolved ]; then
+              echo
+              echo "### AUTO-RESOLVED — resolved with no human in the loop ($(wc -l < .fork/.report.autoresolved))"
+              cut -f1 .fork/.report.autoresolved | sed 's/^/- /'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Headroom actually used
+        if: always()
+        run: |
+          { echo; echo "### Resources"; echo '```'
+            echo "-- disk before --"; cat "$RUNNER_TEMP/disk-before.txt"
+            echo "-- disk after  --"; df -h /
+            echo "-- mem before  --"; cat "$RUNNER_TEMP/mem-before.txt"
+            echo "-- mem after   --"; free -m
+            echo "-- repo --"; du -sh .git 2>/dev/null || true
+          echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fork-rebuild-evidence
+          # Every report path begins with a dot. v4 excludes hidden files by
+          # DEFAULT, so the first real run uploaded rebuild.log and silently
+          # nothing else -- an empty-looking evidence bundle from a green step.
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            rebuild.log
+            ${{ runner.temp }}/disk-before.txt
+            ${{ runner.temp }}/mem-before.txt
+            .fork/.report.incomplete
+            .fork/.report.conflicts
+            .fork/.report.autoresolved
+            .fork/.report.retire
+
+      - name: Reflect the script's exit code
+        if: always()
+        run: |
+          rc='${{ steps.run.outputs.rc }}'
+          if [ "$rc" = "3" ]; then
+            echo "::notice::exit 3 - integration incomplete, nothing published. Expected today."
+            exit 0
+          fi
+          exit "${rc:-1}"

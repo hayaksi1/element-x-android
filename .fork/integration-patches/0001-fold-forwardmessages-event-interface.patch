@@ -1,0 +1,87 @@
+From 34a343757e79fcf3deebebd34350749d1fb9d078 Mon Sep 17 00:00:00 2001
+From: t <erkan.gec01@gmail.com>
+Date: Sat, 29 Aug 2026 00:18:52 +0300
+Subject: [PATCH] Fold the duplicated ForwardMessages event interface the merge
+ kept
+
+Upstream renamed ForwardMessagesEvents to ForwardMessagesEvent and dropped
+Cancel; the fork's fix/5242-forward-cancel adds Cancel back. The integration
+resolution kept BOTH interfaces, so the file declares ForwardMessagesEvent
+with ClearError and ForwardMessagesEvents with ClearError and Cancel, and the
+call sites are split across the two names.
+
+That does not compile: handleEvent takes a ForwardMessagesEvent and the when
+has a ForwardMessagesEvents.ClearError branch, which is a type mismatch, not
+merely an unreachable duplicate.
+
+Keep one interface carrying both members and point every call site at it -
+the presenter's two branches, the view's Cancel, and the presenter test's
+Cancel. Supersedes 0001-drop-duplicated-clearerror-branch, which assumed the
+rename had already been folded and only removed a repeated line.
+
+Fork-Feature: fork-misc
+---
+ .../android/features/forward/impl/ForwardMessagesEvent.kt   | 6 +-----
+ .../features/forward/impl/ForwardMessagesPresenter.kt       | 3 +--
+ .../android/features/forward/impl/ForwardMessagesView.kt    | 2 +-
+ .../features/forward/impl/ForwardMessagesPresenterTest.kt   | 2 +-
+ 4 files changed, 4 insertions(+), 9 deletions(-)
+
+diff --git a/features/forward/impl/src/main/kotlin/io/element/android/features/forward/impl/ForwardMessagesEvent.kt b/features/forward/impl/src/main/kotlin/io/element/android/features/forward/impl/ForwardMessagesEvent.kt
+index 8aea4909a5..0e301c99e8 100644
+--- a/features/forward/impl/src/main/kotlin/io/element/android/features/forward/impl/ForwardMessagesEvent.kt
++++ b/features/forward/impl/src/main/kotlin/io/element/android/features/forward/impl/ForwardMessagesEvent.kt
+@@ -10,9 +10,5 @@ package io.element.android.features.forward.impl
+ 
+ sealed interface ForwardMessagesEvent {
+     data object ClearError : ForwardMessagesEvent
+-}
+-
+-sealed interface ForwardMessagesEvents {
+-    data object ClearError : ForwardMessagesEvents
+-    data object Cancel : ForwardMessagesEvents
++    data object Cancel : ForwardMessagesEvent
+ }
+diff --git a/features/forward/impl/src/main/kotlin/io/element/android/features/forward/impl/ForwardMessagesPresenter.kt b/features/forward/impl/src/main/kotlin/io/element/android/features/forward/impl/ForwardMessagesPresenter.kt
+index 5ebf5db64a..b5d50e4735 100644
+--- a/features/forward/impl/src/main/kotlin/io/element/android/features/forward/impl/ForwardMessagesPresenter.kt
++++ b/features/forward/impl/src/main/kotlin/io/element/android/features/forward/impl/ForwardMessagesPresenter.kt
+@@ -53,8 +53,7 @@ class ForwardMessagesPresenter(
+         fun handleEvent(event: ForwardMessagesEvent) {
+             when (event) {
+                 ForwardMessagesEvent.ClearError -> forwardingActionState.value = AsyncAction.Uninitialized
+-                ForwardMessagesEvents.ClearError -> forwardingActionState.value = AsyncAction.Uninitialized
+-                ForwardMessagesEvents.Cancel -> {
++                ForwardMessagesEvent.Cancel -> {
+                     forwardingJob?.cancel()
+                     forwardingJob = null
+                     forwardingActionState.value = AsyncAction.Uninitialized
+diff --git a/features/forward/impl/src/main/kotlin/io/element/android/features/forward/impl/ForwardMessagesView.kt b/features/forward/impl/src/main/kotlin/io/element/android/features/forward/impl/ForwardMessagesView.kt
+index fed376fa1e..5d3f707e67 100644
+--- a/features/forward/impl/src/main/kotlin/io/element/android/features/forward/impl/ForwardMessagesView.kt
++++ b/features/forward/impl/src/main/kotlin/io/element/android/features/forward/impl/ForwardMessagesView.kt
+@@ -33,7 +33,7 @@ fun ForwardMessagesView(
+                 text = stringResource(id = CommonStrings.common_sending),
+                 showCancelButton = true,
+                 onDismissRequest = {
+-                    state.eventSink(ForwardMessagesEvents.Cancel)
++                    state.eventSink(ForwardMessagesEvent.Cancel)
+                 },
+             )
+         },
+diff --git a/features/forward/impl/src/test/kotlin/io/element/android/features/forward/impl/ForwardMessagesPresenterTest.kt b/features/forward/impl/src/test/kotlin/io/element/android/features/forward/impl/ForwardMessagesPresenterTest.kt
+index ca41d8fd97..1ff9e8e997 100644
+--- a/features/forward/impl/src/test/kotlin/io/element/android/features/forward/impl/ForwardMessagesPresenterTest.kt
++++ b/features/forward/impl/src/test/kotlin/io/element/android/features/forward/impl/ForwardMessagesPresenterTest.kt
+@@ -114,7 +114,7 @@ class ForwardMessagesPresenterTest {
+             presenter.onRoomSelected(listOf(aRoomSummary().roomId))
+             val forwardingState = awaitItem()
+             assertThat(forwardingState.forwardAction.isLoading()).isTrue()
+-            forwardingState.eventSink(ForwardMessagesEvents.Cancel)
++            forwardingState.eventSink(ForwardMessagesEvent.Cancel)
+             assertThat(awaitItem().forwardAction.isUninitialized()).isTrue()
+             // A timeline becoming available must not resurrect the cancelled forward
+             activeTimeline.value = timeline
+-- 
+2.52.0
+

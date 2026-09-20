@@ -1,0 +1,159 @@
+# Retired: Cancel is already on ForwardMessagesEvent and its call sites in 4e9e1d8854.
+From 434fadebc52a3c7271a219d95a5f73f6aa90cffa Mon Sep 17 00:00:00 2001
+From: hayaksi1 <193020925+hayaksi1@users.noreply.github.com>
+Date: Sun, 20 Sep 2026 17:00:57 +0300
+Subject: [PATCH 2/5] Carry ForwardMessagesEvent.Cancel that cherry-pick
+ --no-merges drops
+
+be057d0a83 rewrites Cancel onto the renamed ForwardMessagesEvent
+interface. The pick list still uses ForwardMessagesEvents.
+
+Fork-Feature: fork-tooling
+---
+ .../forward/impl/ForwardMessagesEvent.kt      |  1 +
+ .../forward/impl/ForwardMessagesPresenter.kt  |  9 ++++-
+ .../forward/impl/ForwardMessagesView.kt       | 10 ++++++
+ .../impl/ForwardMessagesPresenterTest.kt      | 35 ++++++++++++++++++-
+ 4 files changed, 53 insertions(+), 2 deletions(-)
+
+diff --git a/features/forward/impl/src/main/kotlin/io/element/android/features/forward/impl/ForwardMessagesEvent.kt b/features/forward/impl/src/main/kotlin/io/element/android/features/forward/impl/ForwardMessagesEvent.kt
+index 9fab72424f..0e301c99e8 100644
+--- a/features/forward/impl/src/main/kotlin/io/element/android/features/forward/impl/ForwardMessagesEvent.kt
++++ b/features/forward/impl/src/main/kotlin/io/element/android/features/forward/impl/ForwardMessagesEvent.kt
+@@ -10,4 +10,5 @@ package io.element.android.features.forward.impl
+ 
+ sealed interface ForwardMessagesEvent {
+     data object ClearError : ForwardMessagesEvent
++    data object Cancel : ForwardMessagesEvent
+ }
+diff --git a/features/forward/impl/src/main/kotlin/io/element/android/features/forward/impl/ForwardMessagesPresenter.kt b/features/forward/impl/src/main/kotlin/io/element/android/features/forward/impl/ForwardMessagesPresenter.kt
+index 6068866653..b5d50e4735 100644
+--- a/features/forward/impl/src/main/kotlin/io/element/android/features/forward/impl/ForwardMessagesPresenter.kt
++++ b/features/forward/impl/src/main/kotlin/io/element/android/features/forward/impl/ForwardMessagesPresenter.kt
+@@ -23,6 +23,7 @@ import io.element.android.libraries.matrix.api.core.RoomId
+ import io.element.android.libraries.matrix.api.timeline.TimelineProvider
+ import io.element.android.libraries.matrix.api.timeline.getActiveTimeline
+ import kotlinx.coroutines.CoroutineScope
++import kotlinx.coroutines.Job
+ import kotlinx.coroutines.launch
+ import timber.log.Timber
+ 
+@@ -41,9 +42,10 @@ class ForwardMessagesPresenter(
+     }
+ 
+     private val forwardingActionState: MutableState<AsyncAction<List<RoomId>>> = mutableStateOf(AsyncAction.Uninitialized)
++    private var forwardingJob: Job? = null
+ 
+     fun onRoomSelected(roomIds: List<RoomId>) {
+-        sessionCoroutineScope.forwardEvent(eventId, roomIds)
++        forwardingJob = sessionCoroutineScope.forwardEvent(eventId, roomIds)
+     }
+ 
+     @Composable
+@@ -51,6 +53,11 @@ class ForwardMessagesPresenter(
+         fun handleEvent(event: ForwardMessagesEvent) {
+             when (event) {
+                 ForwardMessagesEvent.ClearError -> forwardingActionState.value = AsyncAction.Uninitialized
++                ForwardMessagesEvent.Cancel -> {
++                    forwardingJob?.cancel()
++                    forwardingJob = null
++                    forwardingActionState.value = AsyncAction.Uninitialized
++                }
+             }
+         }
+ 
+diff --git a/features/forward/impl/src/main/kotlin/io/element/android/features/forward/impl/ForwardMessagesView.kt b/features/forward/impl/src/main/kotlin/io/element/android/features/forward/impl/ForwardMessagesView.kt
+index 8c622d8e29..5d3f707e67 100644
+--- a/features/forward/impl/src/main/kotlin/io/element/android/features/forward/impl/ForwardMessagesView.kt
++++ b/features/forward/impl/src/main/kotlin/io/element/android/features/forward/impl/ForwardMessagesView.kt
+@@ -11,6 +11,7 @@ package io.element.android.features.forward.impl
+ import androidx.compose.runtime.Composable
+ import androidx.compose.ui.res.stringResource
+ import androidx.compose.ui.tooling.preview.PreviewParameter
++import io.element.android.libraries.designsystem.components.ProgressDialog
+ import io.element.android.libraries.designsystem.components.async.AsyncActionView
+ import io.element.android.libraries.designsystem.preview.ElementPreview
+ import io.element.android.libraries.designsystem.preview.PreviewsDayNight
+@@ -27,6 +28,15 @@ fun ForwardMessagesView(
+         onSuccess = {
+             onForwardSuccess(it)
+         },
++        progressDialog = {
++            ProgressDialog(
++                text = stringResource(id = CommonStrings.common_sending),
++                showCancelButton = true,
++                onDismissRequest = {
++                    state.eventSink(ForwardMessagesEvent.Cancel)
++                },
++            )
++        },
+         errorMessage = {
+             stringResource(id = CommonStrings.error_unknown)
+         },
+diff --git a/features/forward/impl/src/test/kotlin/io/element/android/features/forward/impl/ForwardMessagesPresenterTest.kt b/features/forward/impl/src/test/kotlin/io/element/android/features/forward/impl/ForwardMessagesPresenterTest.kt
+index 0ff3210f2e..2d00c9a483 100644
+--- a/features/forward/impl/src/test/kotlin/io/element/android/features/forward/impl/ForwardMessagesPresenterTest.kt
++++ b/features/forward/impl/src/test/kotlin/io/element/android/features/forward/impl/ForwardMessagesPresenterTest.kt
+@@ -18,11 +18,15 @@ import io.element.android.libraries.matrix.api.core.RoomId
+ import io.element.android.libraries.matrix.test.AN_EVENT_ID
+ import io.element.android.libraries.matrix.test.room.FakeJoinedRoom
+ import io.element.android.libraries.matrix.test.room.aRoomSummary
++import io.element.android.libraries.matrix.api.timeline.Timeline
++import io.element.android.libraries.matrix.api.timeline.TimelineProvider
+ import io.element.android.libraries.matrix.test.timeline.FakeTimeline
+ import io.element.android.libraries.matrix.test.timeline.LiveTimelineProvider
+ import io.element.android.tests.testutils.WarmUpRule
+ import io.element.android.tests.testutils.lambda.lambdaRecorder
++import kotlinx.coroutines.flow.MutableStateFlow
+ import kotlinx.coroutines.test.TestScope
++import kotlinx.coroutines.test.advanceUntilIdle
+ import kotlinx.coroutines.test.runTest
+ import org.junit.Rule
+ import org.junit.Test
+@@ -91,13 +95,42 @@ class ForwardMessagesPresenterTest {
+             forwardEventLambda.assertions().isCalledOnce()
+         }
+     }
++
++    @Test
++    fun `present - a forward that never completes can be cancelled`() = runTest {
++        val forwardEventLambda = lambdaRecorder { _: EventId, _: List<RoomId> ->
++            Result.success(Unit)
++        }
++        val timeline = FakeTimeline().apply {
++            this.forwardEventLambda = forwardEventLambda
++        }
++        // No timeline is active yet, so the forward suspends until one is
++        val activeTimeline = MutableStateFlow<Timeline?>(null)
++        val presenter = createForwardMessagesPresenter(timelineProvider = { activeTimeline })
++        moleculeFlow(RecompositionMode.Immediate) {
++            presenter.present()
++        }.test {
++            skipItems(1)
++            presenter.onRoomSelected(listOf(aRoomSummary().roomId))
++            val forwardingState = awaitItem()
++            assertThat(forwardingState.forwardAction.isLoading()).isTrue()
++            forwardingState.eventSink(ForwardMessagesEvent.Cancel)
++            assertThat(awaitItem().forwardAction.isUninitialized()).isTrue()
++            // A timeline becoming available must not resurrect the cancelled forward
++            activeTimeline.value = timeline
++            advanceUntilIdle()
++            forwardEventLambda.assertions().isNeverCalled()
++            ensureAllEventsConsumed()
++        }
++    }
+ }
+ 
+ fun TestScope.createForwardMessagesPresenter(
+     eventId: EventId = AN_EVENT_ID,
+     fakeRoom: FakeJoinedRoom = FakeJoinedRoom(),
++    timelineProvider: TimelineProvider = LiveTimelineProvider(fakeRoom),
+ ) = ForwardMessagesPresenter(
+     eventId = eventId.value,
+-    timelineProvider = LiveTimelineProvider(fakeRoom),
++    timelineProvider = timelineProvider,
+     sessionCoroutineScope = this,
+ )
+-- 
+2.52.0
+
