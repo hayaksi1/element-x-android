@@ -68,8 +68,24 @@ private fun fixMentions(
 private object CustomHtmlToDomParser {
     fun document(html: String): Document {
         val outputSettings = OutputSettings().prettyPrint(false).indentAmount(0)
-        val cleanHtml = Jsoup.clean(html, "", safeList, outputSettings)
+        val cleanHtml = Jsoup.clean(html.withHeadingsAsBoldParagraphs(), "", safeList, outputSettings)
         return Jsoup.parse(cleanHtml)
+    }
+
+    private fun String.withHeadingsAsBoldParagraphs(): String {
+        if (!contains("<h", ignoreCase = true)) return this
+        val document = Jsoup.parseBodyFragment(this)
+        val headings = document.select("h1, h2, h3, h4, h5, h6")
+        if (headings.isEmpty()) return this
+        for (heading in headings) {
+            val bold = document.createElement("b")
+            for (child in heading.childNodes().toList()) {
+                bold.appendChild(child)
+            }
+            heading.appendChild(bold)
+            heading.tagName("p")
+        }
+        return document.body().html()
     }
 
     private val safeList = Safelist()
