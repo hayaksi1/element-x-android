@@ -35,6 +35,27 @@ open class DeveloperSettingsStatePreviewParam : PreviewParameterProvider<Develop
             aDeveloperSettingsState(
                 pushRulesAction = AsyncAction.Failure(Exception("A failure"))
             ),
+            aDeveloperSettingsState(
+                messageSearchIndexStatus = MessageSearchIndexStatus.Idle,
+            ),
+            aDeveloperSettingsState(
+                messageSearchIndexStatus = MessageSearchIndexStatus.RestartNeeded,
+            ),
+            aDeveloperSettingsState(
+                messageSearchIndexStatus = MessageSearchIndexStatus.Paused(roomsDone = 4, roomsTotal = 9),
+            ),
+            aDeveloperSettingsState(
+                messageSearchIndexStatus = MessageSearchIndexStatus.WaitingForRun,
+            ),
+            aDeveloperSettingsState(
+                messageSearchIndexStatus = MessageSearchIndexStatus.Running(roomsDone = 3, roomsTotal = 9),
+            ),
+            aDeveloperSettingsState(
+                messageSearchIndexStatus = MessageSearchIndexStatus.Running(roomsDone = 0, roomsTotal = 0),
+            ),
+            aDeveloperSettingsState(
+                messageSearchIndexStatus = MessageSearchIndexStatus.Finished(roomsSwept = 9, pagesFetched = 420),
+            ),
         )
 }
 
@@ -46,6 +67,7 @@ fun aDeveloperSettingsState(
     isEnterpriseBuild: Boolean = false,
     showColorPicker: Boolean = false,
     deviceId: DeviceId = DeviceId("ILAKNDNASDLK"),
+    messageSearchIndexStatus: MessageSearchIndexStatus = MessageSearchIndexStatus.Hidden,
     eventSink: (DeveloperSettingsEvent) -> Unit = {},
 ) = DeveloperSettingsState(
     appDeveloperSettingsState = appDeveloperSettingsState,
@@ -57,5 +79,6 @@ fun aDeveloperSettingsState(
     isEnterpriseBuild = isEnterpriseBuild,
     showColorPicker = showColorPicker,
     deviceId = deviceId,
+    messageSearchIndexStatus = messageSearchIndexStatus,
     eventSink = eventSink,
 )
