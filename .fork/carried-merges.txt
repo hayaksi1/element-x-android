@@ -45,3 +45,75 @@
 # integration patch was retired: git am --3way conflicts on a tree that already
 # has the switch via rerere of fix/developer-options-switch.
 8338fec20c71f61e6618b1fd7842c7dc065afa91
+
+# fix/3575-blank-state-event-rows
+#
+# f723856b9d carries 6 lines in neither parent: aBlankStateFactory (the local
+# helper renamed so it does not clash with develop's fixture) and a blank line
+# between isKeyVerificationRequest and isStateEventWithBlankBody. git apply
+# --check of 0013 against master cb79fefb0f exits 0; reverse-check does not.
+f723856b9d8506508c4048b28869c91f06cf06e5
+
+# fix/4095-hide-custom-state-events
+#
+# ecaeac10b4 carries 41 lines in neither parent: the custom-state test rewritten
+# onto develop's aTimelineItemsFactory / factory.timelineItems.test API, plus
+# OtherState/StateContent imports. Carried by 0013 with DisplayableTimelineEvents.
+# git apply --check of 0013 against master cb79fefb0f exits 0; reverse-check does not.
+ecaeac10b4d6e07dd4133a0f8e7a28cbf66c11e0
+
+# fix/4417-hide-redacted-messages
+#
+# f2cc687b63 carries 3 lines in neither parent. The unique factory line is
+# renderRedactedMessages: Boolean = true (the PR commit has the parameter with
+# no default). The test uses aRedactedContent() instead of RedactedContent.
+# Default is carried via 0013; the PR branch is not rewritten.
+# git apply --check of 0013 against master cb79fefb0f exits 0; reverse-check does not.
+f2cc687b63c21cae33a0c2868a4ba80a64969903
+
+# fix/5209-hide-no-change-events
+#
+# 2ed37811f9 carries 4 lines in neither parent: three imports
+# (TimelineItemRoomMembershipContent, MembershipChange, aRoomMembershipContent)
+# plus a blank line, re-inserted after develop's import block won. The membership
+# test itself is in 4922cfcded; 0013 carries the merge-resolved imports and test.
+# git apply --check of 0013 against master cb79fefb0f exits 0; reverse-check does not.
+2ed37811f942c39fdd04432cc3090836d2956b72
+
+# fix/5242-forward-cancel
+#
+# be057d0a83 carries 4 lines in neither parent: Cancel on the renamed
+# ForwardMessagesEvent (the pick list still uses ForwardMessagesEvents).
+# 0001 folds a tree that kept BOTH interfaces and does not apply to master
+# cb79fefb0f. 0014 adds Cancel to the current Event interface.
+# git apply --check of 0014 against master cb79fefb0f exits 0; reverse-check does not.
+be057d0a83158d37059a256b0dce3f887822a6c5
+
+# fix/7471-conversation-notifications
+#
+# 5d5d098877 carries 41 lines in neither parent: the two conversation-preference
+# tests (and the InMemoryAppPreferencesStore import) kept after develop's
+# share-sheet tests. 0009/0012 do not contain those tests (NotificationSettingsView
+# / NotificationCreator only) and neither apply nor reverse-check against master.
+# 0015 adds the tests using onMessageInRoom.
+# git apply --check of 0015 against master cb79fefb0f exits 0; reverse-check does not.
+5d5d098877a92008c980fba83452820fd04a00b8
+
+# search/cache-bootstrap
+#
+# a771b4f239 carries 26 lines in neither parent: deleteEventCacheStore and the
+# coverage-marker writes placed into develop's restoreSession layout (the pick
+# list still has them on the old client-builder layout). Not in master
+# cb79fefb0f (SEARCH_INDEX_COVERAGE_MARKER is absent). Carried by 0016.
+# git apply --check of 0016 against master cb79fefb0f exits 0; reverse-check does not.
+a771b4f23989fead685157c3097c5c69e97af16a
+
+# search/message-search-index
+#
+# 360b8b07a7 carries 8 lines in neither parent: StartSearchIndexing and
+# CancelSearchIndexing rewritten onto DeveloperSettingsEvent after develop
+# renamed Events -> Event. Four of those lines are onClick rewrites of
+# MessageSearchIndexCategory, which is parent-1 UI not on master; 0017 carries
+# the two event members and the two presenter when labels.
+# git apply --check of 0017 against master cb79fefb0f exits 0; reverse-check does not.
+360b8b07a7af66f239f2d29c1f318f79be33cecc

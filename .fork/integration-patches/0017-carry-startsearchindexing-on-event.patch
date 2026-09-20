@@ -1,0 +1,44 @@
+From b82289c6c446b80c71cdc3105872072f135a9889 Mon Sep 17 00:00:00 2001
+From: hayaksi1 <193020925+hayaksi1@users.noreply.github.com>
+Date: Sun, 20 Sep 2026 17:00:58 +0300
+Subject: [PATCH 5/5] Carry StartSearchIndexing on DeveloperSettingsEvent after
+ the rename
+
+360b8b07a7 rewrites StartSearchIndexing/CancelSearchIndexing onto the
+singular Event interface. The pick list still uses DeveloperSettingsEvents.
+
+Fork-Feature: fork-tooling
+---
+ .../preferences/impl/developer/DeveloperSettingsEvent.kt      | 2 ++
+ .../preferences/impl/developer/DeveloperSettingsPresenter.kt  | 4 ++++
+ 2 files changed, 6 insertions(+)
+
+diff --git a/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsEvent.kt b/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsEvent.kt
+index 34ccba2abe..233a2ceeaa 100644
+--- a/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsEvent.kt
++++ b/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsEvent.kt
+@@ -19,4 +19,6 @@ sealed interface DeveloperSettingsEvent {
+     data object DismissMarkAllRoomsAsReadConfirmation : DeveloperSettingsEvent
+     data object OpenPushRules : DeveloperSettingsEvent
+     data object DismissPushRulesError : DeveloperSettingsEvent
++    data object StartSearchIndexing : DeveloperSettingsEvent
++    data object CancelSearchIndexing : DeveloperSettingsEvent
+ }
+diff --git a/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsPresenter.kt b/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsPresenter.kt
+index 74bf595ce4..7fc064684f 100644
+--- a/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsPresenter.kt
++++ b/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsPresenter.kt
+@@ -130,6 +130,10 @@ class DeveloperSettingsPresenter(
+                 DeveloperSettingsEvent.DismissPushRulesError -> {
+                     pushRulesAction.value = AsyncAction.Uninitialized
+                 }
++                DeveloperSettingsEvent.StartSearchIndexing -> coroutineScope.launch {
++                }
++                DeveloperSettingsEvent.CancelSearchIndexing -> {
++                }
+             }
+         }
+ 
+-- 
+2.52.0
+
