@@ -43,6 +43,12 @@ add_attr() {
 add_attr '**/snapshots/**/*.png merge=binary'
 add_attr 'screenshots/**/*.png merge=binary'
 add_attr 'libraries/compound/screenshots/** merge=binary'
+# PR-backed branches have occasionally committed rerere blobs under
+# .fork/rr-cache. Cherry-picking those onto master (which already has the
+# tooling cache) is not product work; keep HEAD. merge.ours.driver is `true`,
+# which leaves the file as-is.
+git config merge.ours.driver true
+add_attr '.fork/rr-cache/** merge=ours'
 
 # 3. Submodule policy: always upstream's gitlink, never initialised.
 #    The owner has no access to element-android-enterprise (private).
