@@ -203,6 +203,4 @@ class ToPlainTextTest : RobolectricTest() {
         )
         assertThat(messageType.toPlainText(permalinkParser = FakePermalinkParser())).isEqualTo("\uD83D\uDE1C")
     }
-
-
 }

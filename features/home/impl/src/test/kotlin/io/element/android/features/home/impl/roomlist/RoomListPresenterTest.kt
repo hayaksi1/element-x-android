@@ -8,6 +8,8 @@
 
 package io.element.android.features.home.impl.roomlist
 
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import com.google.common.truth.Truth.assertThat
 import im.vector.app.features.analytics.plan.Interaction
 import io.element.android.features.announcement.api.Announcement
@@ -33,8 +35,6 @@ import io.element.android.features.leaveroom.api.LeaveRoomEvent
 import io.element.android.features.leaveroom.api.LeaveRoomState
 import io.element.android.features.preferences.impl.tasks.MarkRoomAsRead
 import io.element.android.features.rageshake.test.logs.FakeAnnouncementService
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import io.element.android.libraries.architecture.Presenter
 import io.element.android.libraries.dateformatter.api.DateFormatter
 import io.element.android.libraries.dateformatter.test.FakeDateFormatter
