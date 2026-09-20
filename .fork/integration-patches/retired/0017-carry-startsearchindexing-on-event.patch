@@ -1,3 +1,4 @@
+# Retired: StartSearchIndexing/CancelSearchIndexing are already on Event and the presenter.
 From b82289c6c446b80c71cdc3105872072f135a9889 Mon Sep 17 00:00:00 2001
 From: hayaksi1 <193020925+hayaksi1@users.noreply.github.com>
 Date: Sun, 20 Sep 2026 17:00:58 +0300

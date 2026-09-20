@@ -1,3 +1,4 @@
+# Retired: Cancel is already on ForwardMessagesEvent and its call sites in 4e9e1d8854.
 From 434fadebc52a3c7271a219d95a5f73f6aa90cffa Mon Sep 17 00:00:00 2001
 From: hayaksi1 <193020925+hayaksi1@users.noreply.github.com>
 Date: Sun, 20 Sep 2026 17:00:57 +0300
