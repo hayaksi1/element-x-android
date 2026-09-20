@@ -60,6 +60,7 @@ open class DeveloperSettingsStatePreviewParam : PreviewParameterProvider<Develop
 }
 
 fun aDeveloperSettingsState(
+    showDeveloperSettings: Boolean = true,
     appDeveloperSettingsState: AppDeveloperSettingsState = anAppDeveloperSettingsState(),
     clearCacheAction: AsyncAction<Unit> = AsyncAction.Uninitialized,
     markAllRoomsAsReadAction: AsyncAction<Unit> = AsyncAction.Uninitialized,
@@ -70,6 +71,7 @@ fun aDeveloperSettingsState(
     messageSearchIndexStatus: MessageSearchIndexStatus = MessageSearchIndexStatus.Hidden,
     eventSink: (DeveloperSettingsEvent) -> Unit = {},
 ) = DeveloperSettingsState(
+    showDeveloperSettings = showDeveloperSettings,
     appDeveloperSettingsState = appDeveloperSettingsState,
     cacheSize = AsyncData.Success("1.2 MB"),
     databaseSizes = AsyncData.Success(persistentMapOf("state_store" to "1.2MB")),

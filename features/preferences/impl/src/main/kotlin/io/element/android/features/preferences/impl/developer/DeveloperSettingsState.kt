@@ -24,7 +24,6 @@ data class DeveloperSettingsState(
     val pushRulesAction: AsyncAction<Unit>,
     val isEnterpriseBuild: Boolean,
     val showColorPicker: Boolean,
-    val messageSearchIndexStatus: MessageSearchIndexStatus,
     val deviceId: DeviceId,
     val messageSearchIndexStatus: MessageSearchIndexStatus,
     val eventSink: (DeveloperSettingsEvent) -> Unit
