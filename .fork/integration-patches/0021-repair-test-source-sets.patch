@@ -1,0 +1,199 @@
+From 21957176be4f47f82553671a2974f87d4b1659e6 Mon Sep 17 00:00:00 2001
+From: hayaksi1 <193020925+hayaksi1@users.noreply.github.com>
+Date: Sun, 20 Sep 2026 19:41:52 +0300
+Subject: [PATCH] Repair the test source sets the merges still leave broken
+
+0010's RustMatrixClientFactoryTest hunk is already in the tree. This keeps
+the duplicated share-intent helpers, the duplicated mimeType parameter, and
+the two onSendMessage call sites that still use the renamed API, and drops
+the second copy of the five message-search presenter tests the merge left
+after OpenPushRules.
+
+Fork-Feature: fork-tooling
+---
+ .../DeveloperSettingsPresenterTest.kt         | 87 -------------------
+ .../impl/DefaultShareIntentHandlerTest.kt     | 34 --------
+ .../impl/AndroidMediaPreProcessorTest.kt      |  1 -
+ ...aultNotificationConversationServiceTest.kt |  4 +-
+ 4 files changed, 2 insertions(+), 124 deletions(-)
+
+diff --git a/features/preferences/impl/src/test/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsPresenterTest.kt b/features/preferences/impl/src/test/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsPresenterTest.kt
+index fe9d118..b44b9ee 100644
+--- a/features/preferences/impl/src/test/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsPresenterTest.kt
++++ b/features/preferences/impl/src/test/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsPresenterTest.kt
+@@ -351,93 +351,6 @@ class DeveloperSettingsPresenterTest {
+         }
+     }
+ 
+-    @Test
+-    fun `present - message search index section is hidden while the flag is off`() = runTest {
+-        val presenter = createDeveloperSettingsPresenter()
+-        presenter.test {
+-            assertThat(awaitItem().messageSearchIndexStatus).isEqualTo(MessageSearchIndexStatus.Hidden)
+-            cancelAndIgnoreRemainingEvents()
+-        }
+-    }
+-
+-    @Test
+-    fun `present - message search index needs a restart when the flag is on but no index is attached`() = runTest {
+-        val presenter = createDeveloperSettingsPresenter(
+-            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.MessageSearch.key to true)),
+-        )
+-        presenter.test {
+-            consumeItemsUntilPredicate { it.messageSearchIndexStatus == MessageSearchIndexStatus.RestartNeeded }
+-            cancelAndIgnoreRemainingEvents()
+-        }
+-    }
+-
+-    @Test
+-    fun `present - message search index maps a running sweep to progress`() = runTest {
+-        val indexer = FakeMessageSearchIndexer()
+-        val presenter = createDeveloperSettingsPresenter(
+-            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.MessageSearch.key to true)),
+-            matrixClient = FakeMatrixClient(isMessageSearchAvailable = true),
+-            messageSearchIndexer = indexer,
+-        )
+-        presenter.test {
+-            indexer.userSweepActivityFlow.value = MessageSearchSweepActivity.RUNNING
+-            indexer.cursorFlow.value = SearchBackfillCursor(
+-                generation = 1,
+-                queue = listOf("!a:server.org", "!b:server.org", "!c:server.org"),
+-                index = 1,
+-            )
+-            consumeItemsUntilPredicate {
+-                it.messageSearchIndexStatus == MessageSearchIndexStatus.Running(roomsDone = 1, roomsTotal = 3)
+-            }
+-            cancelAndIgnoreRemainingEvents()
+-        }
+-    }
+-
+-    @Test
+-    fun `present - message search index reports a drained sweep as finished`() = runTest {
+-        val indexer = FakeMessageSearchIndexer()
+-        val presenter = createDeveloperSettingsPresenter(
+-            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.MessageSearch.key to true)),
+-            matrixClient = FakeMatrixClient(isMessageSearchAvailable = true),
+-            messageSearchIndexer = indexer,
+-        )
+-        presenter.test {
+-            indexer.cursorFlow.value = SearchBackfillCursor(
+-                generation = 1,
+-                queue = listOf("!a:server.org", "!b:server.org"),
+-                index = 2,
+-                pagesIssued = 42,
+-                finishedAt = 123L,
+-            )
+-            consumeItemsUntilPredicate {
+-                it.messageSearchIndexStatus == MessageSearchIndexStatus.Finished(roomsSwept = 2, pagesFetched = 42)
+-            }
+-            cancelAndIgnoreRemainingEvents()
+-        }
+-    }
+-
+-    @Test
+-    fun `present - start and cancel indexing delegate to the indexer`() = runTest {
+-        val startRecorder = lambdaRecorder<SessionId, Unit> { }
+-        val cancelRecorder = lambdaRecorder<SessionId, Unit> { }
+-        val presenter = createDeveloperSettingsPresenter(
+-            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.MessageSearch.key to true)),
+-            matrixClient = FakeMatrixClient(isMessageSearchAvailable = true),
+-            messageSearchIndexer = FakeMessageSearchIndexer(
+-                startUserInitiatedSweepLambda = startRecorder,
+-                cancelSweepLambda = cancelRecorder,
+-            ),
+-        )
+-        presenter.test {
+-            val state = awaitItem()
+-            state.eventSink(DeveloperSettingsEvent.StartSearchIndexing)
+-            state.eventSink(DeveloperSettingsEvent.CancelSearchIndexing)
+-            cancelAndIgnoreRemainingEvents()
+-        }
+-        startRecorder.assertions().isCalledOnce().with(value(A_SESSION_ID))
+-        cancelRecorder.assertions().isCalledOnce().with(value(A_SESSION_ID))
+-    }
+-
+     @Test
+     fun `present - turning the developer options switch off persists the choice`() = runTest {
+         val appPreferencesStore = InMemoryAppPreferencesStore(showDeveloperSettings = true)
+diff --git a/features/share/impl/src/test/kotlin/io/element/android/features/share/impl/DefaultShareIntentHandlerTest.kt b/features/share/impl/src/test/kotlin/io/element/android/features/share/impl/DefaultShareIntentHandlerTest.kt
+index cc36e61..d81bbe0 100644
+--- a/features/share/impl/src/test/kotlin/io/element/android/features/share/impl/DefaultShareIntentHandlerTest.kt
++++ b/features/share/impl/src/test/kotlin/io/element/android/features/share/impl/DefaultShareIntentHandlerTest.kt
+@@ -296,40 +296,6 @@ class DefaultShareIntentHandlerTest : RobolectricTest() {
+         override fun update(uri: Uri, values: ContentValues?, selection: String?, selectionArgs: Array<out String>?) = 0
+     }
+ 
+-    private companion object {
+-        const val A_PACKAGE_NAME = "io.element.android.x"
+-        const val AN_ACTIVITY_NAME = "io.element.android.x.MainActivity"
+-    }
+-    private fun createDefaultShareIntentHandler() = DefaultShareIntentHandler(
+-        context = RuntimeEnvironment.getApplication(),
+-    )
+-
+-    private class FailingGrantUriPermissionContext(context: Context) : ContextWrapper(context) {
+-        override fun grantUriPermission(toPackage: String, uri: Uri, modeFlags: Int) {
+-            error("Unable to grant Uri permission")
+-        }
+-    }
+-
+-    private class ZipContentProvider : ContentProvider() {
+-        override fun onCreate() = true
+-
+-        override fun getType(uri: Uri) = "application/zip"
+-
+-        override fun query(
+-            uri: Uri,
+-            projection: Array<out String>?,
+-            selection: String?,
+-            selectionArgs: Array<out String>?,
+-            sortOrder: String?,
+-        ): Cursor? = null
+-
+-        override fun insert(uri: Uri, values: ContentValues?): Uri? = null
+-
+-        override fun delete(uri: Uri, selection: String?, selectionArgs: Array<out String>?) = 0
+-
+-        override fun update(uri: Uri, values: ContentValues?, selection: String?, selectionArgs: Array<out String>?) = 0
+-    }
+-
+     private companion object {
+         const val A_PACKAGE_NAME = "io.element.android.x"
+         const val AN_ACTIVITY_NAME = "io.element.android.x.MainActivity"
+diff --git a/libraries/mediaupload/impl/src/test/kotlin/io/element/android/libraries/mediaupload/impl/AndroidMediaPreProcessorTest.kt b/libraries/mediaupload/impl/src/test/kotlin/io/element/android/libraries/mediaupload/impl/AndroidMediaPreProcessorTest.kt
+index b21157a..6bc56cb 100644
+--- a/libraries/mediaupload/impl/src/test/kotlin/io/element/android/libraries/mediaupload/impl/AndroidMediaPreProcessorTest.kt
++++ b/libraries/mediaupload/impl/src/test/kotlin/io/element/android/libraries/mediaupload/impl/AndroidMediaPreProcessorTest.kt
+@@ -85,7 +85,6 @@ class AndroidMediaPreProcessorTest : RobolectricTest() {
+         mimeType: String = asset.mimeType,
+         sdkIntVersion: Int = Build.VERSION_CODES.P,
+         deleteOriginal: Boolean = false,
+-        mimeType: String = asset.mimeType,
+     ): MediaUploadInfo {
+         val context = InstrumentationRegistry.getInstrumentation().context
+         val deleteCallback = lambdaRecorder<Uri?, Unit> {}
+diff --git a/libraries/push/impl/src/test/kotlin/io/element/android/libraries/push/impl/notifications/conversations/DefaultNotificationConversationServiceTest.kt b/libraries/push/impl/src/test/kotlin/io/element/android/libraries/push/impl/notifications/conversations/DefaultNotificationConversationServiceTest.kt
+index 9c32e3a..da5951c 100644
+--- a/libraries/push/impl/src/test/kotlin/io/element/android/libraries/push/impl/notifications/conversations/DefaultNotificationConversationServiceTest.kt
++++ b/libraries/push/impl/src/test/kotlin/io/element/android/libraries/push/impl/notifications/conversations/DefaultNotificationConversationServiceTest.kt
+@@ -59,7 +59,7 @@ class DefaultNotificationConversationServiceTest : RobolectricTest() {
+         val context = InstrumentationRegistry.getInstrumentation().context
+         val service = createService(context)
+ 
+-        service.onSendMessage(
++        service.onMessageInRoom(
+             sessionId = A_SESSION_ID,
+             roomId = A_ROOM_ID,
+             roomName = "Room title",
+@@ -83,7 +83,7 @@ class DefaultNotificationConversationServiceTest : RobolectricTest() {
+             appPreferencesStore = InMemoryAppPreferencesStore(isConversationNotificationsEnabled = false),
+         )
+ 
+-        service.onSendMessage(
++        service.onMessageInRoom(
+             sessionId = A_SESSION_ID,
+             roomId = A_ROOM_ID,
+             roomName = "Room title",
+-- 
+2.52.0
+
