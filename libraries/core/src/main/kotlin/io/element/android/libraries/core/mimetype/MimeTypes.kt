@@ -76,4 +76,6 @@ object MimeTypes {
         this == Audio -> Mp3
         else -> OctetStream
     }
+
+    fun String?.withDefaultSubtype(): String = ensureDefaultSubtype()
 }
