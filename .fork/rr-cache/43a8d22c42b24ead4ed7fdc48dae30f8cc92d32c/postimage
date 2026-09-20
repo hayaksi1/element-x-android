@@ -84,7 +84,7 @@ class DefaultAppPreferencesStore(
             prefs[roomListActivityVisibilityKey]
                 ?.let { runCatchingExceptions { RoomListActivityVisibility.valueOf(it) }.getOrNull() }
                 ?: RoomListActivityVisibility.CURRENT
-    }
+        }
     }
 
     override suspend fun setHideSpaceRooms(hide: Boolean) {
