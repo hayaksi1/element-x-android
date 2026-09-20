@@ -1,0 +1,228 @@
+From 407bd0d1ac5a280a47558ae469493ef3326094cf Mon Sep 17 00:00:00 2001
+From: hayaksi1 <193020925+hayaksi1@users.noreply.github.com>
+Date: Sun, 20 Sep 2026 17:00:57 +0300
+Subject: [PATCH 3/5] Carry the conversation-notification tests the 7471 merge
+ uniquely added
+
+5d5d098877 keeps the two preference tests after develop's share-sheet
+tests. Cherry-pick --no-merges drops that placement.
+
+Fork-Feature: fork-tooling
+---
+ .../api/store/AppPreferencesStore.kt          |  9 ++++
+ .../impl/store/DefaultAppPreferencesStore.kt  | 13 ++++++
+ .../test/InMemoryAppPreferencesStore.kt       | 10 +++++
+ .../DefaultNotificationConversationService.kt | 17 ++++++++
+ ...aultNotificationConversationServiceTest.kt | 43 +++++++++++++++++++
+ 5 files changed, 92 insertions(+)
+
+diff --git a/libraries/preferences/api/src/main/kotlin/io/element/android/libraries/preferences/api/store/AppPreferencesStore.kt b/libraries/preferences/api/src/main/kotlin/io/element/android/libraries/preferences/api/store/AppPreferencesStore.kt
+index b681cd66a7..6603692aff 100644
+--- a/libraries/preferences/api/src/main/kotlin/io/element/android/libraries/preferences/api/store/AppPreferencesStore.kt
++++ b/libraries/preferences/api/src/main/kotlin/io/element/android/libraries/preferences/api/store/AppPreferencesStore.kt
+@@ -28,6 +28,15 @@ interface AppPreferencesStore {
+     /** Whether developer mode is on; defaults to `true` on debug builds and `false` otherwise. */
+     fun isDeveloperModeEnabledFlow(): Flow<Boolean>
+ 
++    /**
++     * @param enabled true to publish room notifications as Android conversations, which lets the system show them as such and
++     * lets Do Not Disturb treat them as conversations.
++     */
++    suspend fun setConversationNotificationsEnabled(enabled: Boolean)
++
++    /** Whether room notifications are published as Android conversations; defaults to `true`. */
++    fun isConversationNotificationsEnabledFlow(): Flow<Boolean>
++
+     /**
+      * @param string the Element Call deployment to use, or `null` to go back to the one from the homeserver.
+      */
+diff --git a/libraries/preferences/impl/src/main/kotlin/io/element/android/libraries/preferences/impl/store/DefaultAppPreferencesStore.kt b/libraries/preferences/impl/src/main/kotlin/io/element/android/libraries/preferences/impl/store/DefaultAppPreferencesStore.kt
+index 258c6c1e36..84367f6406 100644
+--- a/libraries/preferences/impl/src/main/kotlin/io/element/android/libraries/preferences/impl/store/DefaultAppPreferencesStore.kt
++++ b/libraries/preferences/impl/src/main/kotlin/io/element/android/libraries/preferences/impl/store/DefaultAppPreferencesStore.kt
+@@ -32,6 +32,7 @@ import kotlinx.coroutines.flow.first
+ import kotlinx.coroutines.flow.map
+ 
+ private val developerModeKey = booleanPreferencesKey("developerMode")
++private val conversationNotificationsKey = booleanPreferencesKey("conversationNotifications")
+ private val customElementCallBaseUrlKey = stringPreferencesKey("elementCallBaseUrl")
+ private val themeKey = stringPreferencesKey("theme")
+ private val roomListActivityVisibilityKey = stringPreferencesKey("roomListActivityVisibility")
+@@ -72,6 +73,18 @@ class DefaultAppPreferencesStore(
+         }
+     }
+ 
++    override suspend fun setConversationNotificationsEnabled(enabled: Boolean) {
++        store.edit { prefs ->
++            prefs[conversationNotificationsKey] = enabled
++        }
++    }
++
++    override fun isConversationNotificationsEnabledFlow(): Flow<Boolean> {
++        return store.data.map { prefs ->
++            prefs[conversationNotificationsKey] ?: true
++        }
++    }
++
+     override suspend fun setRoomListActivityVisibility(visibility: RoomListActivityVisibility) {
+         store.edit { prefs ->
+             prefs[roomListActivityVisibilityKey] = visibility.name
+diff --git a/libraries/preferences/test/src/main/kotlin/io/element/android/libraries/preferences/test/InMemoryAppPreferencesStore.kt b/libraries/preferences/test/src/main/kotlin/io/element/android/libraries/preferences/test/InMemoryAppPreferencesStore.kt
+index 15b48de4a9..8c845d4a57 100644
+--- a/libraries/preferences/test/src/main/kotlin/io/element/android/libraries/preferences/test/InMemoryAppPreferencesStore.kt
++++ b/libraries/preferences/test/src/main/kotlin/io/element/android/libraries/preferences/test/InMemoryAppPreferencesStore.kt
+@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.updateAndGet
+ 
+ class InMemoryAppPreferencesStore(
+     isDeveloperModeEnabled: Boolean = false,
++    isConversationNotificationsEnabled: Boolean = true,
+     customElementCallBaseUrl: String? = null,
+     hideInviteAvatars: Boolean? = null,
+     timelineMediaPreviewValue: MediaPreviewValue? = null,
+@@ -39,6 +40,7 @@ class InMemoryAppPreferencesStore(
+     callRingtoneDisplayName: String? = null,
+ ) : AppPreferencesStore {
+     private val isDeveloperModeEnabled = MutableStateFlow(isDeveloperModeEnabled)
++    private val isConversationNotificationsEnabled = MutableStateFlow(isConversationNotificationsEnabled)
+     private val customElementCallBaseUrl = MutableStateFlow(customElementCallBaseUrl)
+     private val theme = MutableStateFlow(theme)
+     private val roomListActivityVisibility = MutableStateFlow(roomListActivityVisibility)
+@@ -71,6 +73,14 @@ class InMemoryAppPreferencesStore(
+         return isDeveloperModeEnabled
+     }
+ 
++    override suspend fun setConversationNotificationsEnabled(enabled: Boolean) {
++        isConversationNotificationsEnabled.value = enabled
++    }
++
++    override fun isConversationNotificationsEnabledFlow(): Flow<Boolean> {
++        return isConversationNotificationsEnabled
++    }
++
+     override suspend fun setCustomElementCallBaseUrl(string: String?) {
+         customElementCallBaseUrl.tryEmit(string)
+     }
+diff --git a/libraries/push/impl/src/main/kotlin/io/element/android/libraries/push/impl/notifications/conversations/DefaultNotificationConversationService.kt b/libraries/push/impl/src/main/kotlin/io/element/android/libraries/push/impl/notifications/conversations/DefaultNotificationConversationService.kt
+index b0d737c5e8..154a211bea 100644
+--- a/libraries/push/impl/src/main/kotlin/io/element/android/libraries/push/impl/notifications/conversations/DefaultNotificationConversationService.kt
++++ b/libraries/push/impl/src/main/kotlin/io/element/android/libraries/push/impl/notifications/conversations/DefaultNotificationConversationService.kt
+@@ -28,6 +28,7 @@ import io.element.android.libraries.matrix.api.MatrixClientProvider
+ import io.element.android.libraries.matrix.api.core.RoomId
+ import io.element.android.libraries.matrix.api.core.SessionId
+ import io.element.android.libraries.matrix.ui.media.ImageLoaderHolder
++import io.element.android.libraries.preferences.api.store.AppPreferencesStore
+ import io.element.android.libraries.push.api.notifications.NotificationBitmapLoader
+ import io.element.android.libraries.push.api.notifications.conversations.NotificationConversationService
+ import io.element.android.libraries.push.impl.intent.IntentProvider
+@@ -57,6 +58,7 @@ class DefaultNotificationConversationService(
+     private val matrixClientProvider: MatrixClientProvider,
+     private val imageLoaderHolder: ImageLoaderHolder,
+     private val lockScreenService: LockScreenService,
++    private val appPreferencesStore: AppPreferencesStore,
+     sessionObserver: SessionObserver,
+     @AppCoroutineScope private val coroutineScope: CoroutineScope,
+ ) : NotificationConversationService {
+@@ -77,6 +79,16 @@ class DefaultNotificationConversationService(
+                 }
+             }
+             .launchIn(coroutineScope)
++
++        appPreferencesStore.isConversationNotificationsEnabledFlow()
++            .withPreviousValue()
++            .onEach { (wasEnabled, isEnabled) ->
++                if (wasEnabled == true && !isEnabled) {
++                    // The shortcuts already published are what make the existing notifications conversations, so they have to go too.
++                    clearShortcuts()
++                }
++            }
++            .launchIn(coroutineScope)
+     }
+ 
+     override suspend fun onMessageInRoom(
+@@ -91,6 +103,11 @@ class DefaultNotificationConversationService(
+             return
+         }
+ 
++        if (!appPreferencesStore.isConversationNotificationsEnabledFlow().first()) {
++            // The user asked for their notifications not to be conversations, and a shortcut is what makes them one.
++            return
++        }
++
+         val categories = setOfNotNull(
+             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N_MR1) ShortcutInfo.SHORTCUT_CATEGORY_CONVERSATION else null,
+             SHARE_TARGET_CATEGORY,
+diff --git a/libraries/push/impl/src/test/kotlin/io/element/android/libraries/push/impl/notifications/conversations/DefaultNotificationConversationServiceTest.kt b/libraries/push/impl/src/test/kotlin/io/element/android/libraries/push/impl/notifications/conversations/DefaultNotificationConversationServiceTest.kt
+index 51200462d0..fce512d342 100644
+--- a/libraries/push/impl/src/test/kotlin/io/element/android/libraries/push/impl/notifications/conversations/DefaultNotificationConversationServiceTest.kt
++++ b/libraries/push/impl/src/test/kotlin/io/element/android/libraries/push/impl/notifications/conversations/DefaultNotificationConversationServiceTest.kt
+@@ -23,6 +23,7 @@ import io.element.android.libraries.matrix.test.A_SESSION_ID
+ import io.element.android.libraries.matrix.test.A_SESSION_ID_2
+ import io.element.android.libraries.matrix.test.FakeMatrixClientProvider
+ import io.element.android.libraries.matrix.ui.media.test.FakeImageLoaderHolder
++import io.element.android.libraries.preferences.test.InMemoryAppPreferencesStore
+ import io.element.android.libraries.push.impl.notifications.factories.FakeIntentProvider
+ import io.element.android.libraries.push.impl.notifications.shortcut.createShortcutId
+ import io.element.android.libraries.push.test.notifications.push.FakeNotificationBitmapLoader
+@@ -194,10 +195,51 @@ class DefaultNotificationConversationServiceTest : RobolectricTest() {
+         assertThat(shortcuts.first().id).startsWith(A_SESSION_ID_2.value)
+     }
+ 
++    @Test
++    fun `onSendMessage adds no shortcut when conversation notifications are off`() = runTest {
++        val context = InstrumentationRegistry.getInstrumentation().context
++        val service = createService(
++            context = context,
++            appPreferencesStore = InMemoryAppPreferencesStore(isConversationNotificationsEnabled = false),
++        )
++
++        service.onMessageInRoom(
++            sessionId = A_SESSION_ID,
++            roomId = A_ROOM_ID,
++            roomName = "Room title",
++            roomIsDirect = false,
++            roomAvatarUrl = null,
++        )
++
++        assertThat(ShortcutManagerCompat.getDynamicShortcuts(context)).isEmpty()
++    }
++
++    @OptIn(ExperimentalCoroutinesApi::class)
++    @Test
++    fun `on conversation notifications turned off, all shortcuts are cleared`() = runTest {
++        val context = InstrumentationRegistry.getInstrumentation().context
++        val appPreferencesStore = InMemoryAppPreferencesStore(isConversationNotificationsEnabled = true)
++        createService(context, appPreferencesStore = appPreferencesStore)
++        runCurrent()
++
++        val shortcutInfo = ShortcutInfoCompat.Builder(context, "$A_SESSION_ID-$A_ROOM_ID")
++            .setShortLabel("Room title")
++            .setIntent(Intent(Intent.ACTION_VIEW))
++            .build()
++        ShortcutManagerCompat.setDynamicShortcuts(context, listOf(shortcutInfo))
++        assertThat(ShortcutManagerCompat.getDynamicShortcuts(context)).hasSize(1)
++
++        appPreferencesStore.setConversationNotificationsEnabled(false)
++        runCurrent()
++
++        assertThat(ShortcutManagerCompat.getDynamicShortcuts(context)).isEmpty()
++    }
++
+     private fun TestScope.createService(
+         context: Context = InstrumentationRegistry.getInstrumentation().context,
+         sessionObserver: FakeSessionObserver = FakeSessionObserver(),
+         lockScreenService: FakeLockScreenService = FakeLockScreenService(),
++        appPreferencesStore: InMemoryAppPreferencesStore = InMemoryAppPreferencesStore(),
+     ) = DefaultNotificationConversationService(
+         context = context,
+         intentProvider = FakeIntentProvider(),
+@@ -206,6 +248,7 @@ class DefaultNotificationConversationServiceTest : RobolectricTest() {
+         imageLoaderHolder = FakeImageLoaderHolder(),
+         sessionObserver = sessionObserver,
+         lockScreenService = lockScreenService,
++        appPreferencesStore = appPreferencesStore,
+         coroutineScope = backgroundScope,
+     )
+ }
+-- 
+2.52.0
+
