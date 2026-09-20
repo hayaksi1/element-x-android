@@ -1,0 +1,48 @@
+From ddc54af80b52c0f4cf2d248035ae8809cd5cb4fb Mon Sep 17 00:00:00 2001
+From: hayaksi1 <193020925+hayaksi1@users.noreply.github.com>
+Date: Sun, 20 Sep 2026 20:15:57 +0300
+Subject: [PATCH] Drop the duplicate messageSearchIndexStatus field.
+
+The develop merge left the property twice on DeveloperSettingsState, which broke compile. Keep one field and pass showDeveloperSettings in the preview factory.
+
+Fork-Feature: fork-tooling
+---
+ .../preferences/impl/developer/DeveloperSettingsState.kt        | 1 -
+ .../impl/developer/DeveloperSettingsStatePreviewParam.kt        | 2 ++
+ 2 files changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsState.kt b/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsState.kt
+index ff4974afc0..46c0647afa 100644
+--- a/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsState.kt
++++ b/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsState.kt
+@@ -24,7 +24,6 @@ data class DeveloperSettingsState(
+     val pushRulesAction: AsyncAction<Unit>,
+     val isEnterpriseBuild: Boolean,
+     val showColorPicker: Boolean,
+-    val messageSearchIndexStatus: MessageSearchIndexStatus,
+     val deviceId: DeviceId,
+     val messageSearchIndexStatus: MessageSearchIndexStatus,
+     val eventSink: (DeveloperSettingsEvent) -> Unit
+diff --git a/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsStatePreviewParam.kt b/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsStatePreviewParam.kt
+index ff34d66f79..ad116b6a58 100644
+--- a/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsStatePreviewParam.kt
++++ b/features/preferences/impl/src/main/kotlin/io/element/android/features/preferences/impl/developer/DeveloperSettingsStatePreviewParam.kt
+@@ -60,6 +60,7 @@ open class DeveloperSettingsStatePreviewParam : PreviewParameterProvider<Develop
+ }
+ 
+ fun aDeveloperSettingsState(
++    showDeveloperSettings: Boolean = true,
+     appDeveloperSettingsState: AppDeveloperSettingsState = anAppDeveloperSettingsState(),
+     clearCacheAction: AsyncAction<Unit> = AsyncAction.Uninitialized,
+     markAllRoomsAsReadAction: AsyncAction<Unit> = AsyncAction.Uninitialized,
+@@ -70,6 +71,7 @@ fun aDeveloperSettingsState(
+     messageSearchIndexStatus: MessageSearchIndexStatus = MessageSearchIndexStatus.Hidden,
+     eventSink: (DeveloperSettingsEvent) -> Unit = {},
+ ) = DeveloperSettingsState(
++    showDeveloperSettings = showDeveloperSettings,
+     appDeveloperSettingsState = appDeveloperSettingsState,
+     cacheSize = AsyncData.Success("1.2 MB"),
+     databaseSizes = AsyncData.Success(persistentMapOf("state_store" to "1.2MB")),
+-- 
+2.52.0
+
