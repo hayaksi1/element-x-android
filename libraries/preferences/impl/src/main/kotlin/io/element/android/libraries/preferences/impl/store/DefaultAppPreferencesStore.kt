@@ -34,6 +34,7 @@ private val showDeveloperSettingsKey = booleanPreferencesKey("showDeveloperSetti
 private val customElementCallBaseUrlKey = stringPreferencesKey("elementCallBaseUrl")
 private val themeKey = stringPreferencesKey("theme")
 private val hideInviteAvatarsKey = booleanPreferencesKey("hideInviteAvatars")
+private val otherAccountsExpandedKey = booleanPreferencesKey("otherAccountsExpanded")
 private val timelineMediaPreviewValueKey = stringPreferencesKey("timelineMediaPreviewValue")
 private val liveLocationMinimumDistanceUpdateKey = intPreferencesKey("liveLocationMinimumDistanceUpdate")
 private val logLevelKey = stringPreferencesKey("logLevel")
@@ -107,6 +108,18 @@ class DefaultAppPreferencesStore(
     override fun getThemeFlow(): Flow<String?> {
         return store.data.map { prefs ->
             prefs[themeKey]
+        }
+    }
+
+    override suspend fun setOtherAccountsExpanded(expanded: Boolean) {
+        store.edit { prefs ->
+            prefs[otherAccountsExpandedKey] = expanded
+        }
+    }
+
+    override fun isOtherAccountsExpandedFlow(): Flow<Boolean> {
+        return store.data.map { prefs ->
+            prefs[otherAccountsExpandedKey] ?: true
         }
     }
 
