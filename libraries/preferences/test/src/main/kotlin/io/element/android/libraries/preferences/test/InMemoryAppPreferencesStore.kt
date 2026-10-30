@@ -22,9 +22,10 @@ import kotlinx.coroutines.flow.updateAndGet
 
 class InMemoryAppPreferencesStore(
     isDeveloperModeEnabled: Boolean = false,
-    hideSpaceRooms: Boolean = false,
     isConversationNotificationsEnabled: Boolean = true,
     showDeveloperSettings: Boolean = false,
+    isOtherAccountsExpanded: Boolean = true,
+    hideSpaceRooms: Boolean = false,
     customElementCallBaseUrl: String? = null,
     hideInviteAvatars: Boolean? = null,
     timelineMediaPreviewValue: MediaPreviewValue? = null,
@@ -42,9 +43,10 @@ class InMemoryAppPreferencesStore(
     callRingtoneDisplayName: String? = null,
 ) : AppPreferencesStore {
     private val isDeveloperModeEnabled = MutableStateFlow(isDeveloperModeEnabled)
-    private val hideSpaceRooms = MutableStateFlow(hideSpaceRooms)
     private val isConversationNotificationsEnabled = MutableStateFlow(isConversationNotificationsEnabled)
     private val showDeveloperSettings = MutableStateFlow(showDeveloperSettings)
+    private val isOtherAccountsExpanded = MutableStateFlow(isOtherAccountsExpanded)
+    private val hideSpaceRooms = MutableStateFlow(hideSpaceRooms)
     private val customElementCallBaseUrl = MutableStateFlow(customElementCallBaseUrl)
     private val theme = MutableStateFlow(theme)
     private val roomListActivityVisibility = MutableStateFlow(roomListActivityVisibility)
@@ -77,14 +79,6 @@ class InMemoryAppPreferencesStore(
         return isDeveloperModeEnabled
     }
 
-    override suspend fun setHideSpaceRooms(hide: Boolean) {
-        hideSpaceRooms.value = hide
-    }
-
-    override fun hideSpaceRoomsFlow(): Flow<Boolean> {
-        return hideSpaceRooms
-    }
-
     override suspend fun setConversationNotificationsEnabled(enabled: Boolean) {
         isConversationNotificationsEnabled.value = enabled
     }
@@ -99,6 +93,22 @@ class InMemoryAppPreferencesStore(
 
     override fun showDeveloperSettingsFlow(): Flow<Boolean> {
         return showDeveloperSettings
+    }
+
+    override suspend fun setOtherAccountsExpanded(expanded: Boolean) {
+        isOtherAccountsExpanded.value = expanded
+    }
+
+    override fun isOtherAccountsExpandedFlow(): Flow<Boolean> {
+        return isOtherAccountsExpanded
+    }
+
+    override suspend fun setHideSpaceRooms(hide: Boolean) {
+        hideSpaceRooms.value = hide
+    }
+
+    override fun hideSpaceRoomsFlow(): Flow<Boolean> {
+        return hideSpaceRooms
     }
 
     override suspend fun setCustomElementCallBaseUrl(string: String?) {

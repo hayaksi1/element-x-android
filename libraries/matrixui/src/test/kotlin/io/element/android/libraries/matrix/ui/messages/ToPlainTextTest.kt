@@ -192,6 +192,7 @@ class ToPlainTextTest : RobolectricTest() {
 
         assertThat(messageType.toAnnotatedText(permalinkParser = FakePermalinkParser())).isEqualTo("Hello world")
     }
+
     @Test
     fun `TextMessageType toPlainText - returns the body if the formatted one only contains an image`() {
         val messageType = TextMessageType(

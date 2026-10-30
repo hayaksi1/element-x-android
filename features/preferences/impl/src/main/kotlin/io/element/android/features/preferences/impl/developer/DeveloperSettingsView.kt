@@ -17,7 +17,6 @@ import androidx.compose.foundation.progressSemantics
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.unit.dp
@@ -25,7 +24,6 @@ import io.element.android.compound.theme.ElementTheme
 import io.element.android.features.preferences.impl.R
 import io.element.android.features.preferences.impl.developer.appsettings.AppDeveloperSettingsView
 import io.element.android.features.preferences.impl.utils.ShowDeveloperSettingsProvider
-import io.element.android.libraries.androidutils.system.copyToClipboard
 import io.element.android.libraries.architecture.AsyncAction
 import io.element.android.libraries.designsystem.components.ProgressDialog
 import io.element.android.libraries.designsystem.components.dialogs.ConfirmationDialog
@@ -89,10 +87,12 @@ fun DeveloperSettingsView(
         DeveloperSettingsToggle(state)
         AppDeveloperSettingsView(
             state = state.appDeveloperSettingsState,
-            showTopDivider = true,
             afterFeatureFlags = { MessageSearchIndexCategory(state) },
         )
-        SessionCategory(deviceId = state.deviceId)
+        SessionCategory(
+            deviceId = state.deviceId,
+            onCopyToClipboard = { state.eventSink(DeveloperSettingsEvent.CopyToClipboard(it)) },
+        )
         NotificationCategory(
             onPushRulesClick = { state.eventSink(DeveloperSettingsEvent.OpenPushRules) },
             onPushHistoryClick = onPushHistoryClick,
@@ -306,19 +306,15 @@ private fun DeveloperSettingsToggle(state: DeveloperSettingsState) {
 }
 
 @Composable
-private fun SessionCategory(deviceId: DeviceId) {
+private fun SessionCategory(
+    deviceId: DeviceId,
+    onCopyToClipboard: (String) -> Unit,
+) {
     PreferenceCategory(title = "Session") {
-        val toastMessage = stringResource(CommonStrings.common_copied_to_clipboard)
-        val context = LocalContext.current
         ListItem(
             content = { Text("DeviceId") },
             supportingContent = { Text(text = deviceId.value) },
-            onClick = {
-                context.copyToClipboard(
-                    text = deviceId.value,
-                    toastMessage = toastMessage,
-                )
-            }
+            onClick = { onCopyToClipboard(deviceId.value) }
         )
     }
 }

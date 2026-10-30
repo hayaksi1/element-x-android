@@ -10,7 +10,6 @@ package io.element.android.libraries.htmlrenderer.impl
 import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
@@ -19,6 +18,7 @@ import dev.zacsweers.metro.ContributesBinding
 import io.element.android.libraries.htmlrenderer.api.BlockNode
 import io.element.android.libraries.htmlrenderer.api.CodeBlockNode
 import io.element.android.libraries.htmlrenderer.api.DocumentNode
+import io.element.android.libraries.htmlrenderer.api.HeaderNode
 import io.element.android.libraries.htmlrenderer.api.HtmlMessageParser
 import io.element.android.libraries.htmlrenderer.api.HtmlMessageParser.Companion.INLINE_CODE_ANNOTATION_TAG
 import io.element.android.libraries.htmlrenderer.api.HtmlMessageParser.Companion.LINK_ANNOTATION_TAG
@@ -27,11 +27,13 @@ import io.element.android.libraries.htmlrenderer.api.ListNode
 import io.element.android.libraries.htmlrenderer.api.MentionNodeContent
 import io.element.android.libraries.htmlrenderer.api.ParagraphNode
 import io.element.android.libraries.htmlrenderer.api.QuoteNode
+import io.element.android.libraries.htmlrenderer.api.spans.InlineCodeSpanStyle
+import io.element.android.libraries.matrix.api.permalink.PermalinkBuilder
 import io.element.android.libraries.matrix.api.permalink.PermalinkData
 import io.element.android.libraries.matrix.api.permalink.PermalinkParser
 import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.ImmutableMap
 import kotlinx.collections.immutable.toImmutableList
-import kotlinx.collections.immutable.toImmutableMap
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.nodes.Node
@@ -46,6 +48,7 @@ import org.jsoup.nodes.TextNode
 @ContributesBinding(AppScope::class)
 class DefaultHtmlMessageParser(
     private val permalinkParser: PermalinkParser,
+    private val permalinkBuilder: PermalinkBuilder,
 ) : HtmlMessageParser {
     override fun parse(document: Document): DocumentNode {
         return DocumentNode(children = parseBlocks(document.body()))
@@ -81,12 +84,13 @@ class DefaultHtmlMessageParser(
         return blocks.toImmutableList()
     }
 
-    private fun parseBlock(element: Element): BlockNode? = when (element.tagName()) {
+    private fun parseBlock(element: Element): BlockNode? = when (val tag = element.tagName()) {
         TAG_P -> buildParagraph(element.childNodes())
         TAG_PRE -> CodeBlockNode(code = element.wholeText().trimEnd('\n'))
         TAG_BLOCKQUOTE -> QuoteNode(children = parseBlocks(element))
         TAG_UL -> buildList(element, ordered = false)
         TAG_OL -> buildList(element, ordered = true)
+        in HEADER_TAGS -> buildHeader(element, level = tag.removePrefix("h").toInt())
         else -> null
     }
 
@@ -102,6 +106,17 @@ class DefaultHtmlMessageParser(
 
     /** Builds a [ParagraphNode] from a run of inline [nodes], or `null` if it holds no content. */
     private fun buildParagraph(nodes: List<Node>): ParagraphNode? {
+        return buildInlineContent(nodes)?.let { ParagraphNode(text = it.text, inlineContent = it.inlineContent) }
+    }
+
+    /** Builds a [HeaderNode] of the given [level] from the inline content of [element], or `null` if empty. */
+    private fun buildHeader(element: Element, level: Int): HeaderNode? {
+        return buildInlineContent(element.childNodes())?.let {
+            HeaderNode(level = level, text = it.text, inlineContent = it.inlineContent)
+        }
+    }
+
+    private fun buildInlineContent(nodes: List<Node>): InlineContentBuilder.Result? {
         val builder = InlineContentBuilder()
         nodes.forEach { builder.append(it) }
         return builder.build()
@@ -158,7 +173,7 @@ class DefaultHtmlMessageParser(
             val start = builder.length
             appendChildren(element)
             if (builder.length > start) {
-                builder.addStyle(SpanStyle(fontFamily = FontFamily.Monospace), start, builder.length)
+                builder.addStyle(InlineCodeSpanStyle, start, builder.length)
                 builder.addStringAnnotation(INLINE_CODE_ANNOTATION_TAG, "", start, builder.length)
             }
         }
@@ -185,11 +200,13 @@ class DefaultHtmlMessageParser(
                 is PermalinkData.UserLink -> MentionNodeContent.User(
                     displayText = element.text(),
                     userId = permalink.userId,
+                    permalinkUrl = href,
                 )
                 is PermalinkData.RoomLink -> if (permalink.eventId == null) {
                     MentionNodeContent.Room(
                         displayText = element.text(),
                         roomIdOrAlias = permalink.roomIdOrAlias,
+                        permalinkUrl = href,
                     )
                 } else {
                     // A link to a specific event is a regular link, not a mention pill.
@@ -199,21 +216,31 @@ class DefaultHtmlMessageParser(
             }
         }
 
-        fun build(): ParagraphNode? {
+        fun build(): Result? {
             val text = builder.toAnnotatedString()
             if (text.isBlank() && mentions.isEmpty()) return null
-            return ParagraphNode(
-                text = text,
-                inlineContent = mentions.toImmutableMap(),
+            // Turn any mention in the raw text (not an `<a>` tag) into a pill too
+            val pillified = text.pillify(mentions, permalinkParser, permalinkBuilder)
+            return Result(
+                text = pillified.text,
+                inlineContent = pillified.inlineContent,
             )
         }
+
+        /** The flattened inline content of a block: styled text plus its inline-content placeholders. */
+        inner class Result(
+            val text: AnnotatedString,
+            val inlineContent: ImmutableMap<String, MentionNodeContent>,
+        )
     }
 }
 
 /** Tags that start a new block-level node. Anything else is treated as inline content. */
 private fun Element.isBlockLevel(): Boolean = tagName() in BLOCK_TAGS
 
-private val BLOCK_TAGS = setOf(TAG_P, TAG_PRE, TAG_BLOCKQUOTE, TAG_UL, TAG_OL)
+private val HEADER_TAGS = setOf("h1", "h2", "h3", "h4", "h5", "h6")
+
+private val BLOCK_TAGS = setOf(TAG_P, TAG_PRE, TAG_BLOCKQUOTE, TAG_UL, TAG_OL) + HEADER_TAGS
 
 private const val TAG_P = "p"
 private const val TAG_PRE = "pre"

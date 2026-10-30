@@ -32,13 +32,14 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 private val developerModeKey = booleanPreferencesKey("developerMode")
-private val showDeveloperSettingsKey = booleanPreferencesKey("showDeveloperSettings")
 private val hideSpaceRoomsKey = booleanPreferencesKey("hideSpaceRooms")
 private val conversationNotificationsKey = booleanPreferencesKey("conversationNotifications")
+private val showDeveloperSettingsKey = booleanPreferencesKey("showDeveloperSettings")
 private val customElementCallBaseUrlKey = stringPreferencesKey("elementCallBaseUrl")
 private val themeKey = stringPreferencesKey("theme")
 private val roomListActivityVisibilityKey = stringPreferencesKey("roomListActivityVisibility")
 private val hideInviteAvatarsKey = booleanPreferencesKey("hideInviteAvatars")
+private val otherAccountsExpandedKey = booleanPreferencesKey("otherAccountsExpanded")
 private val timelineMediaPreviewValueKey = stringPreferencesKey("timelineMediaPreviewValue")
 private val liveLocationMinimumDistanceUpdateKey = intPreferencesKey("liveLocationMinimumDistanceUpdate")
 private val logLevelKey = stringPreferencesKey("logLevel")
@@ -75,18 +76,6 @@ class DefaultAppPreferencesStore(
         }
     }
 
-    override suspend fun setShowDeveloperSettings(show: Boolean) {
-        store.edit { prefs ->
-            prefs[showDeveloperSettingsKey] = show
-        }
-    }
-
-    override fun showDeveloperSettingsFlow(): Flow<Boolean> {
-        return store.data.map { prefs ->
-            prefs[showDeveloperSettingsKey] ?: (buildMeta.buildType != BuildType.RELEASE)
-        }
-    }
-
     override suspend fun setRoomListActivityVisibility(visibility: RoomListActivityVisibility) {
         store.edit { prefs ->
             prefs[roomListActivityVisibilityKey] = visibility.name
@@ -98,7 +87,7 @@ class DefaultAppPreferencesStore(
             prefs[roomListActivityVisibilityKey]
                 ?.let { runCatchingExceptions { RoomListActivityVisibility.valueOf(it) }.getOrNull() }
                 ?: RoomListActivityVisibility.CURRENT
-        }
+    }
     }
 
     override suspend fun setHideSpaceRooms(hide: Boolean) {
@@ -110,7 +99,7 @@ class DefaultAppPreferencesStore(
     override fun hideSpaceRoomsFlow(): Flow<Boolean> {
         return store.data.map { prefs ->
             prefs[hideSpaceRoomsKey] ?: false
-        }
+    }
     }
 
     override suspend fun setConversationNotificationsEnabled(enabled: Boolean) {
@@ -122,6 +111,18 @@ class DefaultAppPreferencesStore(
     override fun isConversationNotificationsEnabledFlow(): Flow<Boolean> {
         return store.data.map { prefs ->
             prefs[conversationNotificationsKey] ?: true
+    }
+    }
+
+    override suspend fun setShowDeveloperSettings(show: Boolean) {
+        store.edit { prefs ->
+            prefs[showDeveloperSettingsKey] = show
+        }
+    }
+
+    override fun showDeveloperSettingsFlow(): Flow<Boolean> {
+        return store.data.map { prefs ->
+            prefs[showDeveloperSettingsKey] ?: (buildMeta.buildType != BuildType.RELEASE)
         }
     }
 
@@ -150,6 +151,18 @@ class DefaultAppPreferencesStore(
     override fun getThemeFlow(): Flow<String?> {
         return store.data.map { prefs ->
             prefs[themeKey]
+        }
+    }
+
+    override suspend fun setOtherAccountsExpanded(expanded: Boolean) {
+        store.edit { prefs ->
+            prefs[otherAccountsExpandedKey] = expanded
+        }
+    }
+
+    override fun isOtherAccountsExpandedFlow(): Flow<Boolean> {
+        return store.data.map { prefs ->
+            prefs[otherAccountsExpandedKey] ?: true
         }
     }
 

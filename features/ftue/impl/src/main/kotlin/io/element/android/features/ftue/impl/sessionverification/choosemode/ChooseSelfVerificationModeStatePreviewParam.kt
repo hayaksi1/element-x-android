@@ -47,13 +47,14 @@ class ChooseSelfVerificationModeStatePreviewParam :
 }
 
 fun aChooseSelfVerificationModeState(
-    currentUser: MatrixUser = aMatrixUser(),
     buttonsState: AsyncData<ChooseSelfVerificationModeState.ButtonsState> = AsyncData.Success(aButtonsState()),
+    currentUser: MatrixUser = aMatrixUser(),
+    eventSink: (ChooseSelfVerificationModeEvent) -> Unit = {},
 ) = ChooseSelfVerificationModeState(
     currentUser = currentUser,
     buttonsState = buttonsState,
     directLogoutState = aDirectLogoutState(),
-    eventSink = {},
+    eventSink = eventSink,
 )
 
 fun aButtonsState(

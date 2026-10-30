@@ -38,19 +38,20 @@ import io.element.android.libraries.matrix.api.timeline.item.event.ProfileDetail
 import io.element.android.libraries.matrix.api.timeline.item.event.Receipt
 import io.element.android.libraries.matrix.api.timeline.item.event.RoomMembershipContent
 import io.element.android.libraries.matrix.api.timeline.item.event.StateContent
+import io.element.android.libraries.matrix.api.timeline.item.virtual.VirtualTimelineItem
 import io.element.android.libraries.matrix.test.A_THREAD_ID
 import io.element.android.libraries.matrix.test.A_USER_ID
 import io.element.android.libraries.matrix.test.A_USER_ID_2
 import io.element.android.libraries.matrix.test.A_USER_ID_3
 import io.element.android.libraries.matrix.test.FakeMatrixClient
 import io.element.android.libraries.matrix.test.permalink.FakePermalinkParser
-import io.element.android.libraries.matrix.test.room.aRoomMember
 import io.element.android.libraries.matrix.test.timeline.aMessageContent
 import io.element.android.libraries.matrix.test.timeline.aRedactedContent
 import io.element.android.libraries.matrix.test.timeline.anEventTimelineItem
 import io.element.android.libraries.matrix.test.timeline.item.event.aRoomMembershipContent
 import io.element.android.tests.testutils.testCoroutineDispatchers
 import kotlinx.collections.immutable.persistentListOf
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
@@ -142,9 +143,6 @@ class TimelineItemsFactoryTest {
         factory.timelineItems.test {
             factory.replaceWith(
                 timelineItems = items,
-                roomMembers = emptyList(),
-                renderReadReceipts = false,
-                renderRedactedMessages = true,
             )
             threadInfo = awaitItem()
                 .filterIsInstance<TimelineItem.Event>()
@@ -188,61 +186,11 @@ class TimelineItemsFactoryTest {
         factory.timelineItems.test {
             factory.replaceWith(
                 timelineItems = items,
-                roomMembers = emptyList(),
-                renderReadReceipts = false,
-                renderRedactedMessages = true,
             )
             val bodies = awaitItem()
                 .filterIsInstance<TimelineItem.Event>()
                 .map { (it.content as TimelineItemTextContent).body }
             assertThat(bodies).containsExactly("A regular message")
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun `a membership event that changed nothing is not rendered`() = runTest {
-        val factory = aTimelineItemsFactory(
-            config = TimelineItemsFactoryConfig(
-                computeReadReceipts = false,
-                computeReactions = false,
-            )
-        )
-        val items = listOf(
-            MatrixTimelineItem.Event(
-                uniqueId = UniqueId("event-0"),
-                event = anEventTimelineItem(
-                    sender = A_USER_ID,
-                    content = aRoomMembershipContent(change = MembershipChange.NONE),
-                ),
-            ),
-            MatrixTimelineItem.Event(
-                uniqueId = UniqueId("event-1"),
-                event = anEventTimelineItem(
-                    sender = A_USER_ID,
-                    content = aRoomMembershipContent(change = MembershipChange.JOINED),
-                ),
-            ),
-            MatrixTimelineItem.Event(
-                uniqueId = UniqueId("event-2"),
-                event = anEventTimelineItem(
-                    sender = A_USER_ID,
-                    content = aMessageContent(body = "A regular message"),
-                ),
-            ),
-        )
-        factory.timelineItems.test {
-            factory.replaceWith(
-                timelineItems = items,
-                roomMembers = emptyList(),
-                renderReadReceipts = false,
-                renderRedactedMessages = true,
-            )
-            val contents = awaitItem()
-                .filterIsInstance<TimelineItem.Event>()
-                .map { it.content }
-            assertThat(contents.filterIsInstance<TimelineItemRoomMembershipContent>()).hasSize(1)
-            assertThat(contents).hasSize(2)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -271,15 +219,12 @@ class TimelineItemsFactoryTest {
         factory.timelineItems.test {
             factory.replaceWith(
                 timelineItems = items,
-                roomMembers = emptyList(),
-                renderReadReceipts = true,
-                renderRedactedMessages = true,
             )
             val receipts = awaitItem()
                 .filterIsInstance<TimelineItem.Event>()
                 .flatMap { it.readReceiptState.receipts }
-                .map { it.avatarData.id }
-            assertThat(receipts).containsExactly(A_USER_ID_3.value)
+                .map { it.userId }
+            assertThat(receipts).containsExactly(A_USER_ID_3)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -308,9 +253,6 @@ class TimelineItemsFactoryTest {
         factory.timelineItems.test {
             factory.replaceWith(
                 timelineItems = items,
-                roomMembers = emptyList(),
-                renderReadReceipts = false,
-                renderRedactedMessages = true,
             )
             val threadInfo = awaitItem()
                 .filterIsInstance<TimelineItem.Event>()
@@ -318,45 +260,6 @@ class TimelineItemsFactoryTest {
                 .threadInfo
             assertThat(threadInfo).isInstanceOf(TimelineItemThreadInfo.ThreadRoot::class.java)
             assertThat((threadInfo as TimelineItemThreadInfo.ThreadRoot).summary.numberOfReplies).isEqualTo(3)
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun `a sender the timeline knows nothing about is named from the room member list`() = runTest {
-        val factory = aTimelineItemsFactory(
-            config = TimelineItemsFactoryConfig(
-                computeReadReceipts = false,
-                computeReactions = false,
-            )
-        )
-        val items = listOf(
-            MatrixTimelineItem.Event(
-                uniqueId = UniqueId("event-0"),
-                event = anEventTimelineItem(
-                    sender = A_USER_ID,
-                    senderProfile = ProfileDetails.Unavailable,
-                    content = aMessageContent(body = "A regular message"),
-                ),
-            ),
-        )
-        factory.timelineItems.test {
-            factory.replaceWith(
-                timelineItems = items,
-                roomMembers = listOf(aRoomMember(userId = A_USER_ID, displayName = "Alice")),
-                renderReadReceipts = false,
-                renderRedactedMessages = true,
-            )
-            val event = awaitItem().filterIsInstance<TimelineItem.Event>().single()
-            assertThat(event.senderProfile).isEqualTo(
-                ProfileDetails.Ready(
-                    displayName = "Alice",
-                    displayNameAmbiguous = false,
-                    avatarUrl = null,
-                    displayedStatus = null,
-                )
-            )
-            assertThat(event.senderAvatar.name).isEqualTo("Alice")
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -382,9 +285,6 @@ class TimelineItemsFactoryTest {
         factory.timelineItems.test {
             factory.replaceWith(
                 timelineItems = items,
-                roomMembers = listOf(aRoomMember(userId = A_USER_ID_2, displayName = "Bob")),
-                renderReadReceipts = false,
-                renderRedactedMessages = true,
             )
             val event = awaitItem().filterIsInstance<TimelineItem.Event>().single()
             assertThat(event.senderProfile).isEqualTo(ProfileDetails.Unavailable)
@@ -393,84 +293,58 @@ class TimelineItemsFactoryTest {
     }
 
     @Test
-    fun `removed messages are left out when the user has turned them off`() = runTest {
+    fun `a pass with the same inputs reuses the cached items`() = runTest {
         val factory = aTimelineItemsFactory(
-            config = TimelineItemsFactoryConfig(
-                computeReadReceipts = false,
-                computeReactions = false,
+            config = TimelineItemsFactoryConfig(computeReadReceipts = true, computeReactions = true),
+        )
+        val items = List(5) { index ->
+            MatrixTimelineItem.Event(
+                uniqueId = UniqueId("event-$index"),
+                event = anEventTimelineItem(
+                    sender = A_USER_ID,
+                    senderProfile = ProfileDetails.Unavailable,
+                    content = aMessageContent(body = "Message $index"),
+                ),
             )
+        }
+
+        factory.replaceWith(timelineItems = items)
+        val first = factory.timelineItems.first().filterIsInstance<TimelineItem.Event>()
+
+        factory.replaceWith(timelineItems = items)
+        val second = factory.timelineItems.first().filterIsInstance<TimelineItem.Event>()
+        assertThat(first).containsExactlyElementsIn(second)
+    }
+
+    @Test
+    fun `an unchanged virtual item does not invalidate the events around it`() = runTest {
+        val factory = aTimelineItemsFactory(
+            config = TimelineItemsFactoryConfig(computeReadReceipts = true, computeReactions = true),
         )
         val items = listOf(
             MatrixTimelineItem.Event(
                 uniqueId = UniqueId("event-0"),
-                event = anEventTimelineItem(
-                    sender = A_USER_ID,
-                    content = aRedactedContent(),
-                ),
+                event = anEventTimelineItem(sender = A_USER_ID, content = aMessageContent(body = "Message 0")),
+            ),
+            MatrixTimelineItem.Virtual(
+                uniqueId = UniqueId("day-divider"),
+                virtual = VirtualTimelineItem.DayDivider(timestamp = 0L),
             ),
             MatrixTimelineItem.Event(
                 uniqueId = UniqueId("event-1"),
-                event = anEventTimelineItem(
-                    sender = A_USER_ID,
-                    content = aMessageContent(body = "A regular message"),
-                ),
+                event = anEventTimelineItem(sender = A_USER_ID, content = aMessageContent(body = "Message 1")),
             ),
         )
-        factory.timelineItems.test {
-            factory.replaceWith(
-                timelineItems = items,
-                roomMembers = emptyList(),
-                renderReadReceipts = false,
-                renderRedactedMessages = false,
-            )
-            val contents = awaitItem()
-                .filterIsInstance<TimelineItem.Event>()
-                .map { it.content }
-            assertThat(contents).hasSize(1)
-            assertThat(contents.first()).isInstanceOf(TimelineItemTextContent::class.java)
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
 
+        factory.replaceWith(timelineItems = items)
+        val first = factory.timelineItems.first().filterIsInstance<TimelineItem.Event>()
 
-    @Test
-    fun `a state event which cannot be formatted is not rendered`() = runTest {
-        val sut = aBlankStateFactory()
-        sut.timelineItems.test {
-            sut.replaceWith(
-                timelineItems = listOf(
-                    aMessageTimelineItem("0"),
-                    aRoomMembershipTimelineItem("1", change = MembershipChange.JOINED),
-                    aRoomMembershipTimelineItem("2", change = null),
-                ),
-                roomMembers = emptyList(),
-                renderReadReceipts = false,
-            )
-            val result = awaitItem()
-            assertThat(result).hasSize(2)
-            assertThat(result.map { (it as TimelineItem.Event).id }).containsExactly(UniqueId("1"), UniqueId("0"))
-            assertThat(result.stateEventBodies()).containsExactly(A_STATE_EVENT_BODY)
-        }
-    }
+        factory.replaceWith(timelineItems = items)
+        val second = factory.timelineItems.first().filterIsInstance<TimelineItem.Event>()
 
-    @Test
-    fun `a state event which cannot be formatted is not counted in a group of state events`() = runTest {
-        val sut = aBlankStateFactory()
-        sut.timelineItems.test {
-            sut.replaceWith(
-                timelineItems = listOf(
-                    aMessageTimelineItem("0"),
-                    aRoomMembershipTimelineItem("1", change = MembershipChange.JOINED),
-                    aRoomMembershipTimelineItem("2", change = MembershipChange.LEFT),
-                    aRoomMembershipTimelineItem("3", change = null),
-                ),
-                roomMembers = emptyList(),
-                renderReadReceipts = false,
-            )
-            val result = awaitItem()
-            assertThat(result).hasSize(2)
-            val group = result.first() as TimelineItem.GroupedEvents
-            assertThat(group.events.map { it.id }).containsExactly(UniqueId("1"), UniqueId("2"))
+        assertThat(second).hasSize(first.size)
+        second.forEachIndexed { index, item ->
+            assertThat(item).isSameInstanceAs(first[index])
         }
     }
 
@@ -511,8 +385,6 @@ class TimelineItemsFactoryTest {
         factory.timelineItems.test {
             factory.replaceWith(
                 timelineItems = items,
-                roomMembers = emptyList(),
-                renderReadReceipts = false,
             )
             val positions = awaitItem()
                 .filterIsInstance<TimelineItem.Event>()
@@ -523,6 +395,43 @@ class TimelineItemsFactoryTest {
                 TimelineItemGroupPosition.Last,
             ).inOrder()
             cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a state event which cannot be formatted is not rendered`() = runTest {
+        val sut = aBlankStateFactory()
+        sut.timelineItems.test {
+            sut.replaceWith(
+                timelineItems = listOf(
+                    aMessageTimelineItem("0"),
+                    aRoomMembershipTimelineItem("1", change = MembershipChange.JOINED),
+                    aRoomMembershipTimelineItem("2", change = null),
+                ),
+            )
+            val result = awaitItem()
+            assertThat(result).hasSize(2)
+            assertThat(result.map { (it as TimelineItem.Event).id }).containsExactly(UniqueId("1"), UniqueId("0"))
+            assertThat(result.stateEventBodies()).containsExactly(A_STATE_EVENT_BODY)
+        }
+    }
+
+    @Test
+    fun `a state event which cannot be formatted is not counted in a group of state events`() = runTest {
+        val sut = aBlankStateFactory()
+        sut.timelineItems.test {
+            sut.replaceWith(
+                timelineItems = listOf(
+                    aMessageTimelineItem("0"),
+                    aRoomMembershipTimelineItem("1", change = MembershipChange.JOINED),
+                    aRoomMembershipTimelineItem("2", change = MembershipChange.LEFT),
+                    aRoomMembershipTimelineItem("3", change = null),
+                ),
+            )
+            val result = awaitItem()
+            assertThat(result).hasSize(2)
+            val group = result.first() as TimelineItem.GroupedEvents
+            assertThat(group.events.map { it.id }).containsExactly(UniqueId("1"), UniqueId("2"))
         }
     }
 
@@ -576,6 +485,88 @@ class TimelineItemsFactoryTest {
         }
     }
 
+    @Test
+    fun `removed messages are left out when the user has turned them off`() = runTest {
+        val factory = aTimelineItemsFactory(
+            config = TimelineItemsFactoryConfig(
+                computeReadReceipts = false,
+                computeReactions = false,
+            )
+        )
+        val items = listOf(
+            MatrixTimelineItem.Event(
+                uniqueId = UniqueId("event-0"),
+                event = anEventTimelineItem(
+                    sender = A_USER_ID,
+                    content = aRedactedContent(),
+                ),
+            ),
+            MatrixTimelineItem.Event(
+                uniqueId = UniqueId("event-1"),
+                event = anEventTimelineItem(
+                    sender = A_USER_ID,
+                    content = aMessageContent(body = "A regular message"),
+                ),
+            ),
+        )
+        factory.timelineItems.test {
+            factory.replaceWith(
+                timelineItems = items,
+                renderRedactedMessages = false,
+            )
+            val contents = awaitItem()
+                .filterIsInstance<TimelineItem.Event>()
+                .map { it.content }
+            assertThat(contents).hasSize(1)
+            assertThat(contents.first()).isInstanceOf(TimelineItemTextContent::class.java)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a membership event that changed nothing is not rendered`() = runTest {
+        val factory = aTimelineItemsFactory(
+            config = TimelineItemsFactoryConfig(
+                computeReadReceipts = false,
+                computeReactions = false,
+            )
+        )
+        val items = listOf(
+            MatrixTimelineItem.Event(
+                uniqueId = UniqueId("event-0"),
+                event = anEventTimelineItem(
+                    sender = A_USER_ID,
+                    content = aRoomMembershipContent(change = MembershipChange.NONE),
+                ),
+            ),
+            MatrixTimelineItem.Event(
+                uniqueId = UniqueId("event-1"),
+                event = anEventTimelineItem(
+                    sender = A_USER_ID,
+                    content = aRoomMembershipContent(change = MembershipChange.JOINED),
+                ),
+            ),
+            MatrixTimelineItem.Event(
+                uniqueId = UniqueId("event-2"),
+                event = anEventTimelineItem(
+                    sender = A_USER_ID,
+                    content = aMessageContent(body = "A regular message"),
+                ),
+            ),
+        )
+        factory.timelineItems.test {
+            factory.replaceWith(
+                timelineItems = items,
+            )
+            val contents = awaitItem()
+                .filterIsInstance<TimelineItem.Event>()
+                .map { it.content }
+            assertThat(contents.filterIsInstance<TimelineItemRoomMembershipContent>()).hasSize(1)
+            assertThat(contents).hasSize(2)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
     private suspend fun TestScope.groupPositionsOf(timestamps: List<Long>): List<TimelineItemGroupPosition> {
         val factory = aTimelineItemsFactory(
             config = TimelineItemsFactoryConfig(
@@ -597,8 +588,6 @@ class TimelineItemsFactoryTest {
         factory.timelineItems.test {
             factory.replaceWith(
                 timelineItems = items,
-                roomMembers = emptyList(),
-                renderReadReceipts = false,
             )
             positions = awaitItem()
                 .filterIsInstance<TimelineItem.Event>()

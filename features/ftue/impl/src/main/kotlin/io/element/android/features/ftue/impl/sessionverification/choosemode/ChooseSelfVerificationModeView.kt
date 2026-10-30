@@ -14,19 +14,14 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.unit.dp
 import io.element.android.compound.theme.ElementTheme
@@ -38,22 +33,22 @@ import io.element.android.libraries.designsystem.atomic.molecules.ButtonColumnMo
 import io.element.android.libraries.designsystem.atomic.molecules.IconTitleSubtitleMolecule
 import io.element.android.libraries.designsystem.atomic.pages.HeaderFooterPage
 import io.element.android.libraries.designsystem.components.BigIcon
-import io.element.android.libraries.designsystem.components.avatar.Avatar
-import io.element.android.libraries.designsystem.components.avatar.AvatarSize
-import io.element.android.libraries.designsystem.components.avatar.AvatarType
 import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
 import io.element.android.libraries.designsystem.theme.components.Button
+import io.element.android.libraries.designsystem.theme.components.IconSource
 import io.element.android.libraries.designsystem.theme.components.OutlinedButton
 import io.element.android.libraries.designsystem.theme.components.Text
 import io.element.android.libraries.designsystem.theme.components.TextButton
 import io.element.android.libraries.designsystem.theme.components.TopAppBar
-import io.element.android.libraries.matrix.api.user.MatrixUser
-import io.element.android.libraries.matrix.ui.model.getAvatarData
-import io.element.android.libraries.matrix.ui.model.getBestName
+import io.element.android.libraries.matrix.ui.components.accountinfo.AccountInfoCard
+import io.element.android.libraries.matrix.ui.components.accountinfo.AccountInfoCardMode
+import io.element.android.libraries.matrix.ui.components.accountinfo.AccountInfoCardState
 import io.element.android.libraries.ui.strings.CommonStrings
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * Ref: https://www.figma.com/design/kEAcfun9iSpszeUDvdKZ6b/ER-351--Multi-account-in-EX?node-id=432-31813
+ */
 @Composable
 fun ChooseSelfVerificationModeView(
     state: ChooseSelfVerificationModeState,
@@ -74,25 +69,21 @@ fun ChooseSelfVerificationModeView(
                 title = {},
                 actions = {
                     TextButton(
-                        text = stringResource(CommonStrings.action_signout),
+                        text = stringResource(R.string.screen_identity_confirmation_sign_out),
                         onClick = { state.eventSink(ChooseSelfVerificationModeEvent.SignOut) }
                     )
                 }
             )
         },
         header = {
-            Column(
+            IconTitleSubtitleMolecule(
                 modifier = Modifier.padding(bottom = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(24.dp),
-            ) {
-                IconTitleSubtitleMolecule(
-                    iconStyle = BigIcon.Style.Default(CompoundIcons.LockSolid()),
-                    title = stringResource(id = R.string.screen_identity_confirmation_title),
-                    subTitle = stringResource(id = R.string.screen_identity_confirmation_subtitle)
-                )
-                CurrentUserRow(user = state.currentUser)
-            }
+                iconStyle = BigIcon.Style.Default(CompoundIcons.LockSolid()),
+                title = stringResource(id = R.string.screen_identity_confirmation_title),
+                subTitle = stringResource(id = R.string.screen_identity_confirmation_subtitle)
+            )
         },
+        isScrollable = true,
         footer = {
             ChooseSelfVerificationModeButtons(
                 state = state,
@@ -102,60 +93,32 @@ fun ChooseSelfVerificationModeView(
             )
         }
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center,
-        ) {
-            Text(
-                modifier = Modifier
-                    .clickable(onClick = onLearnMore)
-                    .padding(vertical = 4.dp, horizontal = 16.dp)
-                    .semantics {
-                        // Note: there is no Role.Link, so we use Role.Button for better accessibility support
-                        role = Role.Button
-                    },
-                text = stringResource(CommonStrings.action_learn_more),
-                style = ElementTheme.typography.fontBodyLgMedium
-            )
-        }
-    }
-}
-
-@Composable
-private fun CurrentUserRow(
-    user: MatrixUser,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Avatar(
-            avatarData = user.getAvatarData(AvatarSize.UserVerification),
-            avatarType = AvatarType.User,
-        )
-        Spacer(modifier = Modifier.width(12.dp))
         Column(
-            modifier = Modifier.weight(1f, fill = false),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(24.dp),
         ) {
-            Text(
-                text = user.getBestName(),
-                style = ElementTheme.typography.fontBodyLgMedium,
-                color = ElementTheme.colors.textPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (user.displayName.isNullOrEmpty().not()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+            ) {
                 Text(
-                    text = user.userId.value,
-                    style = ElementTheme.typography.fontBodyMdRegular,
-                    color = ElementTheme.colors.textSecondary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .clickable(onClick = onLearnMore)
+                        .padding(vertical = 4.dp, horizontal = 16.dp)
+                        .semantics {
+                            // Note: there is no Role.Link, so we use Role.Button for better accessibility support
+                            role = Role.Button
+                        },
+                    text = stringResource(CommonStrings.action_learn_more),
+                    style = ElementTheme.typography.fontBodyLgMedium
                 )
             }
+            AccountInfoCard(
+                state = AccountInfoCardState(
+                    matrixUser = state.currentUser,
+                    mode = AccountInfoCardMode.Simple,
+                ),
+            )
         }
     }
 }
@@ -182,6 +145,7 @@ private fun ChooseSelfVerificationModeButtons(
                         modifier = Modifier.fillMaxWidth(),
                         text = stringResource(R.string.screen_identity_use_another_device),
                         onClick = onUseAnotherDevice,
+                        leadingIcon = IconSource.Vector(CompoundIcons.Devices()),
                     )
                 }
                 if (state.buttonsState.data.canUseRecoveryKey) {

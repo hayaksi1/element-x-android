@@ -48,6 +48,7 @@ import io.element.android.libraries.matrix.api.permalink.PermalinkData
 import io.element.android.libraries.matrix.api.room.JoinedRoom
 import io.element.android.libraries.matrix.api.room.errors.FocusEventException
 import io.element.android.libraries.matrix.api.timeline.Timeline
+import io.element.android.libraries.matrix.api.timeline.TimelineProvider
 import io.element.android.libraries.matrix.api.timeline.item.TimelineItemDebugInfo
 import io.element.android.libraries.matrix.api.user.MatrixUser
 import io.element.android.libraries.matrix.test.A_THREAD_ID
@@ -139,7 +140,7 @@ private class FakeThreadedMessagesNodeCallback : ThreadedMessagesNode.Callback {
     override fun navigateToRoomMemberDetails(userId: UserId) = Unit
     override fun handlePermalinkClick(data: PermalinkData) = Unit
     override fun navigateToEventDebugInfo(eventId: EventId?, debugInfo: TimelineItemDebugInfo) = Unit
-    override fun handleForwardEventClick(eventId: EventId) = Unit
+    override fun handleForwardEventClick(eventIds: List<EventId>, timelineProvider: TimelineProvider) = Unit
     override fun navigateToReportMessage(eventId: EventId, senderId: UserId) = Unit
     override fun navigateToSendLocation() = Unit
     override fun navigateToCreatePoll() = Unit

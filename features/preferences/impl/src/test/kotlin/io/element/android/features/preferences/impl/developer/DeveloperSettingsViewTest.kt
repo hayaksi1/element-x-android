@@ -42,7 +42,7 @@ class DeveloperSettingsViewTest : RobolectricTest() {
         }
     }
 
-    @Config(qualifiers = "h3000dp")
+    @Config(qualifiers = "h2400dp")
     @Test
     fun `clicking on push history notification invokes the expected callback`() = runAndroidComposeUiTest {
         val eventsRecorder = EventsRecorder<DeveloperSettingsEvent>(expectEvents = false)

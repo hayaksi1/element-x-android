@@ -28,7 +28,9 @@ import io.element.android.features.preferences.impl.tasks.ComputeCacheSizeUseCas
 import io.element.android.features.preferences.impl.tasks.MarkAllRoomsAsRead
 import io.element.android.features.preferences.impl.tasks.VacuumStoresUseCase
 import io.element.android.features.preferences.impl.utils.ShowDeveloperSettingsProvider
+import io.element.android.libraries.androidutils.clipboard.ClipboardHelper
 import io.element.android.libraries.androidutils.filesize.FileSizeFormatter
+import io.element.android.libraries.androidutils.toast.ToastHelper
 import io.element.android.libraries.architecture.AsyncAction
 import io.element.android.libraries.architecture.AsyncData
 import io.element.android.libraries.architecture.Presenter
@@ -46,6 +48,7 @@ import io.element.android.libraries.matrix.api.notificationsettings.Notification
 import io.element.android.libraries.matrix.api.search.MessageSearchIndexer
 import io.element.android.libraries.matrix.api.search.MessageSearchSweepActivity
 import io.element.android.libraries.matrix.api.search.SearchBackfillCursor
+import io.element.android.libraries.ui.strings.CommonStrings
 import kotlinx.collections.immutable.ImmutableMap
 import kotlinx.collections.immutable.toImmutableMap
 import kotlinx.coroutines.CoroutineScope
@@ -70,6 +73,8 @@ class DeveloperSettingsPresenter(
     private val showDeveloperSettingsProvider: ShowDeveloperSettingsProvider,
     private val buildMeta: BuildMeta,
     private val notificationSettingsService: NotificationSettingsService,
+    private val clipboardHelper: ClipboardHelper,
+    private val toastHelper: ToastHelper,
     private val featureFlagService: FeatureFlagService,
     private val matrixClient: MatrixClient,
     private val messageSearchIndexer: MessageSearchIndexer,
@@ -123,7 +128,6 @@ class DeveloperSettingsPresenter(
             sweepActivity = sweepActivity,
             cursor = sweepCursor,
         )
-
         val showDeveloperSettings by showDeveloperSettingsProvider.showDeveloperSettings.collectAsState()
 
         fun handleEvent(event: DeveloperSettingsEvent) {
@@ -162,6 +166,11 @@ class DeveloperSettingsPresenter(
                 DeveloperSettingsEvent.OpenPushRules -> coroutineScope.openPushRules(pushRulesAction)
                 DeveloperSettingsEvent.DismissPushRulesError -> {
                     pushRulesAction.value = AsyncAction.Uninitialized
+                }
+                is DeveloperSettingsEvent.CopyToClipboard -> {
+                    clipboardHelper.copyPlainText(event.text) {
+                        toastHelper.show(CommonStrings.common_copied_to_clipboard)
+                    }
                 }
                 DeveloperSettingsEvent.StartSearchIndexing -> coroutineScope.launch {
                     messageSearchIndexer.startUserInitiatedSweep(sessionId)

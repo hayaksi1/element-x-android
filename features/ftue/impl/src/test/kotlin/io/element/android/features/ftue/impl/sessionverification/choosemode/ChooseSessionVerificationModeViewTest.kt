@@ -21,6 +21,7 @@ import io.element.android.libraries.architecture.AsyncData
 import io.element.android.libraries.matrix.ui.components.aMatrixUser
 import io.element.android.libraries.ui.strings.CommonStrings
 import io.element.android.tests.testutils.EnsureNeverCalled
+import io.element.android.tests.testutils.EventsRecorder
 import io.element.android.tests.testutils.clickOn
 import io.element.android.tests.testutils.ensureCalledOnce
 import io.element.android.tests.testutils.robolectric.RobolectricTest
@@ -45,7 +46,7 @@ class ChooseSessionVerificationModeViewTest : RobolectricTest() {
     fun `clicking on use another device calls the callback`() = runAndroidComposeUiTest {
         ensureCalledOnce { callback ->
             setChooseSelfVerificationModeView(
-                aChooseSelfVerificationModeState(buttonsState = AsyncData.Success(aButtonsState(canUseAnotherDevice = true))),
+                aChooseSelfVerificationModeState(AsyncData.Success(aButtonsState(canUseAnotherDevice = true))),
                 onUseAnotherDevice = callback,
             )
             clickOn(R.string.screen_identity_use_another_device)
@@ -57,7 +58,7 @@ class ChooseSessionVerificationModeViewTest : RobolectricTest() {
     fun `clicking on enter recovery key calls the callback`() = runAndroidComposeUiTest {
         ensureCalledOnce { callback ->
             setChooseSelfVerificationModeView(
-                aChooseSelfVerificationModeState(buttonsState = AsyncData.Success(aButtonsState(canUseRecoveryKey = true))),
+                aChooseSelfVerificationModeState(AsyncData.Success(aButtonsState(canUseRecoveryKey = true))),
                 onEnterRecoveryKey = callback,
             )
             clickOn(R.string.screen_identity_confirmation_use_recovery_key)
@@ -74,6 +75,16 @@ class ChooseSessionVerificationModeViewTest : RobolectricTest() {
             )
             clickOn(R.string.screen_identity_confirmation_cannot_confirm)
         }
+    }
+
+    @Test
+    fun `clicking on sign out emits the expected event`() = runAndroidComposeUiTest {
+        val eventsRecorder = EventsRecorder<ChooseSelfVerificationModeEvent>()
+        setChooseSelfVerificationModeView(
+            aChooseSelfVerificationModeState(eventSink = eventsRecorder),
+        )
+        clickOn(R.string.screen_identity_confirmation_sign_out)
+        eventsRecorder.assertSingle(ChooseSelfVerificationModeEvent.SignOut)
     }
 
     @Config(qualifiers = "h1024dp")

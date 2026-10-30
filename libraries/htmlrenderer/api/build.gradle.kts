@@ -1,3 +1,5 @@
+import extension.testCommonDependencies
+
 /*
  * Copyright (c) 2026 Element Creations Ltd.
  *
@@ -15,5 +17,11 @@ android {
 
 dependencies {
     api(projects.libraries.matrix.api)
+    implementation(projects.libraries.designsystem)
+    implementation(projects.libraries.uiCommon)
+    implementation(projects.libraries.uiStrings)
+
     api(libs.jsoup)
+
+    testCommonDependencies(libs)
 }

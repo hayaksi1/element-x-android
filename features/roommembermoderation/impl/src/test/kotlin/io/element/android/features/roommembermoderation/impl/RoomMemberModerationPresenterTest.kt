@@ -42,6 +42,7 @@ import io.element.android.tests.testutils.testCoroutineDispatchers
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.collections.immutable.toImmutableList
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -415,6 +416,7 @@ class RoomMemberModerationPresenterTest {
         }
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     @Test
     fun `present - changing a role is not offered without the power levels permission`() = runTest {
         val room = aJoinedRoom(
@@ -456,6 +458,7 @@ class RoomMemberModerationPresenterTest {
         }
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     @Test
     fun `present - confirming a role change applies it once`() = runTest {
         val updateUsersRolesLambda = lambdaRecorder<List<UserRoleChange>, Result<Unit>> { Result.success(Unit) }

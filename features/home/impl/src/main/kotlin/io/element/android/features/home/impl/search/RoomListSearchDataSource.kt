@@ -66,7 +66,7 @@ class RoomListSearchDataSource(
             RoomListFilter.None
         } else {
             val roomIdsMatchingAlias = roomIdsMatchingAlias(searchQuery)
-            val nameOrAliasFilter = if (roomIdsMatchingAlias.isEmpty()) {
+            val nameFilter = if (roomIdsMatchingAlias.isEmpty()) {
                 RoomListFilter.NormalizedMatchRoomName(searchQuery)
             } else {
                 RoomListFilter.any(
@@ -75,9 +75,9 @@ class RoomListSearchDataSource(
                 )
             }
             if (additionalFilters != null) {
-                RoomListFilter.all(additionalFilters, nameOrAliasFilter)
+                RoomListFilter.all(additionalFilters, nameFilter)
             } else {
-                nameOrAliasFilter
+                nameFilter
             }
         }
         roomList.updateFilter(filter)

@@ -29,23 +29,21 @@ import timber.log.Timber
 
 @AssistedInject
 class ForwardMessagesPresenter(
-    @Assisted eventId: String,
+    @Assisted private val eventIds: List<EventId>,
     @Assisted private val timelineProvider: TimelineProvider,
     @SessionCoroutineScope
     private val sessionCoroutineScope: CoroutineScope,
 ) : Presenter<ForwardMessagesState> {
-    private val eventId: EventId = EventId(eventId)
-
     @AssistedFactory
     fun interface Factory {
-        fun create(eventId: String, timelineProvider: TimelineProvider): ForwardMessagesPresenter
+        fun create(eventIds: List<EventId>, timelineProvider: TimelineProvider): ForwardMessagesPresenter
     }
 
     private val forwardingActionState: MutableState<AsyncAction<List<RoomId>>> = mutableStateOf(AsyncAction.Uninitialized)
     private var forwardingJob: Job? = null
 
     fun onRoomSelected(roomIds: List<RoomId>) {
-        forwardingJob = sessionCoroutineScope.forwardEvent(eventId, roomIds)
+        forwardingJob = sessionCoroutineScope.forwardEvents(eventIds, roomIds)
     }
 
     @Composable
@@ -67,14 +65,14 @@ class ForwardMessagesPresenter(
         )
     }
 
-    private fun CoroutineScope.forwardEvent(
-        eventId: EventId,
+    private fun CoroutineScope.forwardEvents(
+        eventIds: List<EventId>,
         roomIds: List<RoomId>,
     ) = launch {
         suspend {
-            timelineProvider.getActiveTimeline().forwardEvent(eventId, roomIds)
+            timelineProvider.getActiveTimeline().forwardEvents(eventIds, roomIds)
                 .onFailure {
-                    Timber.e(it, "Error while forwarding event")
+                    Timber.e(it, "Error while forwarding events")
                 }
                 .getOrThrow()
             roomIds

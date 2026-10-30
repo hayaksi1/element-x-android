@@ -72,7 +72,6 @@ dependencies {
     implementation(projects.libraries.preferences.api)
     implementation(projects.libraries.uiUtils)
     implementation(projects.libraries.network)
-    implementation(projects.libraries.wellknown.api)
     implementation(platform(libs.network.retrofit.bom))
     implementation(libs.network.retrofit)
     implementation(libs.androidx.browser)
@@ -81,7 +80,6 @@ dependencies {
     api(projects.features.login.api)
 
     testCommonDependencies(libs, true)
-    testImplementation(projects.features.login.test)
     testImplementation(projects.features.enterprise.test)
     testImplementation(projects.features.preferences.test)
     testImplementation(projects.libraries.preferences.test)
@@ -89,7 +87,6 @@ dependencies {
     testImplementation(projects.libraries.oauth.test)
     testImplementation(projects.libraries.permissions.test)
     testImplementation(projects.libraries.sessionStorage.test)
-    testImplementation(projects.libraries.wellknown.test)
     testImplementation(libs.androidx.camera.camera2)
     testImplementation(libs.androidx.camera.lifecycle)
 }

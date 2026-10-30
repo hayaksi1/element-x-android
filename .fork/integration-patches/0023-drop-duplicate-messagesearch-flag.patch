@@ -1,0 +1,38 @@
+From 1a71d41fdd383ffd93a01c18bde5850362486afb Mon Sep 17 00:00:00 2001
+From: hayaksi1 <193020925+hayaksi1@users.noreply.github.com>
+Date: Sun, 20 Sep 2026 20:13:24 +0300
+Subject: [PATCH] Drop duplicate MessageSearch feature flag entries.
+
+Three copies of the same enum survived the develop merge. Keep the Start indexing description.
+
+Fork-Feature: fork-tooling
+---
+ .../libraries/featureflag/api/FeatureFlags.kt      | 14 --------------
+ 1 file changed, 14 deletions(-)
+
+diff --git a/libraries/featureflag/api/src/main/kotlin/io/element/android/libraries/featureflag/api/FeatureFlags.kt b/libraries/featureflag/api/src/main/kotlin/io/element/android/libraries/featureflag/api/FeatureFlags.kt
+index 2498826644..7da7c23c54 100644
+--- a/libraries/featureflag/api/src/main/kotlin/io/element/android/libraries/featureflag/api/FeatureFlags.kt
++++ b/libraries/featureflag/api/src/main/kotlin/io/element/android/libraries/featureflag/api/FeatureFlags.kt
+@@ -162,18 +162,4 @@ enum class FeatureFlags(
+         defaultValue = { false },
+         isFinished = false,
+     ),
+-    MessageSearch(
+-        key = "feature.message_search",
+-        title = "Message search",
+-        description = "Index messages locally so they can be searched. Enabling this rebuilds the index once, which re-fetches recent history.",
+-        defaultValue = { false },
+-        isFinished = false,
+-    ),
+-    MessageSearch(
+-        key = "feature.message_search",
+-        title = "Message search",
+-        description = "Index messages locally so they can be searched. Only messages received while enabled are indexed.",
+-        defaultValue = { false },
+-        isFinished = false,
+-    ),
+ }
+-- 
+2.52.0
+

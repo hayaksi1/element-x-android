@@ -21,6 +21,9 @@ open class DeveloperSettingsStatePreviewParam : PreviewParameterProvider<Develop
         get() = sequenceOf(
             aDeveloperSettingsState(),
             aDeveloperSettingsState(
+                showDeveloperSettings = false,
+            ),
+            aDeveloperSettingsState(
                 clearCacheAction = AsyncAction.Loading
             ),
             aDeveloperSettingsState(
