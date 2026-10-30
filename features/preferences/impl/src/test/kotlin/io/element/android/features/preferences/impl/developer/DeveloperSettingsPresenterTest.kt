@@ -402,7 +402,7 @@ class DeveloperSettingsPresenterTest {
         notificationSettingsService: NotificationSettingsService = FakeNotificationSettingsService(),
         clipboardHelper: ClipboardHelper = FakeClipboardHelper(),
         toastHelper: ToastHelper = FakeToastHelper(),
-        featureFlagService: FakeFeatureFlagService = FakeFeatureFlagService(),
+        featureFlagService: FakeFeatureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.MessageSearch.key to false)),
         matrixClient: FakeMatrixClient = FakeMatrixClient(),
         messageSearchIndexer: FakeMessageSearchIndexer = FakeMessageSearchIndexer(),
     ): DeveloperSettingsPresenter {
