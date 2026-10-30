@@ -41,6 +41,7 @@ data class TimelineState(
     val displayThreadSummaries: Boolean,
     val displayJumpToUnread: Boolean,
     val jumpToUnread: JumpToUnreadState,
+    val canJumpBack: Boolean,
     val selectionState: SelectionState,
     // When true, formatted message bodies are rendered with the native Compose renderer.
     val useNewTimelineEventRenderer: Boolean,

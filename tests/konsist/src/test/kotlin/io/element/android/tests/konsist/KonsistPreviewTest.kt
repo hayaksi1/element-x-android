@@ -183,6 +183,7 @@ class KonsistPreviewTest {
         "TimelineItemVoiceViewUnifiedPreview",
         "TimelineViewMessageShieldPreview",
         "TimelineViewSelectionModePreview",
+        "TimelineViewWithJumpBackPreview",
         "TimelineViewWithReadMarkerBothIndicatorsPreview",
         "TimelineViewWithReadMarkerJumpToUnreadIndicatorOnlyPreview",
         "UserAvatarColorsPreview",
