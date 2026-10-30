@@ -70,6 +70,18 @@ class DeveloperSettingsViewTest : RobolectricTest() {
         eventsRecorder.assertSingle(DeveloperSettingsEvent.OpenPushRules)
     }
 
+    @Test
+    fun `clicking on the developer options switch emits the expected event`() = runAndroidComposeUiTest {
+        val eventsRecorder = EventsRecorder<DeveloperSettingsEvent>()
+        setDeveloperSettingsView(
+            state = aDeveloperSettingsState(
+                eventSink = eventsRecorder
+            ),
+        )
+        onNodeWithText("On").performClick()
+        eventsRecorder.assertSingle(DeveloperSettingsEvent.SetShowDeveloperSettings(false))
+    }
+
     @Config(qualifiers = "h2400dp")
     @Test
     fun `clicking on clear cache emits the expected event`() = runAndroidComposeUiTest {

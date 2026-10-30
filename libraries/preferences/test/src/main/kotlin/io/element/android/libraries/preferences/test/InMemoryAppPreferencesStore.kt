@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.updateAndGet
 class InMemoryAppPreferencesStore(
     isDeveloperModeEnabled: Boolean = false,
     isConversationNotificationsEnabled: Boolean = true,
+    showDeveloperSettings: Boolean = false,
     isOtherAccountsExpanded: Boolean = true,
     hideSpaceRooms: Boolean = false,
     customElementCallBaseUrl: String? = null,
@@ -43,6 +44,7 @@ class InMemoryAppPreferencesStore(
 ) : AppPreferencesStore {
     private val isDeveloperModeEnabled = MutableStateFlow(isDeveloperModeEnabled)
     private val isConversationNotificationsEnabled = MutableStateFlow(isConversationNotificationsEnabled)
+    private val showDeveloperSettings = MutableStateFlow(showDeveloperSettings)
     private val isOtherAccountsExpanded = MutableStateFlow(isOtherAccountsExpanded)
     private val hideSpaceRooms = MutableStateFlow(hideSpaceRooms)
     private val customElementCallBaseUrl = MutableStateFlow(customElementCallBaseUrl)
@@ -83,6 +85,14 @@ class InMemoryAppPreferencesStore(
 
     override fun isConversationNotificationsEnabledFlow(): Flow<Boolean> {
         return isConversationNotificationsEnabled
+    }
+
+    override suspend fun setShowDeveloperSettings(show: Boolean) {
+        showDeveloperSettings.value = show
+    }
+
+    override fun showDeveloperSettingsFlow(): Flow<Boolean> {
+        return showDeveloperSettings
     }
 
     override suspend fun setOtherAccountsExpanded(expanded: Boolean) {

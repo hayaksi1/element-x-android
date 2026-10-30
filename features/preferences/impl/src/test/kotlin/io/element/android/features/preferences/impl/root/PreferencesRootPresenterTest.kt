@@ -56,6 +56,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
+import kotlin.coroutines.EmptyCoroutineContext
 
 class PreferencesRootPresenterTest {
     @get:Rule
@@ -199,9 +200,13 @@ class PreferencesRootPresenterTest {
     }
 
     @Test
-    fun `present - developer settings is hidden by default in release builds`() = runTest {
+    fun `present - developer settings is hidden when the preference is off`() = runTest {
         createPreferencesRootPresenter(
-            showDeveloperSettingsProvider = ShowDeveloperSettingsProvider(aBuildMeta(BuildType.RELEASE))
+            showDeveloperSettingsProvider = ShowDeveloperSettingsProvider(
+                buildMeta = aBuildMeta(BuildType.RELEASE),
+                appPreferencesStore = InMemoryAppPreferencesStore(showDeveloperSettings = false),
+                appCoroutineScope = backgroundScope,
+            ),
         ).test {
             val loadedState = awaitFirstItem()
             assertThat(loadedState.showDeveloperSettings).isFalse()
@@ -209,9 +214,13 @@ class PreferencesRootPresenterTest {
     }
 
     @Test
-    fun `present - developer settings can be enabled in release builds`() = runTest {
+    fun `present - developer settings can be unlocked by tapping the version`() = runTest {
         createPreferencesRootPresenter(
-            showDeveloperSettingsProvider = ShowDeveloperSettingsProvider(aBuildMeta(BuildType.RELEASE))
+            showDeveloperSettingsProvider = ShowDeveloperSettingsProvider(
+                buildMeta = aBuildMeta(BuildType.RELEASE),
+                appPreferencesStore = InMemoryAppPreferencesStore(showDeveloperSettings = false),
+                appCoroutineScope = backgroundScope,
+            ),
         ).test {
             val loadedState = awaitFirstItem()
             repeat(times = ShowDeveloperSettingsProvider.DEVELOPER_SETTINGS_COUNTER) {
@@ -421,7 +430,11 @@ class PreferencesRootPresenterTest {
 
     private fun CoroutineScope.createPreferencesRootPresenter(
         matrixClient: FakeMatrixClient = FakeMatrixClient(),
-        showDeveloperSettingsProvider: ShowDeveloperSettingsProvider = ShowDeveloperSettingsProvider(aBuildMeta(BuildType.DEBUG)),
+        showDeveloperSettingsProvider: ShowDeveloperSettingsProvider = ShowDeveloperSettingsProvider(
+            buildMeta = aBuildMeta(BuildType.DEBUG),
+            appPreferencesStore = InMemoryAppPreferencesStore(showDeveloperSettings = true),
+            appCoroutineScope = CoroutineScope(EmptyCoroutineContext),
+        ),
         featureFlagService: FeatureFlagService = FakeFeatureFlagService(),
         sessionStore: SessionStore = InMemorySessionStore(),
         appPreferencesStore: AppPreferencesStore = InMemoryAppPreferencesStore(),
