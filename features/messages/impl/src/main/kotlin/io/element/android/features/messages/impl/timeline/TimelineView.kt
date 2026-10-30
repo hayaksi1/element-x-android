@@ -84,6 +84,7 @@ import io.element.android.compound.theme.ElementTheme
 import io.element.android.compound.tokens.generated.CompoundIcons
 import io.element.android.features.messages.impl.R
 import io.element.android.features.messages.impl.crypto.sendfailure.resolve.ResolveVerifiedUserSendFailureView
+import io.element.android.features.messages.impl.link.LinkActionsView
 import io.element.android.features.messages.impl.timeline.components.FloatingDateBadgeOverlay
 import io.element.android.features.messages.impl.timeline.components.TimelineItemRow
 import io.element.android.features.messages.impl.timeline.components.toText
@@ -186,11 +187,21 @@ fun TimelineView(
         state.eventSink(TimelineEvent.JumpBack)
     }
 
+    var linkActionsUrl by remember { mutableStateOf<String?>(null) }
+
     fun onLinkLongClick(link: Link) {
         view.performHapticFeedback(
             HapticFeedbackConstants.LONG_PRESS
         )
-        state.eventSink(TimelineEvent.CopyToClipboard(link.url))
+        linkActionsUrl = link.url
+    }
+
+    linkActionsUrl?.let { url ->
+        LinkActionsView(
+            url = url,
+            onDismiss = { linkActionsUrl = null },
+            onCopyClick = { state.eventSink(TimelineEvent.CopyToClipboard(url)) },
+        )
     }
 
     fun prefetchMoreItems() {
