@@ -150,6 +150,8 @@ private fun NotificationSettingsContentView(
             onDirectChatsClick = onDirectChatsClick,
             onInviteForMeNotificationsChange = onInviteForMeNotificationsChange,
             onMentionNotificationsChange = onMentionNotificationsChange,
+            conversationNotificationsEnabled = state.appSettings.conversationNotificationsEnabled,
+            onConversationNotificationsChange = { state.eventSink(NotificationSettingsEvent.SetConversationNotificationsEnabled(it)) },
         )
         ActivityCategory(
             showAllActivityInRoomList = state.showAllActivityInRoomList,
@@ -230,6 +232,8 @@ private fun NotificationsCategory(
     onDirectChatsClick: () -> Unit,
     onInviteForMeNotificationsChange: (Boolean) -> Unit,
     onMentionNotificationsChange: (Boolean) -> Unit,
+    conversationNotificationsEnabled: Boolean,
+    onConversationNotificationsChange: (Boolean) -> Unit,
 ) {
     PreferenceCategory(title = stringResource(id = R.string.screen_notification_settings_notification_section_title)) {
         ListItem(
@@ -259,6 +263,12 @@ private fun NotificationsCategory(
             title = stringResource(id = R.string.screen_notification_settings_room_mention_label),
             isChecked = matrixSettings.atRoomNotificationsEnabled,
             onCheckedChange = onMentionNotificationsChange
+        )
+        PreferenceSwitch(
+            title = stringResource(id = R.string.screen_notification_settings_conversations_label),
+            subtitle = stringResource(id = R.string.screen_notification_settings_conversations_description),
+            isChecked = conversationNotificationsEnabled,
+            onCheckedChange = onConversationNotificationsChange,
         )
     }
 }

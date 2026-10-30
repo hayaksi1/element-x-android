@@ -31,6 +31,7 @@ import io.element.android.libraries.matrix.api.timeline.item.event.EventType
 import io.element.android.libraries.matrix.api.user.MatrixUser
 import io.element.android.libraries.matrix.ui.model.getAvatarData
 import io.element.android.libraries.matrix.ui.model.getBestName
+import io.element.android.libraries.preferences.api.store.AppPreferencesStore
 import io.element.android.libraries.push.api.notifications.NotificationBitmapLoader
 import io.element.android.libraries.push.impl.R
 import io.element.android.libraries.push.impl.notifications.RoomEventGroupInfo
@@ -48,6 +49,7 @@ import io.element.android.libraries.push.impl.notifications.shortcut.createShort
 import io.element.android.libraries.ui.strings.CommonStrings
 import io.element.android.services.appnavstate.api.ROOM_OPENED_FROM_NOTIFICATION
 import io.element.android.services.toolbox.api.strings.StringProvider
+import kotlinx.coroutines.flow.first
 
 interface NotificationCreator {
     /**
@@ -136,6 +138,7 @@ class DefaultNotificationCreator(
     private val quickReplyActionFactory: QuickReplyActionFactory,
     private val bitmapLoader: NotificationBitmapLoader,
     private val acceptInvitationActionFactory: AcceptInvitationActionFactory,
+    private val appPreferencesStore: AppPreferencesStore,
     private val rejectInvitationActionFactory: RejectInvitationActionFactory,
 ) : NotificationCreator {
     /**
@@ -205,6 +208,7 @@ class DefaultNotificationCreator(
         messagingStyle.conversationTitle = createConversationTitle(roomInfo, threadId)
         val newEvents = messagingStyle.filterOutAlreadyDisplayedEvents(events)
         messagingStyle.addMessagesFromEvents(newEvents, imageLoader)
+        val conversationNotificationsEnabled = appPreferencesStore.isConversationNotificationsEnabledFlow().first()
         return builder
             .setCategory(category)
             .setNumber(events.size)
@@ -223,7 +227,7 @@ class DefaultNotificationCreator(
             // The system does not render the subText of conversation notifications, so when the account
             // information has to be displayed, the notification is not rendered as a conversation.
             .setShortcutId(
-                if (!roomInfo.showSessionId) {
+                if (!roomInfo.showSessionId && conversationNotificationsEnabled) {
                     createShortcutId(roomInfo.sessionId, roomInfo.roomId)
                 } else {
                     null

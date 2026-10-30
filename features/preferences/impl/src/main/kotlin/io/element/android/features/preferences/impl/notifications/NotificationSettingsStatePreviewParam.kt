@@ -43,6 +43,9 @@ open class NotificationSettingsStatePreviewParam : PreviewParameterProvider<Noti
                     appSettings = anAppSettings(appNotificationsEnabled = false),
                 ),
                 aNotificationSettingsState(
+                    appSettings = anAppSettings(conversationNotificationsEnabled = false),
+                ),
+                aNotificationSettingsState(
                     fullScreenIntentPermissionsState = aFullScreenIntentPermissionsState(permissionGranted = false),
                 ),
             ),
@@ -218,9 +221,11 @@ fun anInvalidMatrixSettings(
 fun anAppSettings(
     systemNotificationsEnabled: Boolean = true,
     appNotificationsEnabled: Boolean = true,
+    conversationNotificationsEnabled: Boolean = true,
 ) = NotificationSettingsState.AppSettings(
     systemNotificationsEnabled = systemNotificationsEnabled,
     appNotificationsEnabled = appNotificationsEnabled,
+    conversationNotificationsEnabled = conversationNotificationsEnabled,
 )
 
 fun aSoundChannelUiState(

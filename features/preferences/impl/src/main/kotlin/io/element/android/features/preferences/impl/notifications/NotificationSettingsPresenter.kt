@@ -145,6 +145,9 @@ class NotificationSettingsPresenter(
 
         var showChangePushProviderDialog by remember { mutableStateOf(false) }
 
+        val conversationNotificationsEnabled by remember {
+            appPreferencesStore.isConversationNotificationsEnabledFlow()
+        }.collectAsState(initial = true)
         val messageSound by remember { appPreferencesStore.getMessageSoundFlow() }.collectAsState(initial = NotificationSound.SystemDefault)
         val callRingtone by remember { appPreferencesStore.getCallRingtoneFlow() }.collectAsState(initial = NotificationSound.SystemDefault)
         val persistedMessageSoundTitle by remember { appPreferencesStore.getMessageSoundDisplayNameFlow() }.collectAsState(initial = null)
@@ -287,6 +290,9 @@ class NotificationSettingsPresenter(
                 NotificationSettingsEvent.DismissMessageSoundCopyError -> {
                     messageSoundCopyError = false
                 }
+                is NotificationSettingsEvent.SetConversationNotificationsEnabled -> localCoroutineScope.launch {
+                    appPreferencesStore.setConversationNotificationsEnabled(event.enabled)
+                }
                 NotificationSettingsEvent.DismissCallRingtoneCopyError -> {
                     callRingtoneCopyError = false
                 }
@@ -301,6 +307,7 @@ class NotificationSettingsPresenter(
             appSettings = NotificationSettingsState.AppSettings(
                 systemNotificationsEnabled = systemNotificationsEnabled.value,
                 appNotificationsEnabled = appNotificationsEnabled,
+                conversationNotificationsEnabled = conversationNotificationsEnabled,
             ),
             changeNotificationSettingAction = changeNotificationSettingAction.value,
             currentPushDistributor = currentDistributor,
