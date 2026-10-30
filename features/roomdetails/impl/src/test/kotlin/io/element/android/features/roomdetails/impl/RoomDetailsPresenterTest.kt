@@ -13,6 +13,8 @@ import com.google.common.truth.Truth.assertThat
 import im.vector.app.features.analytics.plan.Interaction
 import io.element.android.features.leaveroom.api.LeaveRoomEvent
 import io.element.android.features.leaveroom.api.LeaveRoomState
+import io.element.android.features.messages.api.pinned.PinnedEventsTimelineProvider
+import io.element.android.features.messages.test.pinned.FakePinnedEventsTimelineProvider
 import io.element.android.features.roomcall.api.aStandByCallState
 import io.element.android.features.roomdetails.impl.members.aRoomMember
 import io.element.android.features.roomdetails.impl.members.details.RoomMemberDetailsPresenter
@@ -35,6 +37,7 @@ import io.element.android.libraries.matrix.api.room.powerlevels.RoomPermissions
 import io.element.android.libraries.matrix.api.timeline.ReceiptType
 import io.element.android.libraries.matrix.test.AN_AVATAR_URL
 import io.element.android.libraries.matrix.test.AN_EVENT_ID
+import io.element.android.libraries.matrix.test.AN_EVENT_ID_2
 import io.element.android.libraries.matrix.test.A_ROOM_NAME
 import io.element.android.libraries.matrix.test.A_ROOM_TOPIC
 import io.element.android.libraries.matrix.test.A_SESSION_ID
@@ -66,6 +69,7 @@ import io.element.android.tests.testutils.testWithLifecycleOwner
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
@@ -93,6 +97,7 @@ class RoomDetailsPresenterTest {
         navigator: RoomDetailsNavigator = FakeRoomDetailsNavigator(),
         notificationCleaner: NotificationCleaner = FakeNotificationCleaner(),
         sessionPreferencesStore: SessionPreferencesStore = InMemorySessionPreferencesStore(),
+        pinnedEventsTimelineProvider: PinnedEventsTimelineProvider = FakePinnedEventsTimelineProvider(),
     ): RoomDetailsPresenter {
         val matrixClient = FakeMatrixClient(notificationSettingsService = notificationSettingsService)
         val roomMemberDetailsPresenterFactory = object : RoomMemberDetailsPresenter.Factory {
@@ -123,6 +128,7 @@ class RoomDetailsPresenterTest {
             appPreferencesStore = appPreferencesStore,
             notificationCleaner = notificationCleaner,
             sessionPreferencesStore = sessionPreferencesStore,
+            pinnedEventsTimelineProvider = pinnedEventsTimelineProvider,
         )
     }
 
@@ -733,6 +739,38 @@ class RoomDetailsPresenterTest {
             }
             onDoneResult.assertions().isCalledOnce()
             assertThat(room.baseRoom.setUnreadFlagCalls).containsExactly(true)
+        }
+    }
+
+    @Test
+    fun `present - the pinned messages count is the number the pinned timeline can show`() = runTest {
+        val room = aJoinedRoom(roomPermissions = roomPermissions()).apply {
+            givenRoomInfo(aRoomInfo(pinnedEventIds = listOf(AN_EVENT_ID, AN_EVENT_ID_2)))
+        }
+        val presenter = createRoomDetailsPresenter(
+            room = room,
+            pinnedEventsTimelineProvider = FakePinnedEventsTimelineProvider(displayablePinnedEventsCount = 1),
+        )
+        presenter.testWithLifecycleOwner(lifecycleOwner = fakeLifecycleOwner) {
+            advanceUntilIdle()
+            assertThat(expectMostRecentItem().pinnedMessagesCount).isEqualTo(1)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `present - a room pinning only events the user cannot see reports no pinned messages`() = runTest {
+        val room = aJoinedRoom(roomPermissions = roomPermissions()).apply {
+            givenRoomInfo(aRoomInfo(pinnedEventIds = listOf(AN_EVENT_ID)))
+        }
+        val presenter = createRoomDetailsPresenter(
+            room = room,
+            pinnedEventsTimelineProvider = FakePinnedEventsTimelineProvider(displayablePinnedEventsCount = 0),
+        )
+        presenter.testWithLifecycleOwner(lifecycleOwner = fakeLifecycleOwner) {
+            advanceUntilIdle()
+            assertThat(expectMostRecentItem().pinnedMessagesCount).isEqualTo(0)
+            cancelAndIgnoreRemainingEvents()
         }
     }
 
