@@ -10,6 +10,7 @@ package io.element.android.libraries.matrix.impl
 
 import com.google.common.truth.Truth.assertThat
 import io.element.android.features.enterprise.test.FakeClientBuilderEnterpriseHook
+import io.element.android.libraries.featureflag.api.FeatureFlags
 import io.element.android.libraries.featureflag.test.FakeFeatureFlagService
 import io.element.android.libraries.matrix.api.core.SessionId
 import io.element.android.libraries.matrix.api.paths.SessionPaths
@@ -99,6 +100,24 @@ class RustMatrixClientFactoryTest {
         aliceClient.destroy()
         bobClient.destroy()
     }
+
+    @Test
+    fun `create - message search availability uses the client builder decision`() = runTest {
+        val featureFlagService = FakeFeatureFlagService(
+            initialState = mapOf(FeatureFlags.MessageSearch.key to true),
+        )
+        val sut = createRustMatrixClientFactory(
+            featureFlagService = featureFlagService,
+            workManagerScheduler = FakeWorkManagerScheduler(submitLambda = {}, cancelLambda = { _, _ -> }),
+        )
+
+        val result = sut.create(aSessionData().copy(passphrase = "aSecret"))
+
+        assertThat(result.isMessageSearchAvailable).isTrue()
+        featureFlagService.setFeatureEnabled(FeatureFlags.MessageSearch, false)
+        assertThat(result.isMessageSearchAvailable).isTrue()
+        result.destroy()
+    }
 }
 
 fun TestScope.createRustMatrixClientFactory(
@@ -109,6 +128,7 @@ fun TestScope.createRustMatrixClientFactory(
     clientBuilderProvider: ClientBuilderProvider = FakeClientBuilderProvider(),
     workManagerScheduler: FakeWorkManagerScheduler = FakeWorkManagerScheduler(cancelLambda = { _, _ -> }),
     sqliteStoreBuilderProvider: SqliteStoreBuilderProvider = FakeSqliteStoreBuilderProvider(),
+    featureFlagService: FakeFeatureFlagService = FakeFeatureFlagService(),
 ) = RustMatrixClientFactory(
     cacheDirectory = cacheDirectory,
     appCoroutineScope = backgroundScope,
@@ -117,7 +137,7 @@ fun TestScope.createRustMatrixClientFactory(
     userAgentProvider = SimpleUserAgentProvider(),
     proxyProvider = FakeProxyProvider(),
     analyticsService = FakeAnalyticsService(),
-    featureFlagService = FakeFeatureFlagService(),
+    featureFlagService = featureFlagService,
     clientBuilderProvider = clientBuilderProvider,
     sqliteStoreBuilderProvider = sqliteStoreBuilderProvider,
     clientBuilderEnterpriseHook = FakeClientBuilderEnterpriseHook(),
