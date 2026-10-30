@@ -22,6 +22,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.v2.runAndroidComposeUiTest
+import io.element.android.features.messages.impl.R
 import io.element.android.features.messages.impl.timeline.components.MessageShieldData
 import io.element.android.features.messages.impl.timeline.components.aCriticalShield
 import io.element.android.features.messages.impl.timeline.model.TimelineItem
@@ -39,6 +40,7 @@ import io.element.android.libraries.matrix.api.timeline.item.event.MessageShield
 import io.element.android.libraries.matrix.api.timeline.item.event.TextMessageType
 import io.element.android.libraries.matrix.api.user.MatrixUser
 import io.element.android.libraries.matrix.test.AN_EVENT_ID
+import io.element.android.libraries.matrix.test.A_THREAD_ID
 import io.element.android.libraries.matrix.test.A_USER_ID
 import io.element.android.libraries.matrix.ui.messages.reply.InReplyToDetails
 import io.element.android.libraries.matrix.ui.messages.reply.aProfileDetailsReady
@@ -51,6 +53,7 @@ import io.element.android.tests.testutils.robolectric.RobolectricTest
 import io.element.android.tests.testutils.setSafeContent
 import io.element.android.wysiwyg.link.Link
 import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.collections.immutable.toImmutableList
 import org.junit.Ignore
 import org.junit.Test
@@ -71,6 +74,26 @@ class TimelineViewTest : RobolectricTest() {
             ),
         )
         eventsRecorder.assertSingle(TimelineEvent.LoadMore(Timeline.PaginationDirection.BACKWARDS))
+    }
+
+    @Test
+    fun `a failed pagination shows a retry action instead of emitting LoadMore again`() = runAndroidComposeUiTest {
+        val eventsRecorder = EventsRecorder<TimelineEvent>()
+        setTimelineView(
+            state = aTimelineState(
+                timelineItems = persistentListOf<TimelineItem>(
+                    TimelineItem.Virtual(
+                        id = UniqueId("backward_pagination"),
+                        model = TimelineItemLoadingIndicatorModel(Timeline.PaginationDirection.BACKWARDS, 0)
+                    ),
+                ),
+                paginationFailures = persistentSetOf(Timeline.PaginationDirection.BACKWARDS),
+                eventSink = eventsRecorder,
+            ),
+        )
+        eventsRecorder.assertEmpty()
+        onNodeWithText(activity!!.getString(CommonStrings.action_retry)).performClick()
+        eventsRecorder.assertSingle(TimelineEvent.RetryLoadMore(Timeline.PaginationDirection.BACKWARDS))
     }
 
     @Test
@@ -134,6 +157,28 @@ class TimelineViewTest : RobolectricTest() {
         )
 
         eventsRecorder.assertSingle(TimelineEvent.LoadMore(Timeline.PaginationDirection.BACKWARDS))
+    }
+
+    @Test
+    fun `an empty thread shows an empty state`() = runAndroidComposeUiTest {
+        setTimelineView(
+            state = aTimelineState(
+                timelineItems = persistentListOf(),
+                timelineMode = Timeline.Mode.Thread(A_THREAD_ID),
+            ),
+        )
+        onNodeWithText(activity!!.getString(R.string.screen_room_timeline_empty_thread)).assertIsDisplayed()
+    }
+
+    @Test
+    fun `an empty live timeline does not show the thread empty state`() = runAndroidComposeUiTest {
+        setTimelineView(
+            state = aTimelineState(
+                timelineItems = persistentListOf(),
+                timelineMode = Timeline.Mode.Live,
+            ),
+        )
+        onNodeWithText(activity!!.getString(R.string.screen_room_timeline_empty_thread)).assertDoesNotExist()
     }
 
     @Test
