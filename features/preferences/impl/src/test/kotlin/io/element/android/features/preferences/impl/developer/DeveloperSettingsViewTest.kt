@@ -57,19 +57,17 @@ class DeveloperSettingsViewTest : RobolectricTest() {
         }
     }
 
-    @Config(qualifiers = "h2000dp")
+    @Config(qualifiers = "h2400dp")
     @Test
-    fun `clicking on open showkase invokes the expected callback`() = runAndroidComposeUiTest {
-        val eventsRecorder = EventsRecorder<DeveloperSettingsEvent>(expectEvents = false)
-        ensureCalledOnce {
-            setDeveloperSettingsView(
-                state = aDeveloperSettingsState(
-                    eventSink = eventsRecorder
-                ),
-                onOpenShowkase = it
-            )
-            onNodeWithText("Open Showkase browser").performClick()
-        }
+    fun `clicking on push rules emits the expected event`() = runAndroidComposeUiTest {
+        val eventsRecorder = EventsRecorder<DeveloperSettingsEvent>()
+        setDeveloperSettingsView(
+            state = aDeveloperSettingsState(
+                eventSink = eventsRecorder
+            ),
+        )
+        onNodeWithText("Push rules").performScrollTo().performClick()
+        eventsRecorder.assertSingle(DeveloperSettingsEvent.OpenPushRules)
     }
 
     @Config(qualifiers = "h2400dp")
@@ -88,14 +86,12 @@ class DeveloperSettingsViewTest : RobolectricTest() {
 
 private fun AndroidComposeUiTest<ComponentActivity>.setDeveloperSettingsView(
     state: DeveloperSettingsState,
-    onOpenShowkase: () -> Unit = EnsureNeverCalled(),
     onPushHistoryClick: () -> Unit = EnsureNeverCalled(),
     onBackClick: () -> Unit = EnsureNeverCalled()
 ) {
     setContent {
         DeveloperSettingsView(
             state = state,
-            onOpenShowkase = onOpenShowkase,
             onPushHistoryClick = onPushHistoryClick,
             onBackClick = onBackClick,
         )

@@ -15,16 +15,16 @@ import androidx.compose.foundation.progressSemantics
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.unit.dp
 import io.element.android.compound.theme.ElementTheme
 import io.element.android.features.preferences.impl.R
 import io.element.android.features.preferences.impl.developer.appsettings.AppDeveloperSettingsView
-import io.element.android.libraries.androidutils.system.copyToClipboard
+import io.element.android.libraries.architecture.AsyncAction
 import io.element.android.libraries.designsystem.components.ProgressDialog
 import io.element.android.libraries.designsystem.components.dialogs.ConfirmationDialog
+import io.element.android.libraries.designsystem.components.dialogs.ErrorDialog
 import io.element.android.libraries.designsystem.components.list.ListItemContent
 import io.element.android.libraries.designsystem.components.preferences.PreferenceCategory
 import io.element.android.libraries.designsystem.components.preferences.PreferencePage
@@ -42,7 +42,6 @@ import io.mhssn.colorpicker.ColorPickerType
 @Composable
 fun DeveloperSettingsView(
     state: DeveloperSettingsState,
-    onOpenShowkase: () -> Unit,
     onPushHistoryClick: () -> Unit,
     onBackClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -58,6 +57,12 @@ fun DeveloperSettingsView(
             submitText = stringResource(CommonStrings.action_yes),
             onSubmitClick = { state.eventSink(DeveloperSettingsEvent.MarkAllRoomsAsRead(needsConfirmation = false)) },
             onDismiss = { state.eventSink(DeveloperSettingsEvent.DismissMarkAllRoomsAsReadConfirmation) },
+        )
+    }
+    (state.pushRulesAction as? AsyncAction.Failure)?.let { failure ->
+        ErrorDialog(
+            content = failure.error.message ?: stringResource(CommonStrings.error_unknown),
+            onSubmit = { state.eventSink(DeveloperSettingsEvent.DismissPushRulesError) },
         )
     }
     BackHandler(
@@ -76,10 +81,15 @@ fun DeveloperSettingsView(
         // Note: this is OK to hardcode strings in this debug screen.
         AppDeveloperSettingsView(
             state = state.appDeveloperSettingsState,
-            onOpenShowkase = onOpenShowkase,
         )
-        SessionCategory(deviceId = state.deviceId)
-        NotificationCategory(onPushHistoryClick)
+        SessionCategory(
+            deviceId = state.deviceId,
+            onCopyToClipboard = { state.eventSink(DeveloperSettingsEvent.CopyToClipboard(it)) },
+        )
+        NotificationCategory(
+            onPushRulesClick = { state.eventSink(DeveloperSettingsEvent.OpenPushRules) },
+            onPushHistoryClick = onPushHistoryClick,
+        )
         MarkAllRoomsAsReadCategory(state)
 
         if (state.isEnterpriseBuild) {
@@ -173,19 +183,15 @@ fun DeveloperSettingsView(
 }
 
 @Composable
-private fun SessionCategory(deviceId: DeviceId) {
+private fun SessionCategory(
+    deviceId: DeviceId,
+    onCopyToClipboard: (String) -> Unit,
+) {
     PreferenceCategory(title = "Session") {
-        val toastMessage = stringResource(CommonStrings.common_copied_to_clipboard)
-        val context = LocalContext.current
         ListItem(
             content = { Text("DeviceId") },
             supportingContent = { Text(text = deviceId.value) },
-            onClick = {
-                context.copyToClipboard(
-                    text = deviceId.value,
-                    toastMessage = toastMessage,
-                )
-            }
+            onClick = { onCopyToClipboard(deviceId.value) }
         )
     }
 }
@@ -217,8 +223,17 @@ private fun MarkAllRoomsAsReadCategory(state: DeveloperSettingsState) {
 }
 
 @Composable
-private fun NotificationCategory(onPushHistoryClick: () -> Unit) {
+private fun NotificationCategory(
+    onPushRulesClick: () -> Unit,
+    onPushHistoryClick: () -> Unit,
+) {
     PreferenceCategory(title = stringResource(id = R.string.screen_notification_settings_title)) {
+        ListItem(
+            content = {
+                Text("Push rules")
+            },
+            onClick = onPushRulesClick,
+        )
         ListItem(
             content = {
                 Text(stringResource(R.string.troubleshoot_notifications_entry_point_push_history_title))
@@ -235,7 +250,6 @@ internal fun DeveloperSettingsViewPreview(
 ) = ElementPreview {
     DeveloperSettingsView(
         state = state,
-        onOpenShowkase = {},
         onPushHistoryClick = {},
         onBackClick = {},
     )
