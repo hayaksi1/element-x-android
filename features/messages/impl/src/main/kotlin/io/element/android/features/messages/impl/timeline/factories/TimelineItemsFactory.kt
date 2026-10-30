@@ -66,8 +66,9 @@ class TimelineItemsFactory(
 
     suspend fun replaceWith(timelineItems: List<MatrixTimelineItem>) = withContext(dispatchers.computation) {
         lock.withLock {
-            diffCacheUpdater.updateWith(timelineItems)
-            buildAndEmitTimelineItemStates(timelineItems)
+            val displayableItems = timelineItems.keepDisplayableTimelineEvents()
+            diffCacheUpdater.updateWith(displayableItems)
+            buildAndEmitTimelineItemStates(displayableItems)
         }
     }
 

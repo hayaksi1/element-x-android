@@ -32,9 +32,11 @@ import io.element.android.libraries.matrix.api.timeline.item.ThreadSummary
 import io.element.android.libraries.matrix.api.timeline.item.event.EventContent
 import io.element.android.libraries.matrix.api.timeline.item.event.MembershipChange
 import io.element.android.libraries.matrix.api.timeline.item.event.OtherMessageType
+import io.element.android.libraries.matrix.api.timeline.item.event.OtherState
 import io.element.android.libraries.matrix.api.timeline.item.event.ProfileDetails
 import io.element.android.libraries.matrix.api.timeline.item.event.Receipt
 import io.element.android.libraries.matrix.api.timeline.item.event.RoomMembershipContent
+import io.element.android.libraries.matrix.api.timeline.item.event.StateContent
 import io.element.android.libraries.matrix.api.timeline.item.virtual.VirtualTimelineItem
 import io.element.android.libraries.matrix.test.A_THREAD_ID
 import io.element.android.libraries.matrix.test.A_USER_ID
@@ -342,6 +344,56 @@ class TimelineItemsFactoryTest {
         assertThat(second).hasSize(first.size)
         second.forEachIndexed { index, item ->
             assertThat(item).isSameInstanceAs(first[index])
+        }
+    }
+
+    @Test
+    fun `a custom state event is not emitted and does not split the group around it`() = runTest {
+        val factory = aTimelineItemsFactory(
+            config = TimelineItemsFactoryConfig(
+                computeReadReceipts = false,
+                computeReactions = false,
+            )
+        )
+        val items = listOf(
+            MatrixTimelineItem.Event(
+                uniqueId = UniqueId("event-0"),
+                event = anEventTimelineItem(
+                    sender = A_USER_ID,
+                    timestamp = 0L,
+                    content = aMessageContent(body = "Message 0"),
+                ),
+            ),
+            MatrixTimelineItem.Event(
+                uniqueId = UniqueId("custom"),
+                event = anEventTimelineItem(
+                    sender = A_USER_ID,
+                    timestamp = 30 * 1000L,
+                    content = StateContent(stateKey = "", content = OtherState.Custom("com.example.custom")),
+                ),
+            ),
+            MatrixTimelineItem.Event(
+                uniqueId = UniqueId("event-1"),
+                event = anEventTimelineItem(
+                    sender = A_USER_ID,
+                    timestamp = ONE_MINUTE,
+                    content = aMessageContent(body = "Message 1"),
+                ),
+            ),
+        )
+        factory.timelineItems.test {
+            factory.replaceWith(
+                timelineItems = items,
+            )
+            val positions = awaitItem()
+                .filterIsInstance<TimelineItem.Event>()
+                .map { it.groupPosition }
+                .reversed()
+            assertThat(positions).containsExactly(
+                TimelineItemGroupPosition.First,
+                TimelineItemGroupPosition.Last,
+            ).inOrder()
+            cancelAndIgnoreRemainingEvents()
         }
     }
 
