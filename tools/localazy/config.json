@@ -15,6 +15,12 @@
       ]
     },
     {
+      "name" : ":libraries:roomselect:impl",
+      "includeRegex" : [
+        "screen\\.room_select\\..*"
+      ]
+    },
+    {
       "name" : ":features:rageshake:api",
       "includeRegex" : [
         "crash_detection_.*",
@@ -81,6 +87,7 @@
       "name" : ":features:verifysession:impl",
       "includeRegex" : [
         "screen_session_verification_.*",
+        "screen\\.session_verification\\..*",
         "screen_signout_in_progress_dialog_content",
         "screen_identity_.*"
       ]
@@ -193,16 +200,25 @@
       ]
     },
     {
+      "name" : ":libraries:slashcommands:impl",
+      "includeRegex" : [
+        "slash_command\\..*"
+      ]
+    },
+    {
       "name" : ":features:home:impl",
       "includeRegex" : [
         "screen\\.home\\..*",
         "screen_roomlist_.*",
         "screen\\.roomlist\\..*",
+        "screen\\.multi_account_announcement\\..*",
+        "screen_search_.*",
         "session_verification_banner_.*",
         "confirm_recovery_key_banner_.*",
         "banner\\.set_up_recovery\\..*",
         "banner\\.battery_optimization\\..*",
         "banner\\.new_sound\\..*",
+        "banner\\.swipe_avatar\\..*",
         "full_screen_intent_banner_.*",
         "screen_migration_.*",
         "screen_invites_.*"
@@ -274,6 +290,7 @@
         "screen\\.room\\.timeline.*",
         "error\\.sending_failure\\..*",
         "screen\\.room_timeline.*",
+        "screen\\.room\\.confirm_removal.*",
         "screen_room_typing.*",
         "screen\\.image_edition\\..*",
         "screen\\.media_upload.*"
@@ -303,6 +320,7 @@
       "name" : ":features:poll:impl",
       "includeRegex" : [
         "screen_create_poll_.*",
+        "screen\\.create_poll\\..*",
         "screen_edit_poll_.*",
         "screen_polls_history_.*"
       ]
@@ -335,6 +353,7 @@
         "screen_edit_profile_.*",
         "screen_notification_settings_.*",
         "screen\\.notification_settings\\..*",
+        "screen\\.moderation_and_safety\\..*",
         "screen_blocked_users_.*",
         "full_screen_intent_banner_.*",
         "troubleshoot_notifications_entry_point_.*",

@@ -13,7 +13,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import io.element.android.compound.tokens.generated.CompoundIcons
-import io.element.android.libraries.androidutils.system.copyToClipboard
 import io.element.android.libraries.androidutils.system.openUrlInExternalApp
 import io.element.android.libraries.androidutils.system.startSharePlainTextIntent
 import io.element.android.libraries.designsystem.components.list.ListItemContent
@@ -30,9 +29,9 @@ import io.element.android.libraries.ui.strings.CommonStrings
 fun LinkActionsView(
     url: String,
     onDismiss: () -> Unit,
+    onCopyClick: () -> Unit,
 ) {
     val context = LocalContext.current
-    val copiedMessage = stringResource(CommonStrings.common_copied_to_clipboard)
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         scrollable = false,
@@ -52,7 +51,7 @@ fun LinkActionsView(
             },
             onCopyClick = {
                 onDismiss()
-                context.copyToClipboard(text = url, toastMessage = copiedMessage)
+                onCopyClick()
             },
         )
     }
