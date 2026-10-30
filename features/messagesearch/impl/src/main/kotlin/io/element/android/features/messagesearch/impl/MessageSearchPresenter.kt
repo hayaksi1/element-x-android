@@ -140,7 +140,13 @@ class MessageSearchPresenter(
         }
 
         val items = remember(results) {
-            results.map { it.toResultItem() }.toImmutableList()
+            // The SDK ranks results by relevance score, so consecutive pages interleave dates.
+            // Display order is newest-first; sorting belongs here at render time so the upstream
+            // list stays index-parallel to the SDK's (see MessageSearchResultsProcessor).
+            results
+                .sortedByDescending { it.timestamp }
+                .map { it.toResultItem() }
+                .toImmutableList()
         }
 
         fun handleEvent(event: MessageSearchEvents) {

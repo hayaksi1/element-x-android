@@ -42,6 +42,7 @@ import kotlinx.collections.immutable.toImmutableList
 fun AppDeveloperSettingsView(
     state: AppDeveloperSettingsState,
     modifier: Modifier = Modifier,
+    afterFeatureFlags: @Composable () -> Unit = {},
 ) {
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -65,6 +66,7 @@ fun AppDeveloperSettingsView(
         ) {
             FeatureListContent(state)
         }
+        afterFeatureFlags()
         ElementCallCategory(state = state)
         PreferenceCategory(title = "Rust SDK") {
             PreferenceDropdown(
