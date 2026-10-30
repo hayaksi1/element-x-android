@@ -35,6 +35,9 @@ class ModerationAndSafetyPresenter(
         val isSharePresenceEnabled by remember {
             sessionPreferencesStore.isSharePresenceEnabled()
         }.collectAsState(initial = true)
+        val isRenderRedactedMessagesEnabled by remember {
+            sessionPreferencesStore.isRenderRedactedMessagesEnabled()
+        }.collectAsState(initial = true)
 
         val mediaPreviewConfigState = mediaPreviewConfigStateStore.state()
 
@@ -49,6 +52,9 @@ class ModerationAndSafetyPresenter(
                 is ModerationAndSafetyEvent.SetSharePresenceEnabled -> sessionCoroutineScope.launch {
                     sessionPreferencesStore.setSharePresence(event.enabled)
                 }
+                is ModerationAndSafetyEvent.SetRenderRedactedMessagesEnabled -> sessionCoroutineScope.launch {
+                    sessionPreferencesStore.setRenderRedactedMessages(event.enabled)
+                }
                 is ModerationAndSafetyEvent.SetHideInviteAvatars -> mediaPreviewConfigStateStore.setHideInviteAvatars(event.value)
                 is ModerationAndSafetyEvent.SetTimelineMediaPreviewValue -> mediaPreviewConfigStateStore.setTimelineMediaPreviewValue(event.value)
             }
@@ -56,6 +62,7 @@ class ModerationAndSafetyPresenter(
 
         return ModerationAndSafetyState(
             isSharePresenceEnabled = isSharePresenceEnabled,
+            isRenderRedactedMessagesEnabled = isRenderRedactedMessagesEnabled,
             mediaPreviewConfigState = mediaPreviewConfigState,
             numberOfBlockedUsers = numberOfBlockedUsers,
             eventSink = ::handleEvent,

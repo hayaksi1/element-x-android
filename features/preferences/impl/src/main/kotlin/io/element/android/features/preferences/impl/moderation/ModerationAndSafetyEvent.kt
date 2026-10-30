@@ -11,6 +11,7 @@ import io.element.android.libraries.matrix.api.media.MediaPreviewValue
 
 sealed interface ModerationAndSafetyEvent {
     data class SetSharePresenceEnabled(val enabled: Boolean) : ModerationAndSafetyEvent
+    data class SetRenderRedactedMessagesEnabled(val enabled: Boolean) : ModerationAndSafetyEvent
     data class SetHideInviteAvatars(val value: Boolean) : ModerationAndSafetyEvent
     data class SetTimelineMediaPreviewValue(val value: MediaPreviewValue) : ModerationAndSafetyEvent
 }

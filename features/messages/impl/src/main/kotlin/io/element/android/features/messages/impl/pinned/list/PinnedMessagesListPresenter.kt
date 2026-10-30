@@ -229,6 +229,7 @@ class PinnedMessagesListPresenter(
                         .onEach { items ->
                             timelineItemsFactory.replaceWith(
                                 timelineItems = items.keepDisplayablePinnedEvents(),
+                                renderRedactedMessages = true,
                             )
                         }
                         .launchIn(this)

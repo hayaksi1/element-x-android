@@ -66,6 +66,7 @@ fun ModerationAndSafetyView(
         PresenceSection(state)
         InvitesSection(state)
         MediaSection(state)
+        RemovedMessagesSection(state)
         if (state.showBlockedUsersItem) {
             BlockedUsersSection(
                 numberOfBlockedUsers = state.numberOfBlockedUsers,
@@ -179,6 +180,24 @@ private fun ColumnScope.MediaSection(
         },
         enabled = !state.mediaPreviewConfigState.setTimelineMediaPreviewAction.isLoading()
     )
+}
+
+@Composable
+private fun RemovedMessagesSection(state: ModerationAndSafetyState) {
+    PreferenceCategory {
+        ListItem(
+            content = {
+                Text(text = stringResource(id = R.string.screen_advanced_settings_show_removed_messages))
+            },
+            supportingContent = {
+                Text(text = stringResource(id = R.string.screen_advanced_settings_show_removed_messages_description))
+            },
+            trailingContent = ListItemContent.Switch(
+                checked = state.isRenderRedactedMessagesEnabled,
+            ),
+            onClick = { state.eventSink(ModerationAndSafetyEvent.SetRenderRedactedMessagesEnabled(!state.isRenderRedactedMessagesEnabled)) }
+        )
+    }
 }
 
 @PreviewWithLargeHeight

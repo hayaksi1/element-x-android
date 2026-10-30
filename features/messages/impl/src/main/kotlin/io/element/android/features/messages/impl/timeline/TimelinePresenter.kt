@@ -80,6 +80,7 @@ import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toImmutableSet
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
@@ -439,14 +440,20 @@ class TimelinePresenter(
                 .onEach { eventIdsToDeselect -> selectionState.value = selectionState.value.deselect(eventIdsToDeselect) }
                 .launchIn(this)
 
-            timelineController.timelineItems()
-                .onEach { items ->
-                    val parent = analyticsService.getLongRunningTransaction(DisplayFirstTimelineItems)
-                    val transaction = parent?.startChild("timelineItemsFactory.replaceWith", "Processing timeline items")
-                    transaction?.putExtraData(AnalyticsUserData.TIMELINE_ITEM_COUNT, items.count().toString())
-                    timelineItemsFactory.replaceWith(timelineItems = items)
-                    transaction?.finish()
-                }
+            combine(
+                timelineController.timelineItems(),
+                sessionPreferencesStore.isRenderRedactedMessagesEnabled(),
+            ) { items, renderRedactedMessages ->
+                val parent = analyticsService.getLongRunningTransaction(DisplayFirstTimelineItems)
+                val transaction = parent?.startChild("timelineItemsFactory.replaceWith", "Processing timeline items")
+                transaction?.putExtraData(AnalyticsUserData.TIMELINE_ITEM_COUNT, items.count().toString())
+                timelineItemsFactory.replaceWith(
+                    timelineItems = items,
+                    renderRedactedMessages = renderRedactedMessages,
+                )
+                transaction?.finish()
+                items
+            }
                 .onEach(redactedVoiceMessageManager::onEachMatrixTimelineItem)
                 .flowOn(dispatchers.computation)
                 .launchIn(this)
