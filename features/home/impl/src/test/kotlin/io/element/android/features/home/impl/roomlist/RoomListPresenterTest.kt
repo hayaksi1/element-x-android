@@ -8,6 +8,8 @@
 
 package io.element.android.features.home.impl.roomlist
 
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import com.google.common.truth.Truth.assertThat
 import im.vector.app.features.analytics.plan.Interaction
 import io.element.android.features.announcement.api.Announcement
@@ -50,6 +52,7 @@ import io.element.android.libraries.matrix.api.encryption.RecoveryState
 import io.element.android.libraries.matrix.api.room.CurrentUserMembership
 import io.element.android.libraries.matrix.api.room.RoomNotificationMode
 import io.element.android.libraries.matrix.api.roomlist.RoomList
+import io.element.android.libraries.matrix.api.spaces.SpaceServiceFilter
 import io.element.android.libraries.matrix.api.sync.SyncState
 import io.element.android.libraries.matrix.api.timeline.ReceiptType
 import io.element.android.libraries.matrix.test.A_ROOM_ID
@@ -66,12 +69,14 @@ import io.element.android.libraries.matrix.test.room.aRoomMember
 import io.element.android.libraries.matrix.test.room.aRoomSummary
 import io.element.android.libraries.matrix.test.roomlist.FakeDynamicRoomList
 import io.element.android.libraries.matrix.test.roomlist.FakeRoomListService
+import io.element.android.libraries.matrix.test.spaces.FakeSpaceService
 import io.element.android.libraries.matrix.test.sync.FakeSyncService
 import io.element.android.libraries.matrix.test.verification.FakeSessionVerificationService
 import io.element.android.libraries.preferences.api.store.AppPreferencesStore
 import io.element.android.libraries.preferences.api.store.SessionPreferencesStore
 import io.element.android.libraries.preferences.test.InMemoryAppPreferencesStore
 import io.element.android.libraries.preferences.test.InMemorySessionPreferencesStore
+import io.element.android.libraries.previewutils.room.aSpaceRoom
 import io.element.android.libraries.push.api.battery.aBatteryOptimizationState
 import io.element.android.libraries.push.api.notifications.NotificationCleaner
 import io.element.android.libraries.push.test.notifications.FakeNotificationCleaner
@@ -139,6 +144,130 @@ class RoomListPresenterTest {
                 )
             )
             assertThat(withRoomsState.contentAsRooms().seenRoomInvites).containsExactly(A_ROOM_ID, A_ROOM_ID_2, A_ROOM_ID_3)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `present - rooms which belong to a space are hidden when the setting is on`() = runTest {
+        val roomList = FakeDynamicRoomList(
+            loadingState = MutableStateFlow(RoomList.LoadingState.Loaded(2))
+        )
+        val spaceService = FakeSpaceService()
+        val matrixClient = FakeMatrixClient(
+            roomListService = FakeRoomListService(createRoomListLambda = { roomList }),
+            spaceService = spaceService,
+        )
+        val presenter = createRoomListPresenter(
+            client = matrixClient,
+            appPreferencesStore = InMemoryAppPreferencesStore(hideSpaceRooms = true),
+        )
+        presenter.test {
+            skipItems(1)
+            roomList.summaries.emit(
+                listOf(
+                    aRoomSummary(roomId = A_ROOM_ID),
+                    aRoomSummary(roomId = A_ROOM_ID_2),
+                )
+            )
+            spaceService.emitSpaceFilters(
+                listOf(
+                    SpaceServiceFilter(
+                        spaceRoom = aSpaceRoom(roomId = A_ROOM_ID_3),
+                        level = 0,
+                        descendants = listOf(A_ROOM_ID_2),
+                    )
+                )
+            )
+            val state = consumeItemsUntilPredicate { state ->
+                state.contentState is RoomListContentState.Rooms && state.contentAsRooms().summaries.size == 1
+            }.last()
+            assertThat(state.contentAsRooms().summaries.map { it.roomId }).containsExactly(A_ROOM_ID)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `present - rooms which belong to a space are listed when the setting is off`() = runTest {
+        val roomList = FakeDynamicRoomList(
+            loadingState = MutableStateFlow(RoomList.LoadingState.Loaded(2))
+        )
+        val spaceService = FakeSpaceService()
+        val matrixClient = FakeMatrixClient(
+            roomListService = FakeRoomListService(createRoomListLambda = { roomList }),
+            spaceService = spaceService,
+        )
+        val presenter = createRoomListPresenter(
+            client = matrixClient,
+            appPreferencesStore = InMemoryAppPreferencesStore(hideSpaceRooms = false),
+        )
+        presenter.test {
+            skipItems(1)
+            roomList.summaries.emit(
+                listOf(
+                    aRoomSummary(roomId = A_ROOM_ID),
+                    aRoomSummary(roomId = A_ROOM_ID_2),
+                )
+            )
+            spaceService.emitSpaceFilters(
+                listOf(
+                    SpaceServiceFilter(
+                        spaceRoom = aSpaceRoom(roomId = A_ROOM_ID_3),
+                        level = 0,
+                        descendants = listOf(A_ROOM_ID_2),
+                    )
+                )
+            )
+            val state = consumeItemsUntilPredicate { state ->
+                state.contentState is RoomListContentState.Rooms && state.contentAsRooms().summaries.size == 2
+            }.last()
+            assertThat(state.contentAsRooms().summaries.map { it.roomId }).containsExactly(A_ROOM_ID, A_ROOM_ID_2)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `present - rooms of a space are listed once its filter is selected, even when the setting is on`() = runTest {
+        val roomList = FakeDynamicRoomList(
+            loadingState = MutableStateFlow(RoomList.LoadingState.Loaded(2))
+        )
+        val spaceService = FakeSpaceService()
+        val matrixClient = FakeMatrixClient(
+            roomListService = FakeRoomListService(createRoomListLambda = { roomList }),
+            spaceService = spaceService,
+        )
+        val spaceFilter = SpaceServiceFilter(
+            spaceRoom = aSpaceRoom(roomId = A_ROOM_ID_3),
+            level = 0,
+            descendants = listOf(A_ROOM_ID_2),
+        )
+        val selection = MutableStateFlow<SpaceServiceFilter?>(null)
+        val presenter = createRoomListPresenter(
+            client = matrixClient,
+            appPreferencesStore = InMemoryAppPreferencesStore(hideSpaceRooms = true),
+            spaceFiltersPresenter = Presenter {
+                val selected by selection.collectAsState()
+                selected?.let { SpaceFiltersState.Selected(selectedFilter = it, eventSink = {}) }
+                    ?: SpaceFiltersState.Unselected(eventSink = {})
+            },
+        )
+        presenter.test {
+            skipItems(1)
+            roomList.summaries.emit(
+                listOf(
+                    aRoomSummary(roomId = A_ROOM_ID),
+                    aRoomSummary(roomId = A_ROOM_ID_2),
+                )
+            )
+            spaceService.emitSpaceFilters(listOf(spaceFilter))
+            consumeItemsUntilPredicate { state ->
+                state.contentState is RoomListContentState.Rooms && state.contentAsRooms().summaries.size == 1
+            }
+            selection.emit(spaceFilter)
+            val state = consumeItemsUntilPredicate { state ->
+                state.contentAsRooms().summaries.any { it.roomId == A_ROOM_ID_2 }
+            }.last()
+            assertThat(state.contentAsRooms().summaries.map { it.roomId }).contains(A_ROOM_ID_2)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -833,6 +962,7 @@ class RoomListPresenterTest {
         seenInvitesStore: SeenInvitesStore = InMemorySeenInvitesStore(),
         announcementService: AnnouncementService = FakeAnnouncementService(),
         featureFlagService: FeatureFlagService = FakeFeatureFlagService(),
+        appPreferencesStore: AppPreferencesStore = InMemoryAppPreferencesStore(),
         markRoomAsRead: MarkRoomAsRead? = null,
         sessionStore: SessionStore = InMemorySessionStore(),
         appPreferencesStore: AppPreferencesStore = InMemoryAppPreferencesStore(),

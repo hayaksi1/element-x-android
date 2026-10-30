@@ -97,6 +97,10 @@ class PreferencesRootPresenter(
             appPreferencesStore.getThemeFlow().mapToTheme(isBlackThemeAllowed)
         }.collectAsState(initial = Theme.System)
 
+        val hideSpaceRooms by remember {
+            appPreferencesStore.hideSpaceRoomsFlow()
+        }.collectAsState(initial = false)
+
         val otherSessions by remember {
             sessionStore.sessionsFlow()
                 .map { list -> list.filter { it.userId != matrixClient.sessionId.value } }
@@ -162,6 +166,9 @@ class PreferencesRootPresenter(
                 is PreferencesRootEvent.SetMarkdownEnabled -> sessionCoroutineScope.launch {
                     sessionPreferencesStore.setMarkdownEnabled(event.enabled)
                 }
+                is PreferencesRootEvent.SetHideSpaceRooms -> sessionCoroutineScope.launch {
+                    appPreferencesStore.setHideSpaceRooms(event.hide)
+                }
             }
         }
 
@@ -172,6 +179,7 @@ class PreferencesRootPresenter(
             theme = themeOption,
             availableThemeOptions = availableThemeOptions,
             isMarkdownEnabled = isMarkdownEnabled,
+            hideSpaceRooms = hideSpaceRooms,
             version = remember { versionFormatter.get() },
             isMultiAccountEnabled = isMultiAccountEnabled,
             isOtherAccountsSectionExpanded = isOtherAccountsSectionExpanded,

@@ -237,6 +237,18 @@ private fun AppSettingsSection(
             onClick = { state.eventSink(PreferencesRootEvent.SetMarkdownEnabled(!state.isMarkdownEnabled)) },
         )
         ListItem(
+            content = {
+                Text(text = stringResource(id = R.string.screen_advanced_settings_hide_space_rooms_title))
+            },
+            supportingContent = {
+                Text(text = stringResource(id = R.string.screen_advanced_settings_hide_space_rooms_description))
+            },
+            trailingContent = ListItemContent.Switch(
+                checked = state.hideSpaceRooms,
+            ),
+            onClick = { state.eventSink(PreferencesRootEvent.SetHideSpaceRooms(!state.hideSpaceRooms)) }
+        )
+        ListItem(
             content = { Text(stringResource(id = CommonStrings.common_media_upload_quality)) },
             leadingContent = ListItemContent.Icon(IconSource.Vector(CompoundIcons.Image())),
             onClick = onOpenMediaSettings,

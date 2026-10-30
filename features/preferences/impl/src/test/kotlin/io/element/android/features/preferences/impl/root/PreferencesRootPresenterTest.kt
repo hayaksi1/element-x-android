@@ -155,6 +155,26 @@ class PreferencesRootPresenterTest {
     }
 
     @Test
+    fun `present - hide space rooms off on`() = runTest {
+        createPreferencesRootPresenter().test {
+            // Skip until the initial data is loaded
+            skipItems(1)
+
+            with(awaitItem()) {
+                assertThat(hideSpaceRooms).isFalse()
+                eventSink(PreferencesRootEvent.SetHideSpaceRooms(true))
+            }
+            with(awaitItem()) {
+                assertThat(hideSpaceRooms).isTrue()
+                eventSink(PreferencesRootEvent.SetHideSpaceRooms(false))
+            }
+            with(awaitItem()) {
+                assertThat(hideSpaceRooms).isFalse()
+            }
+        }
+    }
+
+    @Test
     fun `present - black theme option shown when feature flag enabled`() = runTest {
         createPreferencesRootPresenter(
             featureFlagService = FakeFeatureFlagService().apply {

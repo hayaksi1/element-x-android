@@ -273,6 +273,34 @@ class PreferencesRootViewTest : RobolectricTest() {
     }
 
     @Test
+    fun `clicking on Hide rooms in Spaces emits the expected event`() = runAndroidComposeUiTest {
+        val eventsRecorder = EventsRecorder<PreferencesRootEvent>()
+        setView(
+            aPreferencesRootState(
+                hideSpaceRooms = false,
+                eventSink = eventsRecorder,
+            ),
+        )
+        val text = activity!!.getString(R.string.screen_advanced_settings_hide_space_rooms_title)
+        onNode(hasText(text) and hasClickAction()).performScrollTo().performClick()
+        eventsRecorder.assertSingle(PreferencesRootEvent.SetHideSpaceRooms(true))
+    }
+
+    @Test
+    fun `clicking on Hide rooms in Spaces when it is on emits an event to show them again`() = runAndroidComposeUiTest {
+        val eventsRecorder = EventsRecorder<PreferencesRootEvent>()
+        setView(
+            aPreferencesRootState(
+                hideSpaceRooms = true,
+                eventSink = eventsRecorder,
+            ),
+        )
+        val text = activity!!.getString(R.string.screen_advanced_settings_hide_space_rooms_title)
+        onNode(hasText(text) and hasClickAction()).performScrollTo().performClick()
+        eventsRecorder.assertSingle(PreferencesRootEvent.SetHideSpaceRooms(false))
+    }
+
+    @Test
     fun `click on Media upload quality invokes the expected callback`() = runAndroidComposeUiTest {
         val eventsRecorder = EventsRecorder<PreferencesRootEvent>(expectEvents = false)
         ensureCalledOnce { callback ->

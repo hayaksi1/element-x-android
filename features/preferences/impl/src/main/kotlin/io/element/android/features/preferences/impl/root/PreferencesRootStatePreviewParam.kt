@@ -82,6 +82,7 @@ open class PreferencesRootStatePreviewParam : PreviewParameterProvider<Preferenc
                 },
             ),
             aPreferencesRootState(isMarkdownEnabled = false),
+            aPreferencesRootState(hideSpaceRooms = true),
         )
 }
 
@@ -94,6 +95,7 @@ fun aPreferencesRootState(
     theme: ThemeOption = ThemeOption.System,
     availableThemeOptions: List<ThemeOption> = ThemeOption.entries,
     isMarkdownEnabled: Boolean = true,
+    hideSpaceRooms: Boolean = false,
     otherSessions: List<OtherAccount> = emptyList(),
     showAnalyticsSettings: Boolean = false,
     showDeveloperSettings: Boolean = false,
@@ -110,6 +112,7 @@ fun aPreferencesRootState(
     theme = theme,
     availableThemeOptions = availableThemeOptions.toImmutableList(),
     isMarkdownEnabled = isMarkdownEnabled,
+    hideSpaceRooms = hideSpaceRooms,
     isOtherAccountsSectionExpanded = isOtherAccountsSectionExpanded,
     otherSessions = otherSessions.toImmutableList(),
     showAnalyticsSettings = showAnalyticsSettings,

@@ -29,6 +29,7 @@ import io.element.android.features.announcement.api.AnnouncementService
 import io.element.android.features.home.impl.datasource.RoomListDataSource
 import io.element.android.features.home.impl.filters.RoomListFiltersState
 import io.element.android.features.home.impl.filters.into
+import io.element.android.features.home.impl.model.RoomListRoomSummary
 import io.element.android.features.home.impl.search.GlobalSearchState
 import io.element.android.features.home.impl.search.RoomListSearchEvent
 import io.element.android.features.home.impl.search.RoomListSearchState
@@ -44,6 +45,7 @@ import io.element.android.features.leaveroom.api.LeaveRoomState
 import io.element.android.features.preferences.impl.tasks.MarkRoomAsRead
 import io.element.android.libraries.architecture.AsyncData
 import io.element.android.libraries.architecture.Presenter
+import io.element.android.libraries.architecture.map
 import io.element.android.libraries.featureflag.api.FeatureFlagService
 import io.element.android.libraries.featureflag.api.FeatureFlags
 import io.element.android.libraries.featureflag.api.ShowAllActivityInRoomListFeature
@@ -62,6 +64,9 @@ import io.element.android.libraries.sessionstorage.api.SessionStore
 import io.element.android.services.analytics.api.AnalyticsService
 import io.element.android.services.analytics.api.watchers.AnalyticsColdStartWatcher
 import io.element.android.services.analyticsproviders.api.trackers.captureInteraction
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.ImmutableSet
+import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toImmutableSet
 import kotlinx.coroutines.CoroutineScope
@@ -195,6 +200,26 @@ class RoomListPresenter(
             roomListDataSource.updateFilter(allFilters)
         }
 
+        val hideSpaceRooms by remember {
+            appPreferencesStore.hideSpaceRoomsFlow()
+        }.collectAsState(initial = false)
+        val spaceDescendants by remember {
+            client.spaceService.spaceFiltersFlow.map { filters ->
+                filters.flatMapTo(mutableSetOf()) { filter -> filter.descendants }
+            }
+        }.collectAsState(initial = emptySet())
+        // A room is only hidden while the whole room list is shown: picking a space filter is an explicit request to see its rooms.
+        val hasSelectedSpaceFilter = spaceFiltersState.selectedFilter() != null
+        val hiddenRoomIds by remember(hasSelectedSpaceFilter) {
+            derivedStateOf {
+                if (hideSpaceRooms && !hasSelectedSpaceFilter) {
+                    spaceDescendants.toImmutableSet()
+                } else {
+                    persistentSetOf()
+                }
+            }
+        }
+
         val canReportRoom by produceState(false) { value = client.canReportRoom() }
         val showUnreadCount by produceState(false) {
             featureFlagService.isFeatureEnabledFlow(FeatureFlags.UnreadIndicatorCount).collect { value = it }
@@ -210,6 +235,7 @@ class RoomListPresenter(
             showUnreadCount,
             showAllActivity,
             activityVisibility,
+            hiddenRoomIds,
         )
 
         return RoomListState(
@@ -271,9 +297,19 @@ class RoomListPresenter(
         showUnreadCount: Boolean,
         showAllActivity: Boolean,
         activityVisibility: RoomListActivityVisibility,
+        hiddenRoomIds: ImmutableSet<RoomId>,
     ): RoomListContentState {
-        val roomSummaries by produceState(initialValue = AsyncData.Loading()) {
+        val allRoomSummaries by produceState<AsyncData<ImmutableList<RoomListRoomSummary>>>(initialValue = AsyncData.Loading()) {
             roomListDataSource.roomSummariesFlow.collect { value = AsyncData.Success(it) }
+        }
+        val roomSummaries by remember(hiddenRoomIds) {
+            derivedStateOf {
+                if (hiddenRoomIds.isEmpty()) {
+                    allRoomSummaries
+                } else {
+                    allRoomSummaries.map { summaries -> summaries.filterNot { it.roomId in hiddenRoomIds }.toImmutableList() }
+                }
+            }
         }
         val loadingState by roomListDataSource.loadingState.collectAsState()
         val showEmpty by remember {
