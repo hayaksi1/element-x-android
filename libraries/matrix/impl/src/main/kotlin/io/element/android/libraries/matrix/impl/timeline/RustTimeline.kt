@@ -29,6 +29,7 @@ import io.element.android.libraries.matrix.api.timeline.MsgType
 import io.element.android.libraries.matrix.api.timeline.ReceiptType
 import io.element.android.libraries.matrix.api.timeline.Timeline
 import io.element.android.libraries.matrix.api.timeline.TimelineException
+import io.element.android.libraries.matrix.api.timeline.item.SendTarget
 import io.element.android.libraries.matrix.api.timeline.item.event.EventOrTransactionId
 import io.element.android.libraries.matrix.api.timeline.item.event.InReplyTo
 import io.element.android.libraries.matrix.impl.media.GalleryMediaUploadHandlerImpl
@@ -75,6 +76,7 @@ import org.matrix.rustcomponents.sdk.PollData
 import org.matrix.rustcomponents.sdk.SendAttachmentJoinHandle
 import org.matrix.rustcomponents.sdk.UploadParameters
 import org.matrix.rustcomponents.sdk.UploadSource
+import org.matrix.rustcomponents.sdk.createCaptionEdit
 import org.matrix.rustcomponents.sdk.use
 import timber.log.Timber
 import uniffi.matrix_sdk.PaginationStatus
@@ -341,7 +343,7 @@ class RustTimeline(
         formattedCaption: String?,
     ): Result<Unit> = withContext(dispatcher) {
         runCatchingExceptions<Unit> {
-            val editedContent = EditedContent.MediaCaption(
+            val editedContent = createCaptionEdit(
                 caption = caption,
                 formattedCaption = formattedCaption?.let {
                     FormattedBody(body = it, format = MessageFormat.Html)
@@ -365,7 +367,7 @@ class RustTimeline(
         fromNotification: Boolean,
         msgType: MsgType,
     ): Result<Unit> = withContext(dispatcher) {
-        runCatchingExceptions {
+        runCatchingExceptions<Unit> {
             val msg = MessageEventContent.from(
                 body = body,
                 htmlBody = htmlBody,
@@ -488,9 +490,9 @@ class RustTimeline(
         }
     }
 
-    override suspend fun forwardEvent(eventId: EventId, roomIds: List<RoomId>): Result<Unit> = withContext(dispatcher) {
+    override suspend fun forwardEvents(eventIds: List<EventId>, roomIds: List<RoomId>): Result<Unit> = withContext(dispatcher) {
         runCatchingExceptions {
-            roomContentForwarder.forward(fromTimeline = inner, eventId = eventId, toRoomIds = roomIds)
+            roomContentForwarder.forward(fromTimeline = inner, eventIds = eventIds, toRoomIds = roomIds)
         }.onFailure {
             Timber.tag(loggerTag).e(it)
         }
@@ -693,6 +695,18 @@ class RustTimeline(
     override suspend fun getLatestEventId(): Result<EventId?> = withContext(dispatcher) {
         runCatchingExceptions {
             inner.latestEventId()?.let(::EventId)
+        }
+    }
+
+    override suspend fun retrySend(eventOrTransactionId: EventOrTransactionId, sendTarget: SendTarget): Result<Boolean> = withContext(dispatcher) {
+        runCatchingExceptions {
+            inner.retrySend(eventOrTransactionId.toRustEventOrTransactionId(), sendTarget.map())
+        }
+    }
+
+    override suspend fun abortSend(eventOrTransactionId: EventOrTransactionId, sendTarget: SendTarget): Result<Boolean> = withContext(dispatcher) {
+        runCatchingExceptions {
+            inner.abortSend(eventOrTransactionId.toRustEventOrTransactionId(), sendTarget.map())
         }
     }
 

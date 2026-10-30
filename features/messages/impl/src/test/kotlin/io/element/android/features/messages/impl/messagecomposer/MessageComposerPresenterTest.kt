@@ -21,6 +21,7 @@ import im.vector.app.features.analytics.plan.Composer
 import im.vector.app.features.analytics.plan.Interaction
 import io.element.android.features.location.api.LocationService
 import io.element.android.features.location.test.FakeLocationService
+import io.element.android.features.messages.api.timeline.TextPillificator
 import io.element.android.features.messages.impl.FakeMessagesNavigator
 import io.element.android.features.messages.impl.MessagesNavigator
 import io.element.android.features.messages.impl.attachments.Attachment
@@ -30,8 +31,7 @@ import io.element.android.features.messages.impl.draft.FakeComposerDraftService
 import io.element.android.features.messages.impl.messagecomposer.suggestions.SuggestionsProcessor
 import io.element.android.features.messages.impl.timeline.TimelineController
 import io.element.android.features.messages.impl.utils.FakeMentionSpanFormatter
-import io.element.android.features.messages.impl.utils.FakeTextPillificationHelper
-import io.element.android.features.messages.impl.utils.TextPillificationHelper
+import io.element.android.features.messages.test.timeline.FakeTextPillificator
 import io.element.android.libraries.architecture.AsyncAction
 import io.element.android.libraries.core.mimetype.MimeTypes
 import io.element.android.libraries.designsystem.utils.snackbar.SnackbarDispatcher
@@ -115,6 +115,7 @@ import io.element.android.tests.testutils.lambda.lambdaRecorder
 import io.element.android.tests.testutils.lambda.value
 import io.element.android.tests.testutils.robolectric.RobolectricTest
 import io.element.android.tests.testutils.test
+import io.element.android.tests.testutils.testCoroutineDispatchers
 import io.element.android.tests.testutils.waitForPredicate
 import io.mockk.mockk
 import kotlinx.collections.immutable.ImmutableList
@@ -128,7 +129,6 @@ import org.junit.Test
 import uniffi.wysiwyg_composer.MentionsState
 import java.io.File
 
-@Suppress("LargeClass")
 class MessageComposerPresenterTest : RobolectricTest() {
     @get:Rule
     val warmUpRule = WarmUpRule()
@@ -1146,7 +1146,8 @@ class MessageComposerPresenterTest : RobolectricTest() {
             baseRoom = FakeBaseRoom(
                 roomPermissions = FakeRoomPermissions(
                     canTriggerRoomNotification = true,
-                )
+                ),
+                updateMembersResult = {},
             ),
             typingNoticeResult = { Result.success(Unit) }
         ).apply {
@@ -1194,6 +1195,55 @@ class MessageComposerPresenterTest : RobolectricTest() {
     }
 
     @Test
+    fun `present - mention suggestions refresh the room members`() = runTest {
+        val currentUser = aRoomMember(userId = A_USER_ID, membership = RoomMembershipState.JOIN)
+        val bob = aRoomMember(userId = A_USER_ID_2, membership = RoomMembershipState.JOIN)
+        val updateMembersResult = lambdaRecorder<Unit> { }
+        val room = FakeJoinedRoom(
+            baseRoom = FakeBaseRoom(
+                roomPermissions = FakeRoomPermissions(
+                    canTriggerRoomNotification = true,
+                ),
+                updateMembersResult = updateMembersResult,
+            ),
+            typingNoticeResult = { Result.success(Unit) }
+        ).apply {
+            givenRoomMembersState(
+                RoomMembersState.Ready(
+                    persistentListOf(currentUser, bob),
+                )
+            )
+            givenRoomInfo(aRoomInfo(isDirect = false))
+        }
+        val presenter = createPresenter(
+            room = room,
+            slashCommandService = FakeSlashCommandService(
+                getSuggestionsResult = { _, _ -> emptyList() },
+            ),
+        )
+        presenter.test {
+            val initialState = awaitItem()
+            initialState.eventSink(MessageComposerEvent.SuggestionReceived(Suggestion(0, 0, SuggestionType.Mention, "")))
+            skipItems(1)
+            assertThat(awaitItem().suggestions).containsExactly(ResolvedSuggestion.AtRoom, ResolvedSuggestion.Member(bob))
+            updateMembersResult.assertions().isCalledOnce()
+
+            // Typing after the `@` must not refresh the members again
+            initialState.eventSink(MessageComposerEvent.SuggestionReceived(Suggestion(0, 1, SuggestionType.Mention, "b")))
+            initialState.eventSink(MessageComposerEvent.SuggestionReceived(Suggestion(0, 2, SuggestionType.Mention, "bo")))
+            advanceUntilIdle()
+            updateMembersResult.assertions().isCalledOnce()
+
+            // Starting a new mention refreshes them again
+            initialState.eventSink(MessageComposerEvent.SuggestionReceived(null))
+            initialState.eventSink(MessageComposerEvent.SuggestionReceived(Suggestion(0, 0, SuggestionType.Mention, "")))
+            advanceUntilIdle()
+            updateMembersResult.assertions().isCalledExactly(2)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `present - room mention suggestions no permission`() = runTest {
         val currentUser = aRoomMember(userId = A_USER_ID, membership = RoomMembershipState.JOIN)
         val invitedUser = aRoomMember(userId = A_USER_ID_3, membership = RoomMembershipState.INVITE)
@@ -1203,7 +1253,8 @@ class MessageComposerPresenterTest : RobolectricTest() {
             baseRoom = FakeBaseRoom(
                 roomPermissions = FakeRoomPermissions(
                     canTriggerRoomNotification = false,
-                )
+                ),
+                updateMembersResult = {},
             ),
             typingNoticeResult = { Result.success(Unit) }
         ).apply {
@@ -1234,6 +1285,7 @@ class MessageComposerPresenterTest : RobolectricTest() {
         val room = FakeJoinedRoom(
             baseRoom = FakeBaseRoom(
                 roomPermissions = FakeRoomPermissions(canTriggerRoomNotification = true),
+                updateMembersResult = {},
             ),
             typingNoticeResult = { Result.success(Unit) }
         ).apply {
@@ -1708,7 +1760,7 @@ class MessageComposerPresenterTest : RobolectricTest() {
             mentionSpanFormatter = FakeMentionSpanFormatter(),
             mentionSpanTheme = MentionSpanTheme(A_USER_ID)
         ),
-        textPillificationHelper: TextPillificationHelper = FakeTextPillificationHelper(),
+        textPillificator: TextPillificator = FakeTextPillificator(),
         isRichTextEditorEnabled: Boolean = true,
         draftService: ComposerDraftService = FakeComposerDraftService(),
         mediaOptimizationConfigProvider: FakeMediaOptimizationConfigProvider = FakeMediaOptimizationConfigProvider(),
@@ -1747,10 +1799,15 @@ class MessageComposerPresenterTest : RobolectricTest() {
         permissionsPresenterFactory = FakePermissionsPresenterFactory(permissionPresenter),
         permalinkParser = permalinkParser,
         permalinkBuilder = permalinkBuilder,
-        timelineController = TimelineController(room, timeline),
+        timelineController = TimelineController(
+            room = room,
+            liveTimeline = timeline,
+            roomCoroutineScope = backgroundScope,
+            dispatchers = testCoroutineDispatchers(),
+        ),
         draftService = draftService,
         mentionSpanProvider = mentionSpanProvider,
-        pillificationHelper = textPillificationHelper,
+        pillificationHelper = textPillificator,
         suggestionsProcessor = SuggestionsProcessor(slashCommandService = slashCommandService),
         mediaOptimizationConfigProvider = mediaOptimizationConfigProvider,
         notificationConversationService = notificationConversationService,
@@ -1758,6 +1815,7 @@ class MessageComposerPresenterTest : RobolectricTest() {
         featureFlagService = featureFlagService,
         contentScannerService = { _, _ -> },
         contentValidationCache = InMemoryEventContentValidationCache(),
+        dispatchers = testCoroutineDispatchers(useUnconfinedTestDispatcher = true),
     ).apply {
         isTesting = true
         showTextFormatting = isRichTextEditorEnabled
