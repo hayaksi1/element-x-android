@@ -35,6 +35,7 @@ class FakeFfiThreadListService(
 
     override fun subscribeToPaginationStateUpdates(listener: ThreadListPaginationStateListener): TaskHandle {
         paginationStateListener = listener
+        listener.onUpdate(paginationState())
         return subscribeToPaginationStateUpdates.invoke(listener)
     }
 
