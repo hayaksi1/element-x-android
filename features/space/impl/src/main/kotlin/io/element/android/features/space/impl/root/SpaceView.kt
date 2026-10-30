@@ -20,9 +20,15 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -78,6 +84,7 @@ import io.element.android.libraries.designsystem.theme.components.IconButton
 import io.element.android.libraries.designsystem.theme.components.IconSource
 import io.element.android.libraries.designsystem.theme.components.OutlinedButton
 import io.element.android.libraries.designsystem.theme.components.Scaffold
+import io.element.android.libraries.designsystem.theme.components.SearchBar
 import io.element.android.libraries.designsystem.theme.components.Text
 import io.element.android.libraries.designsystem.theme.components.TextButton
 import io.element.android.libraries.designsystem.theme.components.TopAppBar
@@ -113,6 +120,8 @@ fun SpaceView(
     BackHandler(enabled = !handledBack) {
         if (state.isManageMode) {
             state.eventSink(SpaceEvent.ExitManageMode)
+        } else if (state.isSearchActive) {
+            state.eventSink(SpaceEvent.OnSearchActiveChanged(false))
         } else {
             handledBack = true
             onBackClick()
@@ -136,7 +145,7 @@ fun SpaceView(
                     )
                 }
                 AnimatedVisibility(
-                    visible = !state.isManageMode,
+                    visible = !state.isManageMode && !state.isSearchActive,
                     enter = fadeIn(),
                     exit = fadeOut()
                 ) {
@@ -153,6 +162,7 @@ fun SpaceView(
                         onManageRoomsClick = { state.eventSink(SpaceEvent.EnterManageMode) },
                         onAddRoomClick = onAddRoomClick,
                         onCreateRoomClick = onCreateRoomClick,
+                        onSearchClick = { state.eventSink(SpaceEvent.OnSearchActiveChanged(true)) },
                     )
                 }
             }
@@ -160,23 +170,32 @@ fun SpaceView(
         contentWindowInsets = scaffoldScrollableContentInsets,
         content = { padding ->
             Box(
-                modifier = Modifier.padding(padding)
+                modifier = Modifier
+                    .padding(padding)
+                    .consumeWindowInsets(padding)
             ) {
-                SpaceViewContent(
-                    state = state,
-                    onRoomClick = { spaceRoom ->
-                        if (state.isManageMode) {
-                            state.eventSink(SpaceEvent.ToggleRoomSelection(spaceRoom.roomId))
-                        } else {
-                            onRoomClick(spaceRoom)
-                        }
-                    },
-                    onTopicClick = { topic ->
-                        state.eventSink(SpaceEvent.ShowTopicViewer(topic))
-                    },
-                    onCreateRoomClick = onCreateRoomClick,
-                    onAddRoomClick = onAddRoomClick,
-                )
+                if (state.isSearchActive) {
+                    SpaceSearchBar(
+                        state = state,
+                        onRoomClick = onRoomClick,
+                    )
+                } else {
+                    SpaceViewContent(
+                        state = state,
+                        onRoomClick = { spaceRoom ->
+                            if (state.isManageMode) {
+                                state.eventSink(SpaceEvent.ToggleRoomSelection(spaceRoom.roomId))
+                            } else {
+                                onRoomClick(spaceRoom)
+                            }
+                        },
+                        onTopicClick = { topic ->
+                            state.eventSink(SpaceEvent.ShowTopicViewer(topic))
+                        },
+                        onCreateRoomClick = onCreateRoomClick,
+                        onAddRoomClick = onAddRoomClick,
+                    )
+                }
                 JoinFailuresEffect(
                     hasAnyFailure = state.hasAnyJoinFailures,
                     eventSink = state.eventSink
@@ -292,48 +311,12 @@ private fun SpaceViewContent(
                 items = state.children,
                 key = { _, spaceRoom -> spaceRoom.roomId }
             ) { index, spaceRoom ->
-                val isInvitation = spaceRoom.state == CurrentUserMembership.INVITED
-                val isCurrentlyJoining = state.isJoining(spaceRoom.roomId)
-                val isSelected = state.isSelected(spaceRoom.roomId)
-                val showUnreadIndicator = isInvitation && spaceRoom.roomId !in state.seenSpaceInvites && !state.isManageMode
-                SpaceRoomItemView(
+                SpaceRoomRow(
+                    state = state,
                     spaceRoom = spaceRoom,
-                    showUnreadIndicator = showUnreadIndicator,
-                    hideAvatars = isInvitation && state.hideInvitesAvatar,
-                    onClick = {
-                        onRoomClick(spaceRoom)
-                    },
-                    onLongClick = {
-                        // TODO
-                    },
-                    trailingAction = if (state.isManageMode) {
-                        {
-                            Checkbox(
-                                checked = isSelected,
-                                onCheckedChange = null,
-                            )
-                        }
-                    } else {
-                        spaceRoom.trailingAction(isCurrentlyJoining = isCurrentlyJoining) {
-                            state.eventSink(SpaceEvent.Join(spaceRoom))
-                        }
-                    },
-                    bottomAction = if (state.isManageMode) {
-                        null
-                    } else {
-                        spaceRoom.inviteButtons(
-                            onAcceptClick = {
-                                state.eventSink(SpaceEvent.AcceptInvite(spaceRoom))
-                            },
-                            onDeclineClick = {
-                                state.eventSink(SpaceEvent.DeclineInvite(spaceRoom))
-                            }
-                        )
-                    }
+                    showDivider = index != state.children.lastIndex,
+                    onRoomClick = onRoomClick,
                 )
-                if (index != state.children.lastIndex) {
-                    HorizontalDivider()
-                }
             }
 
             if (state.hasMoreToLoad) {
@@ -342,6 +325,95 @@ private fun SpaceViewContent(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SpaceSearchBar(
+    state: SpaceState,
+    onRoomClick: (spaceRoom: SpaceRoom) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    SearchBar(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(
+                WindowInsets.safeDrawing
+                    .only(WindowInsetsSides.Horizontal)
+                    .asPaddingValues()
+            ),
+        placeHolderTitle = stringResource(CommonStrings.action_search),
+        queryState = state.searchQuery,
+        active = state.isSearchActive,
+        onActiveChange = { state.eventSink(SpaceEvent.OnSearchActiveChanged(it)) },
+        resultState = state.searchResults,
+    ) { children ->
+        LazyColumn(
+            contentPadding = lazyColumnContentPadding,
+        ) {
+            itemsIndexed(
+                items = children,
+                key = { _, spaceRoom -> spaceRoom.roomId }
+            ) { index, spaceRoom ->
+                SpaceRoomRow(
+                    state = state,
+                    spaceRoom = spaceRoom,
+                    showDivider = index != children.lastIndex,
+                    onRoomClick = onRoomClick,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SpaceRoomRow(
+    state: SpaceState,
+    spaceRoom: SpaceRoom,
+    showDivider: Boolean,
+    onRoomClick: (spaceRoom: SpaceRoom) -> Unit,
+) {
+    val isInvitation = spaceRoom.state == CurrentUserMembership.INVITED
+    val isCurrentlyJoining = state.isJoining(spaceRoom.roomId)
+    val isSelected = state.isSelected(spaceRoom.roomId)
+    val showUnreadIndicator = isInvitation && spaceRoom.roomId !in state.seenSpaceInvites && !state.isManageMode
+    SpaceRoomItemView(
+        spaceRoom = spaceRoom,
+        showUnreadIndicator = showUnreadIndicator,
+        hideAvatars = isInvitation && state.hideInvitesAvatar,
+        onClick = {
+            onRoomClick(spaceRoom)
+        },
+        onLongClick = {
+            // TODO
+        },
+        trailingAction = if (state.isManageMode) {
+            {
+                Checkbox(
+                    checked = isSelected,
+                    onCheckedChange = null,
+                )
+            }
+        } else {
+            spaceRoom.trailingAction(isCurrentlyJoining = isCurrentlyJoining) {
+                state.eventSink(SpaceEvent.Join(spaceRoom))
+            }
+        },
+        bottomAction = if (state.isManageMode) {
+            null
+        } else {
+            spaceRoom.inviteButtons(
+                onAcceptClick = {
+                    state.eventSink(SpaceEvent.AcceptInvite(spaceRoom))
+                },
+                onDeclineClick = {
+                    state.eventSink(SpaceEvent.DeclineInvite(spaceRoom))
+                }
+            )
+        }
+    )
+    if (showDivider) {
+        HorizontalDivider()
     }
 }
 
@@ -414,6 +486,7 @@ private fun SpaceViewTopBar(
     onManageRoomsClick: () -> Unit,
     onAddRoomClick: () -> Unit,
     onCreateRoomClick: () -> Unit,
+    onSearchClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     TopAppBar(
@@ -433,6 +506,12 @@ private fun SpaceViewTopBar(
             )
         },
         actions = {
+            IconButton(onClick = onSearchClick) {
+                Icon(
+                    imageVector = CompoundIcons.Search(),
+                    contentDescription = stringResource(CommonStrings.action_search),
+                )
+            }
             var showMenu by remember { mutableStateOf(false) }
             IconButton(
                 onClick = { showMenu = !showMenu }
