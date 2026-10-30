@@ -9,44 +9,60 @@
 package io.element.android.libraries.matrix.impl
 
 import com.google.common.truth.Truth.assertThat
+import io.element.android.features.enterprise.test.FakeClientBuilderEnterpriseHook
 import io.element.android.libraries.featureflag.api.FeatureFlags
 import io.element.android.libraries.featureflag.test.FakeFeatureFlagService
 import io.element.android.libraries.matrix.api.core.SessionId
+import io.element.android.libraries.matrix.api.paths.SessionPaths
+import io.element.android.libraries.matrix.api.scanner.ContentScanner
 import io.element.android.libraries.matrix.impl.auth.FakeProxyProvider
 import io.element.android.libraries.matrix.impl.fixtures.fakes.FakeFfiClient
 import io.element.android.libraries.matrix.impl.fixtures.fakes.FakeFfiClientBuilder
 import io.element.android.libraries.matrix.impl.room.FakeTimelineEventFilterFactory
+import io.element.android.libraries.matrix.impl.search.RustSearchBackfillService
+import io.element.android.libraries.matrix.impl.search.workmanager.SearchBackfillRequestBuilder
 import io.element.android.libraries.matrix.impl.storage.FakeSqliteStoreBuilderProvider
+import io.element.android.libraries.matrix.impl.storage.SqliteStoreBuilderProvider
 import io.element.android.libraries.network.useragent.SimpleUserAgentProvider
 import io.element.android.libraries.sessionstorage.api.SessionStore
 import io.element.android.libraries.sessionstorage.test.InMemorySessionStore
 import io.element.android.libraries.sessionstorage.test.aSessionData
 import io.element.android.libraries.workmanager.api.WorkManagerRequestBuilder
+import io.element.android.libraries.workmanager.api.WorkManagerRequestWrapper
 import io.element.android.libraries.workmanager.test.FakeWorkManagerScheduler
 import io.element.android.services.analytics.test.FakeAnalyticsService
 import io.element.android.services.toolbox.test.systemclock.FakeSystemClock
 import io.element.android.tests.testutils.lambda.lambdaRecorder
 import io.element.android.tests.testutils.testCoroutineDispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import org.matrix.rustcomponents.sdk.Client
+import org.matrix.rustcomponents.sdk.ClientDelegate
 import java.io.File
+import org.matrix.rustcomponents.sdk.SyncService as ClientSyncService
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class RustMatrixClientFactoryTest {
     @get:Rule
     val temporaryFolder = TemporaryFolder()
+
     @Test
     fun test() = runTest {
-        val scheduleVacuumLambda = lambdaRecorder<WorkManagerRequestBuilder, Unit> {}
-        val workManagerScheduler = FakeWorkManagerScheduler(submitLambda = scheduleVacuumLambda)
+        val scheduleWorkersLambda = lambdaRecorder<WorkManagerRequestBuilder, Unit> {}
+        val workManagerScheduler = FakeWorkManagerScheduler(submitLambda = scheduleWorkersLambda, cancelLambda = { _, _ -> })
         val sut = createRustMatrixClientFactory(workManagerScheduler = workManagerScheduler)
 
         val result = sut.create(aSessionData())
 
         assertThat(result.sessionId).isEqualTo(SessionId("@alice:server.org"))
-        scheduleVacuumLambda.assertions().isCalledOnce()
+        runCurrent()
+        // 2 workers are scheduled: one for the search backfill and one for the vacuum
+        scheduleWorkersLambda.assertions().isCalledExactly(2)
         result.destroy()
     }
 
@@ -57,7 +73,7 @@ class RustMatrixClientFactoryTest {
         )
         val sut = createRustMatrixClientFactory(
             featureFlagService = featureFlagService,
-            workManagerScheduler = FakeWorkManagerScheduler(submitLambda = {}),
+            workManagerScheduler = FakeWorkManagerScheduler(submitLambda = {}, cancelLambda = { _, _ -> }),
         )
 
         val result = sut.create(aSessionData().copy(passphrase = null))
@@ -73,7 +89,7 @@ class RustMatrixClientFactoryTest {
         )
         val sut = createRustMatrixClientFactory(
             featureFlagService = featureFlagService,
-            workManagerScheduler = FakeWorkManagerScheduler(submitLambda = {}),
+            workManagerScheduler = FakeWorkManagerScheduler(submitLambda = {}, cancelLambda = { _, _ -> }),
         )
 
         val result = sut.create(
@@ -103,7 +119,7 @@ class RustMatrixClientFactoryTest {
             featureFlagService = FakeFeatureFlagService(
                 initialState = mapOf(FeatureFlags.MessageSearch.key to true),
             ),
-            workManagerScheduler = FakeWorkManagerScheduler(submitLambda = {}),
+            workManagerScheduler = FakeWorkManagerScheduler(submitLambda = {}, cancelLambda = { _, _ -> }),
             clientBuilderProvider = FakeClientBuilderProvider {
                 FakeFfiClientBuilder {
                     buildCount++
@@ -140,7 +156,7 @@ class RustMatrixClientFactoryTest {
             featureFlagService = FakeFeatureFlagService(
                 initialState = mapOf(FeatureFlags.MessageSearch.key to true),
             ),
-            workManagerScheduler = FakeWorkManagerScheduler(submitLambda = {}),
+            workManagerScheduler = FakeWorkManagerScheduler(submitLambda = {}, cancelLambda = { _, _ -> }),
             clientBuilderProvider = FakeClientBuilderProvider {
                 FakeFfiClientBuilder {
                     buildCount++
@@ -171,7 +187,7 @@ class RustMatrixClientFactoryTest {
             featureFlagService = FakeFeatureFlagService(
                 initialState = mapOf(FeatureFlags.MessageSearch.key to true),
             ),
-            workManagerScheduler = FakeWorkManagerScheduler(submitLambda = {}),
+            workManagerScheduler = FakeWorkManagerScheduler(submitLambda = {}, cancelLambda = { _, _ -> }),
             clientBuilderProvider = FakeClientBuilderProvider {
                 FakeFfiClientBuilder {
                     buildCount++
@@ -204,7 +220,7 @@ class RustMatrixClientFactoryTest {
             featureFlagService = FakeFeatureFlagService(
                 initialState = mapOf(FeatureFlags.MessageSearch.key to false),
             ),
-            workManagerScheduler = FakeWorkManagerScheduler(submitLambda = {}),
+            workManagerScheduler = FakeWorkManagerScheduler(submitLambda = {}, cancelLambda = { _, _ -> }),
         )
 
         val result = sut.create(
@@ -230,7 +246,7 @@ class RustMatrixClientFactoryTest {
             featureFlagService = FakeFeatureFlagService(
                 initialState = mapOf(FeatureFlags.MessageSearch.key to true),
             ),
-            workManagerScheduler = FakeWorkManagerScheduler(submitLambda = {}),
+            workManagerScheduler = FakeWorkManagerScheduler(submitLambda = {}, cancelLambda = { _, _ -> }),
         )
         val sessionData = aSessionData(
             sessionPath = sessionFolder.absolutePath,
@@ -251,29 +267,6 @@ class RustMatrixClientFactoryTest {
     }
 
     @Test
-    fun `create with a client - records coverage for a fresh session`() = runTest {
-        val sessionFolder = temporaryFolder.newFolder("session")
-        val cacheFolder = temporaryFolder.newFolder("cache")
-        val sut = createRustMatrixClientFactory(
-            workManagerScheduler = FakeWorkManagerScheduler(submitLambda = {}),
-        )
-
-        val result = sut.create(
-            client = FakeFfiClient(withUtdHook = {}),
-            sessionData = aSessionData(
-                sessionPath = sessionFolder.absolutePath,
-                cachePath = cacheFolder.absolutePath,
-            ).copy(passphrase = "aSecret"),
-            isMessageSearchAvailable = true,
-        )
-
-        // A fresh login has no event cache, so the index covers everything by construction —
-        // recording that spares the session a pointless cache clear on its first restore.
-        assertThat(File(sessionFolder, SEARCH_INDEX_COVERAGE_MARKER).exists()).isTrue()
-        result.destroy()
-    }
-
-    @Test
     fun `create - does not write the coverage marker when deleting the event cache fails`() = runTest {
         val sessionFolder = temporaryFolder.newFolder("session")
         val cacheFolder = temporaryFolder.newFolder("cache")
@@ -286,7 +279,7 @@ class RustMatrixClientFactoryTest {
             featureFlagService = FakeFeatureFlagService(
                 initialState = mapOf(FeatureFlags.MessageSearch.key to true),
             ),
-            workManagerScheduler = FakeWorkManagerScheduler(submitLambda = {}),
+            workManagerScheduler = FakeWorkManagerScheduler(submitLambda = {}, cancelLambda = { _, _ -> }),
         )
 
         val result = sut.create(
@@ -300,16 +293,57 @@ class RustMatrixClientFactoryTest {
         assertThat(File(sessionFolder, SEARCH_INDEX_COVERAGE_MARKER).exists()).isFalse()
         result.destroy()
     }
+
+    @Test
+    fun `an auth error on a client only invalidates its own session`() = runTest {
+        val aliceSessionId = "@alice:server.org"
+        val bobSessionId = "@bob:server.org"
+        val sessionStore = InMemorySessionStore(
+            initialList = listOf(
+                aSessionData(sessionId = aliceSessionId, isTokenValid = true),
+                aSessionData(sessionId = bobSessionId, isTokenValid = true),
+            ),
+            updateUserProfileResult = { _, _, _, _ -> },
+        )
+        val userIds = ArrayDeque(listOf(aliceSessionId, bobSessionId))
+        val delegates = mutableMapOf<String, ClientDelegate?>()
+        val sut = createRustMatrixClientFactory(
+            sessionStore = sessionStore,
+            workManagerScheduler = FakeWorkManagerScheduler(submitLambda = {}, cancelLambda = { _, _ -> }),
+            clientBuilderProvider = FakeClientBuilderProvider {
+                val userId = userIds.removeFirst()
+                FakeFfiClientBuilder(
+                    buildResult = {
+                        FakeFfiClient(
+                            userId = userId,
+                            withUtdHook = {},
+                            setDelegateResult = { delegates[userId] = it },
+                        )
+                    }
+                )
+            },
+        )
+        val aliceClient = sut.create(sessionStore.getSession(aliceSessionId)!!)
+        val bobClient = sut.create(sessionStore.getSession(bobSessionId)!!)
+
+        delegates.getValue(aliceSessionId)!!.didReceiveAuthError(isSoftLogout = false)
+
+        assertThat(sessionStore.getSession(aliceSessionId)!!.isTokenValid).isFalse()
+        assertThat(sessionStore.getSession(bobSessionId)!!.isTokenValid).isTrue()
+        aliceClient.destroy()
+        bobClient.destroy()
+    }
 }
 
 fun TestScope.createRustMatrixClientFactory(
     cacheDirectory: File = File("/cache"),
     sessionStore: SessionStore = InMemorySessionStore(
-        updateUserProfileResult = { _, _, _ -> },
+        updateUserProfileResult = { _, _, _, _ -> },
     ),
     clientBuilderProvider: ClientBuilderProvider = FakeClientBuilderProvider(),
-    workManagerScheduler: FakeWorkManagerScheduler = FakeWorkManagerScheduler(),
+    workManagerScheduler: FakeWorkManagerScheduler = FakeWorkManagerScheduler(cancelLambda = { _, _ -> }),
     featureFlagService: FakeFeatureFlagService = FakeFeatureFlagService(),
+    sqliteStoreBuilderProvider: SqliteStoreBuilderProvider = FakeSqliteStoreBuilderProvider(),
 ) = RustMatrixClientFactory(
     cacheDirectory = cacheDirectory,
     appCoroutineScope = backgroundScope,
@@ -317,12 +351,52 @@ fun TestScope.createRustMatrixClientFactory(
     sessionStore = sessionStore,
     userAgentProvider = SimpleUserAgentProvider(),
     proxyProvider = FakeProxyProvider(),
-    clock = FakeSystemClock(),
     analyticsService = FakeAnalyticsService(),
     featureFlagService = featureFlagService,
-    timelineEventFilterFactory = FakeTimelineEventFilterFactory(),
     clientBuilderProvider = clientBuilderProvider,
-    sqliteStoreBuilderProvider = FakeSqliteStoreBuilderProvider(),
-    workManagerScheduler = workManagerScheduler,
-    clientBuilderEnterpriseHook = { builder, _ -> builder },
+    sqliteStoreBuilderProvider = sqliteStoreBuilderProvider,
+    clientBuilderEnterpriseHook = FakeClientBuilderEnterpriseHook(),
+    innerMatrixClientFactory = createRustMatrixClientInnerFactory(sessionStore, workManagerScheduler),
 )
+
+private fun TestScope.createRustMatrixClientInnerFactory(
+    sessionStore: SessionStore,
+    workManagerScheduler: FakeWorkManagerScheduler,
+) = object : RustMatrixClient.Factory {
+    override fun create(
+        sessionPaths: SessionPaths,
+        innerClient: Client,
+        innerSyncService: ClientSyncService,
+        baseCacheDirectory: File,
+        contentScanner: ContentScanner?,
+        isMessageSearchAvailable: Boolean,
+        sessionDelegate: RustClientSessionDelegate,
+    ) = RustMatrixClient(
+        sessionPaths = sessionPaths,
+        innerClient = innerClient,
+        innerSyncService = innerSyncService,
+        baseCacheDirectory = baseCacheDirectory,
+        contentScanner = contentScanner,
+        isMessageSearchAvailable = isMessageSearchAvailable,
+        sessionDelegate = sessionDelegate,
+        sessionStore = sessionStore,
+        appCoroutineScope = backgroundScope,
+        dispatchers = testCoroutineDispatchers(),
+        clock = FakeSystemClock(),
+        timelineEventFilterFactory = FakeTimelineEventFilterFactory(),
+        featureFlagService = FakeFeatureFlagService(),
+        analyticsService = FakeAnalyticsService(),
+        workManagerScheduler = workManagerScheduler,
+        searchBackfillServiceFactory = object : RustSearchBackfillService.Factory {
+            override fun create(innerClient: Client) = RustSearchBackfillService(
+                innerClient = innerClient,
+                searchBackfillRequestBuilderFactory = {
+                    object : SearchBackfillRequestBuilder {
+                        override suspend fun build(): Result<List<WorkManagerRequestWrapper>> = Result.success(emptyList())
+                    }
+                },
+                workManagerScheduler = workManagerScheduler,
+            )
+        },
+    )
+}

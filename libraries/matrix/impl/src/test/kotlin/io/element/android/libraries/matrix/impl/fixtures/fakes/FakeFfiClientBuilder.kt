@@ -28,6 +28,7 @@ class FakeFfiClientBuilder(
     override fun addRootCertificates(certificates: List<ByteArray>) = this
     override fun autoEnableBackups(autoEnableBackups: Boolean) = this
     override fun autoEnableCrossSigning(autoEnableCrossSigning: Boolean) = this
+    override fun enableAutomaticBackPagination(enableAutomaticBackPagination: Boolean): ClientBuilder = this
     override fun backupDownloadStrategy(backupDownloadStrategy: BackupDownloadStrategy) = this
     override fun disableAutomaticTokenRefresh() = this
     override fun disableBuiltInRootCertificates() = this
@@ -50,7 +51,7 @@ class FakeFfiClientBuilder(
     override fun inMemoryStore(): ClientBuilder = this
     override fun crossProcessLockConfig(crossProcessLockConfig: CrossProcessLockConfig): ClientBuilder = this
     override fun dmRoomDefinition(dmRoomDefinition: DmRoomDefinition): ClientBuilder = this
-    override fun withSearchIndexStore(path: String, password: String?): ClientBuilder {
+    override fun withSearchIndexStore(path: String, key: String?): ClientBuilder {
         // The real SDK creates the index directory when the client is built; tests that assert on
         // the coverage bookkeeping rely on that side effect.
         File(path).mkdirs()
