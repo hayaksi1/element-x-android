@@ -176,6 +176,7 @@ class TimelineItemEventFactory(
         }
         return TimelineItemReadReceipts(
             receipts = event.receipts
+                .filterNot { it.userId == event.sender }
                 .map { receipt ->
                     ReadReceiptData(
                         userId = receipt.userId,
