@@ -19,6 +19,7 @@ import io.element.android.features.enterprise.api.EnterpriseService
 import io.element.android.features.enterprise.test.FakeEnterpriseService
 import io.element.android.libraries.core.meta.BuildMeta
 import io.element.android.libraries.matrix.api.core.SessionId
+import io.element.android.libraries.matrix.api.core.ThreadId
 import io.element.android.libraries.matrix.test.AN_EVENT_ID
 import io.element.android.libraries.matrix.test.AN_EVENT_ID_2
 import io.element.android.libraries.matrix.test.A_COLOR_INT
@@ -325,6 +326,7 @@ class DefaultNotificationCreatorTest : RobolectricTest() {
             events = listOf(aNotifiableMessageEvent()),
         )
         result.commonAssertions()
+        assertThat(result.shortcutId).isEqualTo(createShortcutId(A_SESSION_ID, A_ROOM_ID))
     }
 
     @Test
@@ -354,6 +356,20 @@ class DefaultNotificationCreatorTest : RobolectricTest() {
             events = listOf(aNotifiableMessageEvent()),
         )
         result.commonAssertions()
+        assertThat(result.shortcutId).isEqualTo(createShortcutId(A_SESSION_ID, A_ROOM_ID))
+    }
+
+    @Test
+    fun `test createMessagesListNotification sets the shortcut id when updating a notification without one`() = runTest {
+        val sut = createNotificationCreator()
+        val existingNotification = NotificationCompat.Builder(RuntimeEnvironment.getApplication(), "aChannelId").build()
+        assertThat(existingNotification.shortcutId).isNull()
+        val result = sut.createRoomNotification(
+            events = listOf(aNotifiableMessageEvent()),
+            existingNotification = existingNotification,
+            threadId = A_THREAD_ID,
+        )
+        assertThat(result.shortcutId).isEqualTo(createShortcutId(A_SESSION_ID, A_ROOM_ID))
     }
 
     @Test
@@ -460,6 +476,7 @@ class DefaultNotificationCreatorTest : RobolectricTest() {
         existingNotification: Notification? = null,
         notificationAccountParams: NotificationAccountParams = aNotificationAccountParams(),
         showSessionId: Boolean = false,
+        threadId: ThreadId? = null,
     ) = createMessagesListNotification(
         notificationAccountParams = notificationAccountParams,
         roomInfo = RoomEventGroupInfo(
@@ -472,7 +489,7 @@ class DefaultNotificationCreatorTest : RobolectricTest() {
             isUpdated = false,
             showSessionId = showSessionId,
         ),
-        threadId = null,
+        threadId = threadId,
         largeIcon = null,
         lastMessageTimestamp = 123_456L,
         tickerText = "tickerText",

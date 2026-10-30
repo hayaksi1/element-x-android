@@ -223,7 +223,7 @@ class DefaultNotificationCreator(
             // The system does not render the subText of conversation notifications, so when the account
             // information has to be displayed, the notification is not rendered as a conversation.
             .setShortcutId(
-                if (threadId == null && !roomInfo.showSessionId) {
+                if (!roomInfo.showSessionId) {
                     createShortcutId(roomInfo.sessionId, roomInfo.roomId)
                 } else {
                     null
