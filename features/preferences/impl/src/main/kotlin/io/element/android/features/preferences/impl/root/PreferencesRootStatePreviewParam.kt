@@ -81,6 +81,7 @@ open class PreferencesRootStatePreviewParam : PreviewParameterProvider<Preferenc
                     anOtherAccount(user = user.copy(displayedStatus = displayedStatus))
                 },
             ),
+            aPreferencesRootState(isMarkdownEnabled = false),
         )
 }
 
@@ -92,6 +93,7 @@ fun aPreferencesRootState(
     isOtherAccountsSectionExpanded: Boolean = false,
     theme: ThemeOption = ThemeOption.System,
     availableThemeOptions: List<ThemeOption> = ThemeOption.entries,
+    isMarkdownEnabled: Boolean = true,
     otherSessions: List<OtherAccount> = emptyList(),
     showAnalyticsSettings: Boolean = false,
     showDeveloperSettings: Boolean = false,
@@ -107,6 +109,7 @@ fun aPreferencesRootState(
     isMultiAccountEnabled = isMultiAccountEnabled,
     theme = theme,
     availableThemeOptions = availableThemeOptions.toImmutableList(),
+    isMarkdownEnabled = isMarkdownEnabled,
     isOtherAccountsSectionExpanded = isOtherAccountsSectionExpanded,
     otherSessions = otherSessions.toImmutableList(),
     showAnalyticsSettings = showAnalyticsSettings,

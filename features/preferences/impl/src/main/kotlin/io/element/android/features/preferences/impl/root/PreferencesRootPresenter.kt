@@ -35,6 +35,7 @@ import io.element.android.libraries.matrix.api.core.SessionId
 import io.element.android.libraries.matrix.api.user.toMatrixUser
 import io.element.android.libraries.matrix.ui.components.switchaccount.OtherAccount
 import io.element.android.libraries.preferences.api.store.AppPreferencesStore
+import io.element.android.libraries.preferences.api.store.SessionPreferencesStore
 import io.element.android.libraries.sessionstorage.api.SessionData
 import io.element.android.libraries.sessionstorage.api.SessionStore
 import io.element.android.services.analytics.api.AnalyticsService
@@ -64,6 +65,7 @@ class PreferencesRootPresenter(
     private val sessionStore: SessionStore,
     private val matrixClientProvider: MatrixClientProvider,
     private val appPreferencesStore: AppPreferencesStore,
+    private val sessionPreferencesStore: SessionPreferencesStore,
     private val userStatusPresenter: Presenter<UserStatusState>,
     private val preferencesAccountPresenter: Presenter<PreferencesAccountState>,
     @SessionCoroutineScope
@@ -109,6 +111,10 @@ class PreferencesRootPresenter(
                 }
         }.collectAsState(initial = persistentListOf())
 
+        val isMarkdownEnabled by remember {
+            sessionPreferencesStore.isMarkdownEnabled()
+        }.collectAsState(initial = true)
+
         val themeOption by remember {
             derivedStateOf {
                 when (theme.value) {
@@ -153,6 +159,9 @@ class PreferencesRootPresenter(
                         ThemeOption.Light -> appPreferencesStore.setTheme(Theme.Light.name)
                     }
                 }
+                is PreferencesRootEvent.SetMarkdownEnabled -> sessionCoroutineScope.launch {
+                    sessionPreferencesStore.setMarkdownEnabled(event.enabled)
+                }
             }
         }
 
@@ -162,6 +171,7 @@ class PreferencesRootPresenter(
             preferencesAccountState = preferencesAccountState,
             theme = themeOption,
             availableThemeOptions = availableThemeOptions,
+            isMarkdownEnabled = isMarkdownEnabled,
             version = remember { versionFormatter.get() },
             isMultiAccountEnabled = isMultiAccountEnabled,
             isOtherAccountsSectionExpanded = isOtherAccountsSectionExpanded,

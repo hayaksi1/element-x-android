@@ -50,6 +50,7 @@ class DefaultSessionPreferencesStore(
     private val compressImages = booleanPreferencesKey("compressMedia")
     private val compressMediaPreset = stringPreferencesKey("compressMediaPreset")
     private val selectedRoomListFilters = stringSetPreferencesKey("selectedRoomListFilters")
+    private val markdownEnabled = booleanPreferencesKey("markdownEnabled")
 
     private val dataStoreFile = storeFile(context, sessionId)
     private val store = PreferenceDataStoreFactory.create(
@@ -102,6 +103,9 @@ class DefaultSessionPreferencesStore(
 
     override suspend fun setSelectedRoomListFilters(filters: Set<String>) = update(selectedRoomListFilters, filters)
     override fun getSelectedRoomListFilters(): Flow<Set<String>> = get(selectedRoomListFilters) { emptySet() }
+
+    override suspend fun setMarkdownEnabled(enabled: Boolean) = update(markdownEnabled, enabled)
+    override fun isMarkdownEnabled(): Flow<Boolean> = get(markdownEnabled) { true }
 
     override suspend fun clear() {
         dataStoreFile.safeDelete()

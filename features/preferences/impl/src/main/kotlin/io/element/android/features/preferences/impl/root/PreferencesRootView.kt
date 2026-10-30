@@ -230,6 +230,13 @@ private fun AppSettingsSection(
             }
         )
         ListItem(
+            content = { Text(stringResource(id = R.string.screen_advanced_settings_markdown_title)) },
+            supportingContent = { Text(stringResource(id = R.string.screen_advanced_settings_markdown_description)) },
+            leadingContent = ListItemContent.Icon(IconSource.Vector(CompoundIcons.TextFormatting())),
+            trailingContent = ListItemContent.Switch(checked = state.isMarkdownEnabled),
+            onClick = { state.eventSink(PreferencesRootEvent.SetMarkdownEnabled(!state.isMarkdownEnabled)) },
+        )
+        ListItem(
             content = { Text(stringResource(id = CommonStrings.common_media_upload_quality)) },
             leadingContent = ListItemContent.Icon(IconSource.Vector(CompoundIcons.Image())),
             onClick = onOpenMediaSettings,

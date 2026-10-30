@@ -39,7 +39,9 @@ import io.element.android.libraries.matrix.test.FakeMatrixClientProvider
 import io.element.android.libraries.matrix.test.core.aBuildMeta
 import io.element.android.libraries.matrix.ui.components.switchaccount.OtherAccount
 import io.element.android.libraries.preferences.api.store.AppPreferencesStore
+import io.element.android.libraries.preferences.api.store.SessionPreferencesStore
 import io.element.android.libraries.preferences.test.InMemoryAppPreferencesStore
+import io.element.android.libraries.preferences.test.InMemorySessionPreferencesStore
 import io.element.android.libraries.sessionstorage.api.SessionStore
 import io.element.android.libraries.sessionstorage.test.InMemorySessionStore
 import io.element.android.libraries.sessionstorage.test.aSessionData
@@ -133,6 +135,22 @@ class PreferencesRootPresenterTest {
             with(awaitItem()) {
                 assertThat(theme).isEqualTo(ThemeOption.System)
             }
+        }
+    }
+
+    @Test
+    fun `present - markdown on off`() = runTest {
+        val sessionPreferencesStore = InMemorySessionPreferencesStore()
+        createPreferencesRootPresenter(sessionPreferencesStore = sessionPreferencesStore).test {
+            val initialState = awaitFirstItem()
+            assertThat(initialState.isMarkdownEnabled).isTrue()
+            initialState.eventSink(PreferencesRootEvent.SetMarkdownEnabled(false))
+            val disabledState = consumeItemsUntilPredicate { !it.isMarkdownEnabled }.last()
+            assertThat(sessionPreferencesStore.isMarkdownEnabled().first()).isFalse()
+            disabledState.eventSink(PreferencesRootEvent.SetMarkdownEnabled(true))
+            consumeItemsUntilPredicate { it.isMarkdownEnabled }
+            assertThat(sessionPreferencesStore.isMarkdownEnabled().first()).isTrue()
+            cancelAndIgnoreRemainingEvents()
         }
     }
 
@@ -387,6 +405,7 @@ class PreferencesRootPresenterTest {
         featureFlagService: FeatureFlagService = FakeFeatureFlagService(),
         sessionStore: SessionStore = InMemorySessionStore(),
         appPreferencesStore: AppPreferencesStore = InMemoryAppPreferencesStore(),
+        sessionPreferencesStore: SessionPreferencesStore = InMemorySessionPreferencesStore(),
         locationService: LocationService = FakeLocationService(isServiceAvailable = true),
         matrixClientProvider: MatrixClientProvider = FakeMatrixClientProvider(),
     ) = PreferencesRootPresenter(
@@ -400,6 +419,7 @@ class PreferencesRootPresenterTest {
         sessionStore = sessionStore,
         matrixClientProvider = matrixClientProvider,
         appPreferencesStore = appPreferencesStore,
+        sessionPreferencesStore = sessionPreferencesStore,
         userStatusPresenter = { aUserStatusState() },
         preferencesAccountPresenter = { aPreferencesAccountState() },
         sessionCoroutineScope = this,

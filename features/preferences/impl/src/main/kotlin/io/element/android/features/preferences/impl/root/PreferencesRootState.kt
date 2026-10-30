@@ -25,6 +25,7 @@ data class PreferencesRootState(
     val theme: ThemeOption,
     val preferencesAccountState: PreferencesAccountState,
     val availableThemeOptions: ImmutableList<ThemeOption>,
+    val isMarkdownEnabled: Boolean,
     val userStatusState: UserStatusState?,
     val version: String,
     val isMultiAccountEnabled: Boolean,

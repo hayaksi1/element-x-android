@@ -259,6 +259,20 @@ class PreferencesRootViewTest : RobolectricTest() {
     }
 
     @Test
+    fun `clicking on Markdown emits the expected event`() = runAndroidComposeUiTest {
+        val eventsRecorder = EventsRecorder<PreferencesRootEvent>()
+        setView(
+            aPreferencesRootState(
+                isMarkdownEnabled = true,
+                eventSink = eventsRecorder,
+            ),
+        )
+        val text = activity!!.getString(R.string.screen_advanced_settings_markdown_title)
+        onNode(hasText(text) and hasClickAction()).performScrollTo().performClick()
+        eventsRecorder.assertSingle(PreferencesRootEvent.SetMarkdownEnabled(false))
+    }
+
+    @Test
     fun `click on Media upload quality invokes the expected callback`() = runAndroidComposeUiTest {
         val eventsRecorder = EventsRecorder<PreferencesRootEvent>(expectEvents = false)
         ensureCalledOnce { callback ->
