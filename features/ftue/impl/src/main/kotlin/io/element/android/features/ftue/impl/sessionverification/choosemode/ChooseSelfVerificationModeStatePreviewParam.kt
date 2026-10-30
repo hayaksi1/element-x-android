@@ -40,6 +40,9 @@ class ChooseSelfVerificationModeStatePreviewParam :
         aChooseSelfVerificationModeState(
             buttonsState = AsyncData.Loading(),
         ),
+        aChooseSelfVerificationModeState(
+            currentUser = aMatrixUser(id = "@alice:server.org", displayName = null),
+        ),
     )
 }
 
