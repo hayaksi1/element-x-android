@@ -49,9 +49,10 @@ class DefaultWorkManagerSchedulerTest {
 
         // The session is now gone and work associated with the session is cancelled
         verify { workManager.cancelAllWorkByTag("notifications-$sessionId") }
-        // Search backfill keeps fetching room history in the background, so leaving it running after
+        // The search sweep keeps fetching room history in the background, so leaving it running after
         // logout would keep pulling a signed-out user's messages down. Pinned explicitly rather than
         // relying on the enum loop, because nothing else fails if the tag stops matching.
+        verify { workManager.cancelAllWorkByTag("search_sweep-$sessionId") }
         verify { workManager.cancelAllWorkByTag("search_backfill-$sessionId") }
     }
 

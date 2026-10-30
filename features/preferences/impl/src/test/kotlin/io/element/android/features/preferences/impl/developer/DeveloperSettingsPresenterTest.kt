@@ -19,7 +19,11 @@ import io.element.android.features.preferences.impl.tasks.FakeClearCacheUseCase
 import io.element.android.features.preferences.impl.tasks.FakeComputeCacheSizeUseCase
 import io.element.android.features.preferences.impl.tasks.FakeMarkAllRoomsAsRead
 import io.element.android.features.preferences.impl.tasks.VacuumStoresUseCase
+import io.element.android.libraries.androidutils.clipboard.ClipboardHelper
+import io.element.android.libraries.androidutils.clipboard.FakeClipboardHelper
 import io.element.android.libraries.androidutils.filesize.FakeFileSizeFormatter
+import io.element.android.libraries.androidutils.toast.FakeToastHelper
+import io.element.android.libraries.androidutils.toast.ToastHelper
 import io.element.android.libraries.architecture.AsyncAction
 import io.element.android.libraries.architecture.AsyncData
 import io.element.android.libraries.core.data.megaBytes
@@ -39,6 +43,7 @@ import io.element.android.libraries.matrix.test.FakeMatrixClient
 import io.element.android.libraries.matrix.test.core.aBuildMeta
 import io.element.android.libraries.matrix.test.notificationsettings.FakeNotificationSettingsService
 import io.element.android.libraries.matrix.test.search.FakeMessageSearchIndexer
+import io.element.android.libraries.ui.strings.CommonStrings
 import io.element.android.tests.testutils.WarmUpRule
 import io.element.android.tests.testutils.consumeItemsUntilPredicate
 import io.element.android.tests.testutils.lambda.lambdaError
@@ -73,7 +78,13 @@ class DeveloperSettingsPresenterTest {
         val presenter = createDeveloperSettingsPresenter(
             databaseSizesUseCase = GetDatabaseSizesUseCase {
                 Result.success(
-                    SdkStoreSizes(stateStore = 10.megaBytes, eventCacheStore = 10.megaBytes, mediaStore = 10.megaBytes, cryptoStore = 10.megaBytes)
+                    SdkStoreSizes(
+                        stateStore = 10.megaBytes,
+                        eventCacheStore = 10.megaBytes,
+                        mediaStore = 10.megaBytes,
+                        cryptoStore = 10.megaBytes,
+                        searchIndex = 10.megaBytes,
+                    )
                 )
             }
         )
@@ -344,6 +355,38 @@ class DeveloperSettingsPresenterTest {
         }
     }
 
+    @Test
+    fun `present - copy to clipboard on old device shows a toast`() = runTest {
+        val clipboardHelper = FakeClipboardHelper(isOldDevice = true)
+        val toastHelper = FakeToastHelper()
+        val presenter = createDeveloperSettingsPresenter(
+            clipboardHelper = clipboardHelper,
+            toastHelper = toastHelper,
+        )
+        presenter.test {
+            awaitItem().eventSink(DeveloperSettingsEvent.CopyToClipboard("text"))
+            assertThat(clipboardHelper.clipboardContents).isEqualTo("text")
+            assertThat(toastHelper.shownToasts).containsExactly(CommonStrings.common_copied_to_clipboard)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `present - copy to clipboard on new device does not show a toast`() = runTest {
+        val clipboardHelper = FakeClipboardHelper(isOldDevice = false)
+        val toastHelper = FakeToastHelper()
+        val presenter = createDeveloperSettingsPresenter(
+            clipboardHelper = clipboardHelper,
+            toastHelper = toastHelper,
+        )
+        presenter.test {
+            awaitItem().eventSink(DeveloperSettingsEvent.CopyToClipboard("text"))
+            assertThat(clipboardHelper.clipboardContents).isEqualTo("text")
+            assertThat(toastHelper.shownToasts).isEmpty()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
     private fun createDeveloperSettingsPresenter(
         navigator: DeveloperSettingsNavigator = DeveloperSettingsNavigator { _, _ -> lambdaError() },
         sessionId: SessionId = A_SESSION_ID,
@@ -352,13 +395,15 @@ class DeveloperSettingsPresenterTest {
         clearCacheUseCase: FakeClearCacheUseCase = FakeClearCacheUseCase(),
         enterpriseService: EnterpriseService = FakeEnterpriseService(),
         vacuumStoresUseCase: VacuumStoresUseCase = VacuumStoresUseCase {},
-        databaseSizesUseCase: GetDatabaseSizesUseCase = GetDatabaseSizesUseCase { Result.success(SdkStoreSizes(null, null, null, null)) },
+        databaseSizesUseCase: GetDatabaseSizesUseCase = GetDatabaseSizesUseCase { Result.success(SdkStoreSizes(null, null, null, null, null)) },
         markAllRoomsAsRead: FakeMarkAllRoomsAsRead = FakeMarkAllRoomsAsRead(),
         featureFlagService: FakeFeatureFlagService = FakeFeatureFlagService(),
         matrixClient: FakeMatrixClient = FakeMatrixClient(),
         messageSearchIndexer: FakeMessageSearchIndexer = FakeMessageSearchIndexer(),
         buildMeta: BuildMeta = aBuildMeta(),
         notificationSettingsService: NotificationSettingsService = FakeNotificationSettingsService(),
+        clipboardHelper: ClipboardHelper = FakeClipboardHelper(),
+        toastHelper: ToastHelper = FakeToastHelper(),
     ): DeveloperSettingsPresenter {
         return DeveloperSettingsPresenter(
             navigator = navigator,
@@ -377,6 +422,8 @@ class DeveloperSettingsPresenterTest {
             messageSearchIndexer = messageSearchIndexer,
             buildMeta = buildMeta,
             notificationSettingsService = notificationSettingsService,
+            clipboardHelper = clipboardHelper,
+            toastHelper = toastHelper,
         )
     }
 }

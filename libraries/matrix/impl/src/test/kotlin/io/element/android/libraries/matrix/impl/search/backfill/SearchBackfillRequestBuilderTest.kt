@@ -29,7 +29,7 @@ class SearchBackfillRequestBuilderTest : RobolectricTest() {
 
         val wrapper = results.getOrThrow().single()
         val type = wrapper.type as WorkManagerWorkerType.Unique
-        assertThat(type.name).isEqualTo(workManagerTag(A_SESSION_ID, WorkManagerRequestType.SEARCH_BACKFILL))
+        assertThat(type.name).isEqualTo(workManagerTag(A_SESSION_ID, WorkManagerRequestType.SEARCH_SWEEP))
         assertThat(type.policy).isEqualTo(ExistingWorkPolicy.KEEP)
     }
 
@@ -41,7 +41,7 @@ class SearchBackfillRequestBuilderTest : RobolectricTest() {
         assertThat(request).isInstanceOf(OneTimeWorkRequest::class.java)
         // Cancel-on-logout works by tag: without it the sweep keeps downloading a signed-out user's
         // history.
-        assertThat(request.tags).contains(workManagerTag(A_SESSION_ID, WorkManagerRequestType.SEARCH_BACKFILL))
+        assertThat(request.tags).contains(workManagerTag(A_SESSION_ID, WorkManagerRequestType.SEARCH_SWEEP))
         // The user did not ask for this download, so it must not arrive on their data plan.
         assertThat(request.workSpec.constraints.requiredNetworkType).isEqualTo(NetworkType.UNMETERED)
     }
@@ -54,7 +54,7 @@ class SearchBackfillRequestBuilderTest : RobolectricTest() {
 
         val wrapper = results.getOrThrow().single()
         val type = wrapper.type as WorkManagerWorkerType.Unique
-        assertThat(type.name).isEqualTo(workManagerTag(A_SESSION_ID, WorkManagerRequestType.SEARCH_BACKFILL))
+        assertThat(type.name).isEqualTo(workManagerTag(A_SESSION_ID, WorkManagerRequestType.SEARCH_SWEEP))
         assertThat(type.policy).isEqualTo(ExistingWorkPolicy.REPLACE)
     }
 
@@ -65,7 +65,7 @@ class SearchBackfillRequestBuilderTest : RobolectricTest() {
         val request = results.getOrThrow().single().request
         // The shared tag stays: logout cancellation and hasPendingWork key on it. The user tag is
         // what lets UI observe this sweep without the always-enqueued background one drowning it out.
-        assertThat(request.tags).contains(workManagerTag(A_SESSION_ID, WorkManagerRequestType.SEARCH_BACKFILL))
+        assertThat(request.tags).contains(workManagerTag(A_SESSION_ID, WorkManagerRequestType.SEARCH_SWEEP))
         assertThat(request.tags).contains(workManagerTag(A_SESSION_ID, WorkManagerRequestType.SEARCH_BACKFILL_USER))
         // The user explicitly asked and is watching a progress bar: any connection will do.
         assertThat(request.workSpec.constraints.requiredNetworkType).isEqualTo(NetworkType.CONNECTED)

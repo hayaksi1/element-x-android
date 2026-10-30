@@ -30,7 +30,7 @@ class DefaultMessageSearchIndexerTest : RobolectricTest() {
     fun `an executing background sweep reports RUNNING, not paused`() = runTest {
         val scheduler = FakeWorkManagerScheduler(
             workStateFlows = mutableMapOf(
-                WorkManagerRequestType.SEARCH_BACKFILL to MutableStateFlow(WorkActivityState.RUNNING),
+                WorkManagerRequestType.SEARCH_SWEEP to MutableStateFlow(WorkActivityState.RUNNING),
                 WorkManagerRequestType.SEARCH_BACKFILL_USER to MutableStateFlow(WorkActivityState.NONE),
             ),
         )
@@ -43,7 +43,7 @@ class DefaultMessageSearchIndexerTest : RobolectricTest() {
     fun `the permanently enqueued background sweep does not read as waiting`() = runTest {
         val scheduler = FakeWorkManagerScheduler(
             workStateFlows = mutableMapOf(
-                WorkManagerRequestType.SEARCH_BACKFILL to MutableStateFlow(WorkActivityState.ENQUEUED),
+                WorkManagerRequestType.SEARCH_SWEEP to MutableStateFlow(WorkActivityState.ENQUEUED),
                 WorkManagerRequestType.SEARCH_BACKFILL_USER to MutableStateFlow(WorkActivityState.NONE),
             ),
         )
@@ -56,7 +56,7 @@ class DefaultMessageSearchIndexerTest : RobolectricTest() {
     fun `an enqueued user sweep reports WAITING`() = runTest {
         val scheduler = FakeWorkManagerScheduler(
             workStateFlows = mutableMapOf(
-                WorkManagerRequestType.SEARCH_BACKFILL to MutableStateFlow(WorkActivityState.ENQUEUED),
+                WorkManagerRequestType.SEARCH_SWEEP to MutableStateFlow(WorkActivityState.ENQUEUED),
                 WorkManagerRequestType.SEARCH_BACKFILL_USER to MutableStateFlow(WorkActivityState.ENQUEUED),
             ),
         )
@@ -86,7 +86,7 @@ class DefaultMessageSearchIndexerTest : RobolectricTest() {
 
         indexer.cancelSweep(A_SESSION_ID)
 
-        cancelRecorder.assertions().isCalledOnce().with(value(A_SESSION_ID), value(WorkManagerRequestType.SEARCH_BACKFILL))
+        cancelRecorder.assertions().isCalledOnce().with(value(A_SESSION_ID), value(WorkManagerRequestType.SEARCH_SWEEP))
     }
 
     private fun createIndexer(

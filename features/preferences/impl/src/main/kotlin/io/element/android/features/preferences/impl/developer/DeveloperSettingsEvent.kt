@@ -21,4 +21,5 @@ sealed interface DeveloperSettingsEvent {
     data object DismissPushRulesError : DeveloperSettingsEvent
     data object StartSearchIndexing : DeveloperSettingsEvent
     data object CancelSearchIndexing : DeveloperSettingsEvent
+    data class CopyToClipboard(val text: String) : DeveloperSettingsEvent
 }

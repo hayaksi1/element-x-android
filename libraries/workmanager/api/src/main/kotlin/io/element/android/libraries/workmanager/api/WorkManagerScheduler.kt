@@ -62,6 +62,7 @@ fun workManagerTag(sessionId: SessionId, requestType: WorkManagerRequestType): S
         WorkManagerRequestType.NOTIFICATION_SYNC -> "notifications"
         WorkManagerRequestType.DB_VACUUM -> "db_vacuum"
         WorkManagerRequestType.SEARCH_BACKFILL -> "search_backfill"
+        WorkManagerRequestType.SEARCH_SWEEP -> "search_sweep"
         WorkManagerRequestType.SEARCH_BACKFILL_USER -> "search_backfill_user"
     }
     return "$prefix-$sessionId"
@@ -70,21 +71,23 @@ fun workManagerTag(sessionId: SessionId, requestType: WorkManagerRequestType): S
 enum class WorkManagerRequestType {
     NOTIFICATION_SYNC,
     DB_VACUUM,
-
-    /**
-     * Back-paginates rooms so their history reaches the local message search index.
-     *
-     * Work of this type keeps fetching history in the background, so it MUST be cancelled when the
-     * session goes away — see the cancel-by-tag test. Any request builder for this type has to call
-     * `addTag(workManagerTag(sessionId, SEARCH_BACKFILL))`; nothing enforces that at compile time.
-     */
     SEARCH_BACKFILL,
 
     /**
-     * Marker tag carried *in addition to* [SEARCH_BACKFILL] by sweeps the user explicitly started
+     * Sweeps rooms so their history reaches the local message search index, driven by the app's own
+     * sweep runner rather than the SDK backfill behind [SEARCH_BACKFILL].
+     *
+     * Work of this type keeps fetching history in the background, so it MUST be cancelled when the
+     * session goes away — see the cancel-by-tag test. Any request builder for this type has to call
+     * `addTag(workManagerTag(sessionId, SEARCH_SWEEP))`; nothing enforces that at compile time.
+     */
+    SEARCH_SWEEP,
+
+    /**
+     * Marker tag carried *in addition to* [SEARCH_SWEEP] by sweeps the user explicitly started
      * from developer settings. It exists purely so UI can observe the user's own sweep without the
      * always-enqueued background one drowning it out; the actual work request is the same worker
-     * under the same unique name. Never enqueue work carrying only this tag: [SEARCH_BACKFILL] is
+     * under the same unique name. Never enqueue work carrying only this tag: [SEARCH_SWEEP] is
      * what logout cancellation and `hasPendingWork` key on.
      */
     SEARCH_BACKFILL_USER,

@@ -27,7 +27,9 @@ import io.element.android.features.preferences.impl.tasks.ClearCacheUseCase
 import io.element.android.features.preferences.impl.tasks.ComputeCacheSizeUseCase
 import io.element.android.features.preferences.impl.tasks.MarkAllRoomsAsRead
 import io.element.android.features.preferences.impl.tasks.VacuumStoresUseCase
+import io.element.android.libraries.androidutils.clipboard.ClipboardHelper
 import io.element.android.libraries.androidutils.filesize.FileSizeFormatter
+import io.element.android.libraries.androidutils.toast.ToastHelper
 import io.element.android.libraries.architecture.AsyncAction
 import io.element.android.libraries.architecture.AsyncData
 import io.element.android.libraries.architecture.Presenter
@@ -45,6 +47,7 @@ import io.element.android.libraries.matrix.api.notificationsettings.Notification
 import io.element.android.libraries.matrix.api.search.MessageSearchIndexer
 import io.element.android.libraries.matrix.api.search.MessageSearchSweepActivity
 import io.element.android.libraries.matrix.api.search.SearchBackfillCursor
+import io.element.android.libraries.ui.strings.CommonStrings
 import kotlinx.collections.immutable.ImmutableMap
 import kotlinx.collections.immutable.toImmutableMap
 import kotlinx.coroutines.CoroutineScope
@@ -71,6 +74,8 @@ class DeveloperSettingsPresenter(
     private val messageSearchIndexer: MessageSearchIndexer,
     private val buildMeta: BuildMeta,
     private val notificationSettingsService: NotificationSettingsService,
+    private val clipboardHelper: ClipboardHelper,
+    private val toastHelper: ToastHelper,
 ) : Presenter<DeveloperSettingsState> {
     @AssistedFactory
     fun interface Factory {
@@ -161,6 +166,11 @@ class DeveloperSettingsPresenter(
                 }
                 DeveloperSettingsEvent.CancelSearchIndexing -> {
                     messageSearchIndexer.cancelSweep(sessionId)
+                }
+                is DeveloperSettingsEvent.CopyToClipboard -> {
+                    clipboardHelper.copyPlainText(event.text) {
+                        toastHelper.show(CommonStrings.common_copied_to_clipboard)
+                    }
                 }
             }
         }

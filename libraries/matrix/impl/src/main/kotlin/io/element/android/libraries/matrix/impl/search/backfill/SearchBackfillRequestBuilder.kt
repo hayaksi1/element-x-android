@@ -32,7 +32,7 @@ import java.util.concurrent.TimeUnit
  * - **User-initiated** (`userInitiated = true`): the user pressed "Start indexing" and is watching —
  *   any connection will do, REPLACE policy so it takes over a request stuck waiting for the
  *   background constraints, and a marker tag ([WorkManagerRequestType.SEARCH_BACKFILL_USER]) that
- *   lets UI observe this sweep specifically. It still carries the shared SEARCH_BACKFILL tag:
+ *   lets UI observe this sweep specifically. It still carries the shared SEARCH_SWEEP tag:
  *   logout cancellation and `hasPendingWork` key on it.
  */
 class SearchBackfillRequestBuilder(
@@ -40,7 +40,7 @@ class SearchBackfillRequestBuilder(
     private val userInitiated: Boolean = false,
 ) : WorkManagerRequestBuilder {
     override suspend fun build(): Result<List<WorkManagerRequestWrapper>> {
-        val tag = workManagerTag(sessionId, WorkManagerRequestType.SEARCH_BACKFILL)
+        val tag = workManagerTag(sessionId, WorkManagerRequestType.SEARCH_SWEEP)
         // One sweep per session at a time. All of its progress lives in a single stored cursor —
         // two of them running at once would interleave writes to it and pay twice for the same
         // pages. Background KEEPs (a sweep already in flight is strictly more useful than

@@ -38,7 +38,7 @@ class DefaultMessageSearchIndexer(
         // user-only marker tag: the background sweep is enqueued on every client start, so the
         // shared tag being ENQUEUED is the steady state and says nothing about what the user asked.
         return combine(
-            workManagerScheduler.workStateFlow(sessionId, WorkManagerRequestType.SEARCH_BACKFILL),
+            workManagerScheduler.workStateFlow(sessionId, WorkManagerRequestType.SEARCH_SWEEP),
             workManagerScheduler.workStateFlow(sessionId, WorkManagerRequestType.SEARCH_BACKFILL_USER),
         ) { anySweep, userSweep ->
             when {
@@ -56,8 +56,8 @@ class DefaultMessageSearchIndexer(
     }
 
     override fun cancelSweep(sessionId: SessionId) {
-        // The user-initiated request carries the SEARCH_BACKFILL tag too, so one cancel reaches
+        // The user-initiated request carries the SEARCH_SWEEP tag too, so one cancel reaches
         // both it and any background request.
-        workManagerScheduler.cancel(sessionId, WorkManagerRequestType.SEARCH_BACKFILL)
+        workManagerScheduler.cancel(sessionId, WorkManagerRequestType.SEARCH_SWEEP)
     }
 }
