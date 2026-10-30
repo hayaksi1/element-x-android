@@ -67,7 +67,7 @@ class RustMatrixClientFactoryTest {
     }
 
     @Test
-    fun `create - message search is unavailable when the client secret is missing`() = runTest {
+    fun `create - message search stays available when the client secret is missing`() = runTest {
         val featureFlagService = FakeFeatureFlagService(
             initialState = mapOf(FeatureFlags.MessageSearch.key to true),
         )
@@ -76,9 +76,14 @@ class RustMatrixClientFactoryTest {
             workManagerScheduler = FakeWorkManagerScheduler(submitLambda = {}, cancelLambda = { _, _ -> }),
         )
 
-        val result = sut.create(aSessionData().copy(passphrase = null))
+        val result = sut.create(
+            aSessionData(
+                sessionPath = temporaryFolder.newFolder("session").absolutePath,
+                cachePath = temporaryFolder.newFolder("cache").absolutePath,
+            ).copy(passphrase = null)
+        )
 
-        assertThat(result.isMessageSearchAvailable).isFalse()
+        assertThat(result.isMessageSearchAvailable).isTrue()
         result.destroy()
     }
 
