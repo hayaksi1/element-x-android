@@ -71,8 +71,12 @@ dependencies {
     implementation(projects.libraries.oauth.api)
     implementation(projects.libraries.preferences.api)
     implementation(projects.libraries.uiUtils)
+    implementation(projects.libraries.network)
+    implementation(platform(libs.network.retrofit.bom))
+    implementation(libs.network.retrofit)
     implementation(libs.androidx.browser)
     implementation(libs.androidx.webkit)
+    implementation(libs.serialization.json)
     api(projects.features.login.api)
 
     testCommonDependencies(libs, true)
