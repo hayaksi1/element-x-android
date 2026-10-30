@@ -14,6 +14,9 @@ package io.element.android.features.enterprise.api
  * [init] must have run before the other members return meaningful answers.
  */
 interface SessionEnterpriseService {
+    /** Loads the deployment configuration of this session; to be called once when the session starts. */
+    suspend fun init()
+
     /** Whether Element Call may be used on this session, which a deployment can turn off. */
     suspend fun isElementCallAvailable(): Boolean
 
@@ -27,6 +30,9 @@ interface SessionEnterpriseService {
     /** Whether the homeserver forbids creating encrypted rooms, in which case the app must not offer the option. */
     suspend fun isEncryptionDisabledByHomeserver(): Boolean
 
-    /** Loads the deployment configuration of this session; to be called once when the session starts. */
-    suspend fun init()
+    /**
+     * Whether the homeserver forbids public rooms and spaces, in which case the app must not offer to create one,
+     * nor to make an existing room or space public.
+     */
+    suspend fun arePublicRoomsDisabledByHomeserver(): Boolean
 }
