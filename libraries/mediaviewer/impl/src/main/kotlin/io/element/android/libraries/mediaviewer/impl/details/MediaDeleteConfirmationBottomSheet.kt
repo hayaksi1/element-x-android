@@ -44,11 +44,14 @@ import io.element.android.libraries.designsystem.theme.components.Button
 import io.element.android.libraries.designsystem.theme.components.ModalBottomSheet
 import io.element.android.libraries.designsystem.theme.components.TextButton
 import io.element.android.libraries.matrix.api.core.EventId
-import io.element.android.libraries.matrix.ui.media.MediaRequestData
+import io.element.android.libraries.matrixmedia.api.MediaRequestData
 import io.element.android.libraries.mediaviewer.impl.R
 import io.element.android.libraries.ui.strings.CommonStrings
 import io.element.android.libraries.ui.strings.Strings
 
+/**
+ * Ref: https://www.figma.com/design/G1xy0HDZKJf5TCRFmKb5d5/Compound-Android-Components?node-id=4168-7384
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MediaDeleteConfirmationBottomSheet(
@@ -168,7 +171,7 @@ private fun MediaRow(
 @PreviewsDayNight
 @Composable
 internal fun MediaDeleteConfirmationBottomSheetPreview(
-    @PreviewParameter(provider = MediaBottomSheetStateDeleteConfirmationProvider::class) state: MediaBottomSheetState.DeleteConfirmation,
+    @PreviewParameter(provider = MediaBottomSheetStateDeleteConfirmationPreviewParam::class) state: MediaBottomSheetState.DeleteConfirmation,
 ) = ElementPreview(fillMaxSize = true) {
     MediaDeleteConfirmationBottomSheet(
         state = state,

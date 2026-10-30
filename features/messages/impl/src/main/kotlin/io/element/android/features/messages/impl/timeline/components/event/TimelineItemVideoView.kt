@@ -37,7 +37,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import io.element.android.compound.tokens.generated.CompoundIcons
 import io.element.android.features.messages.impl.timeline.model.event.TimelineItemVideoContent
-import io.element.android.features.messages.impl.timeline.model.event.TimelineItemVideoContentProvider
+import io.element.android.features.messages.impl.timeline.model.event.TimelineItemVideoContentPreviewParam
 import io.element.android.features.messages.impl.timeline.model.event.aTimelineItemVideoContent
 import io.element.android.features.messages.impl.timeline.protection.ProtectedView
 import io.element.android.features.messages.impl.timeline.protection.coerceRatioWhenHidingContent
@@ -47,12 +47,12 @@ import io.element.android.libraries.designsystem.modifiers.onKeyboardContextMenu
 import io.element.android.libraries.designsystem.modifiers.roundedBackground
 import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
-import io.element.android.libraries.matrix.ui.media.MAX_THUMBNAIL_HEIGHT
-import io.element.android.libraries.matrix.ui.media.MAX_THUMBNAIL_WIDTH
-import io.element.android.libraries.matrix.ui.media.MediaRequestData
 import io.element.android.libraries.matrix.ui.media.contentvalidation.ContentValidationState
 import io.element.android.libraries.matrix.ui.media.contentvalidation.NoopContentValidationState
 import io.element.android.libraries.matrix.ui.media.contentvalidation.collectOverallState
+import io.element.android.libraries.matrixmedia.api.MAX_THUMBNAIL_HEIGHT
+import io.element.android.libraries.matrixmedia.api.MAX_THUMBNAIL_WIDTH
+import io.element.android.libraries.matrixmedia.api.MediaRequestData
 import io.element.android.libraries.ui.strings.CommonStrings
 import io.element.android.libraries.ui.utils.a11y.isTalkbackActive
 
@@ -150,7 +150,7 @@ fun TimelineItemVideoView(
 
 @PreviewsDayNight
 @Composable
-internal fun TimelineItemVideoViewPreview(@PreviewParameter(TimelineItemVideoContentProvider::class) content: TimelineItemVideoContent) = ElementPreview {
+internal fun TimelineItemVideoViewPreview(@PreviewParameter(TimelineItemVideoContentPreviewParam::class) content: TimelineItemVideoContent) = ElementPreview {
     TimelineItemVideoView(
         content = content,
         hideMediaContent = false,

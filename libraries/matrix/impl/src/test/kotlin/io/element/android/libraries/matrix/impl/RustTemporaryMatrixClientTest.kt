@@ -13,10 +13,11 @@ import io.element.android.libraries.matrix.api.paths.SessionPaths
 import io.element.android.libraries.matrix.impl.fixtures.fakes.FakeFfiClient
 import io.element.android.tests.testutils.lambda.lambdaRecorder
 import io.element.android.tests.testutils.lambda.value
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
 import org.matrix.rustcomponents.sdk.Client
-import org.matrix.rustcomponents.sdk.NoHandle
 import java.io.File
 import kotlin.io.path.createTempDirectory
 import org.matrix.rustcomponents.sdk.ClientException as RustClientException
@@ -83,10 +84,10 @@ class RustTemporaryMatrixClientTest {
         assertThat(paths.cacheDirectory.exists()).isFalse()
     }
 
-    private fun createRustTemporaryMatrixClient(
-        client: Client = Client(NoHandle),
+    private fun TestScope.createRustTemporaryMatrixClient(
+        client: Client = FakeFfiClient(),
         paths: SessionPaths,
     ): RustTemporaryMatrixClient {
-        return RustTemporaryMatrixClient(client, paths)
+        return RustTemporaryMatrixClient(client, paths, StandardTestDispatcher(testScheduler))
     }
 }
