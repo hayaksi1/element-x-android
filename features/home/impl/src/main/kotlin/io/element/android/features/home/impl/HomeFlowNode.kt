@@ -57,6 +57,7 @@ import io.element.android.libraries.di.annotations.SessionCoroutineScope
 import io.element.android.libraries.matrix.api.MatrixClient
 import io.element.android.libraries.matrix.api.core.EventId
 import io.element.android.libraries.matrix.api.core.RoomId
+import io.element.android.libraries.mediaviewer.api.MediaViewerEntryPoint
 import io.element.android.services.analytics.api.AnalyticsService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -85,6 +86,7 @@ class HomeFlowNode(
     private val reportRoomEntryPoint: ReportRoomEntryPoint,
     private val declineInviteAndBlockUserEntryPoint: DeclineInviteAndBlockEntryPoint,
     private val changeRoomMemberRolesEntryPoint: ChangeRoomMemberRolesEntryPoint,
+    private val mediaViewerEntryPoint: MediaViewerEntryPoint,
     private val leaveRoomRenderer: LeaveRoomRenderer,
     @SessionCoroutineScope private val sessionCoroutineScope: CoroutineScope,
 ) : BaseFlowNode<HomeFlowNode.NavTarget>(
@@ -133,6 +135,9 @@ class HomeFlowNode(
 
         @Parcelize
         data class SelectNewOwnersWhenLeavingRoom(val roomId: RoomId) : NavTarget
+
+        @Parcelize
+        data class AvatarPreview(val name: String, val avatarUrl: String) : NavTarget
     }
 
     private fun navigateToReportRoom(roomId: RoomId) {
@@ -220,6 +225,12 @@ class HomeFlowNode(
             HomeView(
                 homeState = state,
                 onRoomClick = ::navigateToRoom,
+                onRoomAvatarClick = { room ->
+                    val avatarUrl = room.avatarData.url
+                    if (avatarUrl != null) {
+                        backstack.push(NavTarget.AvatarPreview(room.avatarData.name.orEmpty(), avatarUrl))
+                    }
+                },
                 onSettingsClick = callback::navigateToSettings,
                 onAddAccountClick = callback::navigateToAddAccount,
                 onSwitchToAccount = callback::navigateToSession,
@@ -284,6 +295,29 @@ class HomeFlowNode(
                     buildContext = buildContext,
                     room = room,
                     listType = ChangeRoomMemberRolesListType.SelectNewOwnersWhenLeaving,
+                )
+            }
+            is NavTarget.AvatarPreview -> {
+                mediaViewerEntryPoint.createNode(
+                    parentNode = this,
+                    buildContext = buildContext,
+                    params = mediaViewerEntryPoint.createParamsForAvatar(
+                        filename = navTarget.name,
+                        avatarUrl = navTarget.avatarUrl,
+                    ),
+                    callback = object : MediaViewerEntryPoint.Callback {
+                        override fun onDone() {
+                            backstack.pop()
+                        }
+
+                        override fun viewInTimeline(eventId: EventId) {
+                            // Cannot happen
+                        }
+
+                        override fun forwardEvent(eventId: EventId, fromPinnedEvents: Boolean) {
+                            // Cannot happen
+                        }
+                    },
                 )
             }
             NavTarget.Root -> rootNode(buildContext)

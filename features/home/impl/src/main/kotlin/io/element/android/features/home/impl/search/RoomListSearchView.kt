@@ -65,6 +65,7 @@ internal fun RoomListSearchView(
     hideInvitesAvatars: Boolean,
     eventSink: (RoomListEvent) -> Unit,
     onRoomClick: (RoomId) -> Unit,
+    onRoomAvatarClick: (RoomListRoomSummary) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     BackHandler(enabled = state.isSearchActive) {
@@ -81,6 +82,7 @@ internal fun RoomListSearchView(
                 state = state,
                 hideInvitesAvatars = hideInvitesAvatars,
                 onRoomClick = onRoomClick,
+                onRoomAvatarClick = onRoomAvatarClick,
                 eventSink = eventSink,
             )
         }
@@ -93,6 +95,7 @@ private fun RoomListSearchContent(
     hideInvitesAvatars: Boolean,
     eventSink: (RoomListEvent) -> Unit,
     onRoomClick: (RoomId) -> Unit,
+    onRoomAvatarClick: (RoomListRoomSummary) -> Unit,
 ) {
     val borderColor = MaterialTheme.colorScheme.tertiary
     val strokeWidth = 1.dp
@@ -184,6 +187,7 @@ private fun RoomListSearchContent(
                         // TODO
                         isInviteSeen = false,
                         onClick = ::onRoomClick,
+                        onAvatarClick = onRoomAvatarClick,
                         eventSink = eventSink,
                     )
                 }
@@ -199,6 +203,7 @@ internal fun RoomListSearchContentPreview(@PreviewParameter(RoomListSearchStateP
         state = state,
         hideInvitesAvatars = false,
         onRoomClick = {},
+        onRoomAvatarClick = {},
         eventSink = {},
     )
 }
