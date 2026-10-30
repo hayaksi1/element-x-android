@@ -18,6 +18,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.test.AndroidComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isRoot
@@ -118,8 +119,25 @@ class PinKeypadTest : RobolectricTest() {
         )
     }
 
+    @Test
+    fun `a shuffled keypad still offers every digit exactly once`() = runAndroidComposeUiTest {
+        setPinKeyPad(isShuffled = true)
+        for (digit in '0'..'9') {
+            onAllNodes(hasText(digit.toString())).assertCountEquals(1)
+        }
+    }
+
+    @Test
+    fun `a shuffled keypad still emits the digit that was clicked`() = runAndroidComposeUiTest {
+        val eventsRecorder = EventsRecorder<PinKeypadModel>()
+        setPinKeyPad(onClick = eventsRecorder, isShuffled = true)
+        onNode(hasText("7")).performClick()
+        eventsRecorder.assertSingle(PinKeypadModel.Number('7'))
+    }
+
     private fun AndroidComposeUiTest<ComponentActivity>.setPinKeyPad(
         onClick: (PinKeypadModel) -> Unit = EnsureNeverCalledWithParam(),
+        isShuffled: Boolean = false,
     ): InputModeManager {
         lateinit var inputModeManager: InputModeManager
         setContent {
@@ -128,6 +146,7 @@ class PinKeypadTest : RobolectricTest() {
                 onClick = onClick,
                 maxWidth = 1000.dp,
                 maxHeight = 1000.dp,
+                isShuffled = isShuffled,
             )
         }
         return inputModeManager
