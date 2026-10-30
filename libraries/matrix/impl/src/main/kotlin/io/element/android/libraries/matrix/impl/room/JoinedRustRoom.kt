@@ -144,7 +144,7 @@ class JoinedRustRoom(
     override val knockRequestsFlow: Flow<List<KnockRequest>> = mxCallbackFlow {
         innerRoom.subscribeToKnockRequests(object : KnockRequestsListener {
             override fun call(joinRequests: List<InnerKnockRequest>) {
-                val knockRequests = joinRequests.map { RustKnockRequest(it) }
+                val knockRequests = joinRequests.map { RustKnockRequest(it, roomDispatcher) }
                 channel.trySend(knockRequests)
             }
         })
@@ -158,6 +158,7 @@ class JoinedRustRoom(
         inner = innerRoom.threadListService(),
         contentMapper = TimelineEventContentMapper(),
         roomCoroutineScope = roomCoroutineScope,
+        roomDispatcher = roomDispatcher,
     )
 
     override val syncUpdateFlow = flow {
@@ -265,7 +266,7 @@ class JoinedRustRoom(
                     filter = filter,
                     internalIdPrefix = internalIdPrefix,
                     dateDividerMode = dateDividerMode,
-                    trackReadReceipts = if (trackReadReceipts) TimelineReadReceiptTracking.ALL_EVENTS else TimelineReadReceiptTracking.DISABLED,
+                    trackReadReceipts = if (trackReadReceipts) TimelineReadReceiptTracking.MESSAGE_LIKE_EVENTS else TimelineReadReceiptTracking.DISABLED,
                     reportUtds = true,
                 )
             ).let { innerTimeline ->
@@ -410,8 +411,8 @@ class JoinedRustRoom(
         }
     }
 
-    override suspend fun updateUsersRoles(changes: List<UserRoleChange>): Result<Unit> {
-        return runCatchingExceptions {
+    override suspend fun updateUsersRoles(changes: List<UserRoleChange>): Result<Unit> = withContext(roomDispatcher) {
+        runCatchingExceptions {
             val powerLevelChanges = changes.map { UserPowerLevelUpdate(it.userId.value, it.powerLevel) }
             innerRoom.updatePowerLevelsForUsers(powerLevelChanges)
         }
@@ -478,7 +479,7 @@ class JoinedRustRoom(
                 widgetSettings = widgetSettings,
                 room = innerRoom,
                 widgetCapabilitiesProvider = object : WidgetCapabilitiesProvider {
-                    override fun acquireCapabilities(capabilities: WidgetCapabilities): WidgetCapabilities {
+                    override suspend fun acquireCapabilities(capabilities: WidgetCapabilities): WidgetCapabilities {
                         return getElementCallRequiredPermissions(sessionId.value, baseRoom.deviceId.value)
                     }
                 },
