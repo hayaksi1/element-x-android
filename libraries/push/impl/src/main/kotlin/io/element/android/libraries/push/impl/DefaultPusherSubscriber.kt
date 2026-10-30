@@ -10,7 +10,6 @@ package io.element.android.libraries.push.impl
 
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.ContributesBinding
-import io.element.android.appconfig.PushConfig
 import io.element.android.libraries.core.extensions.mapFailure
 import io.element.android.libraries.core.log.logger.LoggerTag
 import io.element.android.libraries.core.meta.BuildMeta
@@ -24,8 +23,6 @@ import io.element.android.libraries.pushproviders.api.RegistrationFailure
 import io.element.android.libraries.pushstore.api.UserPushStoreFactory
 import io.element.android.libraries.pushstore.api.clientsecret.PushClientSecret
 import timber.log.Timber
-
-internal const val DEFAULT_PUSHER_FILE_TAG = "mobile"
 
 private val loggerTag = LoggerTag("DefaultPusherSubscriber", LoggerTag.PushLoggerTag)
 
@@ -74,9 +71,8 @@ class DefaultPusherSubscriber(
     ): SetHttpPusherData =
         SetHttpPusherData(
             pushKey = pushKey,
-            appId = PushConfig.PUSHER_APP_ID,
-            // TODO + abs(activeSessionHolder.getActiveSession().myUserId.hashCode())
-            profileTag = DEFAULT_PUSHER_FILE_TAG + "_",
+            appId = BuildConfig.PUSHER_APP_ID,
+            profileTag = null,
             // TODO localeProvider.current().language
             lang = "en",
             appDisplayName = buildMeta.applicationName,
@@ -91,7 +87,7 @@ class DefaultPusherSubscriber(
      * Ex: {"cs":"sfvsdv"}.
      */
     private fun createDefaultPayload(secretForUser: String): String {
-        return "{\"cs\":\"$secretForUser\"}"
+        return """{"cs":"$secretForUser"}"""
     }
 
     override suspend fun unregisterPusher(
@@ -104,7 +100,7 @@ class DefaultPusherSubscriber(
             .unsetHttpPusher(
                 unsetHttpPusherData = UnsetHttpPusherData(
                     pushKey = pushKey,
-                    appId = PushConfig.PUSHER_APP_ID
+                    appId = BuildConfig.PUSHER_APP_ID
                 )
             )
             .onSuccess {

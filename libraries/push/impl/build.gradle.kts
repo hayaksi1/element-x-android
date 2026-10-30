@@ -1,3 +1,5 @@
+import config.BuildTimeConfig
+import extension.buildConfigFieldStr
 import extension.setupDependencyInjection
 import extension.testCommonDependencies
 
@@ -16,6 +18,33 @@ plugins {
 
 android {
     namespace = "io.element.android.libraries.push.impl"
+
+    buildFeatures {
+        buildConfig = true
+    }
+
+    buildTypes {
+        val defaultPusherAppId = "im.vector.app.android"
+        getByName("release") {
+            buildConfigFieldStr(
+                name = "PUSHER_APP_ID",
+                value = BuildTimeConfig.PUSHER_APP_ID_RELEASE ?: defaultPusherAppId,
+            )
+        }
+        getByName("debug") {
+            buildConfigFieldStr(
+                name = "PUSHER_APP_ID",
+                value = BuildTimeConfig.PUSHER_APP_ID_DEBUG ?: defaultPusherAppId,
+            )
+        }
+        register("nightly") {
+            matchingFallbacks += listOf("release")
+            buildConfigFieldStr(
+                name = "PUSHER_APP_ID",
+                value = BuildTimeConfig.PUSHER_APP_ID_NIGHTLY ?: defaultPusherAppId,
+            )
+        }
+    }
 
     testOptions {
         unitTests {
@@ -57,7 +86,6 @@ dependencies {
     implementation(projects.libraries.uiStrings)
     implementation(projects.libraries.troubleshoot.api)
     implementation(projects.libraries.workmanager.api)
-    implementation(projects.features.announcement.api)
     implementation(projects.features.call.api)
     implementation(projects.features.enterprise.api)
     implementation(projects.features.lockscreen.api)
@@ -72,6 +100,7 @@ dependencies {
 
     testCommonDependencies(libs)
     testImplementation(libs.coil.test)
+    testImplementation(libs.sqldelight.driver.jvm)
     testImplementation(projects.libraries.matrix.test)
     testImplementation(projects.libraries.matrixmedia.test)
     testImplementation(projects.libraries.preferences.test)
@@ -81,7 +110,6 @@ dependencies {
     testImplementation(projects.libraries.pushstore.test)
     testImplementation(projects.libraries.troubleshoot.test)
     testImplementation(projects.libraries.workmanager.test)
-    testImplementation(projects.features.announcement.test)
     testImplementation(projects.features.call.test)
     testImplementation(projects.features.enterprise.test)
     testImplementation(projects.features.lockscreen.test)

@@ -21,7 +21,6 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.runtime.Composable
@@ -47,7 +46,6 @@ import kotlinx.collections.immutable.ImmutableSet
 import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun EmojiPickerView(
     state: DefaultEmojiPickerState,
@@ -166,7 +164,7 @@ private fun EmojiResults(
 
 @PreviewsDayNight
 @Composable
-internal fun EmojiPickerViewPreview(@PreviewParameter(DefaultEmojiPickerStateProvider::class) state: DefaultEmojiPickerState) = ElementPreview {
+internal fun EmojiPickerViewPreview(@PreviewParameter(DefaultEmojiPickerStatePreviewParam::class) state: DefaultEmojiPickerState) = ElementPreview {
     EmojiPickerView(
         state = state,
         onSelectEmoji = {},

@@ -12,10 +12,10 @@ import android.text.Spannable
 import android.text.style.URLSpan
 import android.text.util.Linkify
 import androidx.core.text.getSpans
-import androidx.core.text.toSpannable
 import androidx.core.text.util.LinkifyCompat
 import io.element.android.libraries.core.extensions.runCatchingExceptions
 import timber.log.Timber
+import java.net.URI
 
 /**
  * Helper class to linkify text while preserving existing URL spans.
@@ -23,13 +23,15 @@ import timber.log.Timber
  * It also checks the linkified results to make sure URLs spans are not including trailing punctuation.
  */
 object LinkifyHelper {
+    private val BRACKETED_AUTHORITY_URL_REGEX = Regex("""(?<![a-zA-Z0-9+.-])[a-zA-Z][a-zA-Z0-9+.-]*://\[\S*""")
+
     fun linkify(
         text: CharSequence,
         @LinkifyCompat.LinkifyMask linkifyMask: Int = Linkify.WEB_URLS or Linkify.PHONE_NUMBERS or Linkify.EMAIL_ADDRESSES,
     ): CharSequence {
         // Convert the text to a Spannable to be able to add URL spans, return the original text if it's not possible (in tests, i.e.)
         @Suppress("USELESS_ELVIS")
-        val spannable = text.toSpannable() ?: return text
+        val spannable = text.safeToSpannable() ?: return text
 
         // Get all URL spans, as they will be removed by LinkifyCompat.addLinks
         val oldURLSpans = spannable.getSpans<URLSpan>(0, text.length).associateWith {
@@ -72,6 +74,24 @@ object LinkifyHelper {
             }
         }
 
+        for (match in BRACKETED_AUTHORITY_URL_REGEX.findAll(spannable)) {
+            val start = match.range.first
+            val end = match.range.last + 1
+            val newEnd = runCatchingExceptions {
+                adjustLinkifiedUrlSpanEndIndex(spannable, start, end)
+            }.onFailure {
+                Timber.e(it, "Failed to adjust end index for link span")
+            }.getOrNull() ?: end
+
+            val url = spannable.substring(start, newEnd)
+            if (!url.hasBracketedHost()) continue
+
+            for (span in spannable.getSpans<URLSpan>(start, newEnd)) {
+                spannable.removeSpan(span)
+            }
+            spannable.setSpan(URLSpan(url), start, newEnd, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+
         // Restore old spans, remove new ones if there is a conflict
         for ((urlSpan, location) in oldURLSpans) {
             val (start, end) = location
@@ -85,6 +105,11 @@ object LinkifyHelper {
             spannable.setSpan(urlSpan, start, end, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
         }
         return spannable
+    }
+
+    private fun String.hasBracketedHost(): Boolean {
+        val host = runCatchingExceptions { URI(this) }.getOrNull()?.host ?: return false
+        return host.startsWith('[') && host.endsWith(']')
     }
 
     private fun Spannable.isEmailInsideFediverseHandle(urlSpan: URLSpan, start: Int): Boolean {

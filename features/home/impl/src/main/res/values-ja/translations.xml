@@ -12,8 +12,8 @@
   <string name="confirm_recovery_key_banner_primary_button_title">"回復鍵を入力してください"</string>
   <string name="confirm_recovery_key_banner_secondary_button_title">"回復鍵を忘れましたか？"</string>
   <string name="confirm_recovery_key_banner_title">"鍵の保管庫を同期できません。"</string>
-  <string name="full_screen_intent_banner_message">"重要な電話を確実に受け取るため、端末がロックされている状態での全画面通知を、設定から許可してください。"</string>
-  <string name="full_screen_intent_banner_title">"通話品質を高める"</string>
+  <string name="full_screen_intent_banner_message_android">"重要な電話を確実に受け取るため、端末がロックされている状態での全画面通知を、設定から許可してください。"</string>
+  <string name="full_screen_intent_banner_title_android">"通話品質を高める"</string>
   <string name="screen_home_tab_chats">"チャット"</string>
   <string name="screen_home_tab_spaces">"スペース"</string>
   <string name="screen_invites_decline_chat_message">"%1$sへの招待を本当に破棄しますか？"</string>
@@ -36,6 +36,8 @@
   <string name="screen_roomlist_filter_invites_empty_state_title">"承認待ちの招待はありません"</string>
   <string name="screen_roomlist_filter_low_priority">"低い優先度"</string>
   <string name="screen_roomlist_filter_low_priority_empty_state_title">"低い優先度のチャットはまだありません"</string>
+  <string name="screen_roomlist_filter_mention">"メンション"</string>
+  <string name="screen_roomlist_filter_mention_empty_state_title">"未読のメンションはありません"</string>
   <string name="screen_roomlist_filter_mixed_empty_state_subtitle">"フィルターを解除して他のチャットを表示できます"</string>
   <string name="screen_roomlist_filter_mixed_empty_state_title">"この選択中にチャットがありません"</string>
   <string name="screen_roomlist_filter_people">"ユーザー"</string>

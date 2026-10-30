@@ -175,6 +175,8 @@ complexity:
     active: true
   LargeClass:
     active: true
+    # Do not report large test classes.
+    excludes: [ '**/test/**', '**/androidTest/**' ]
 
 naming:
   VariableNaming:
@@ -230,6 +232,7 @@ Compose:
       - LocalEventContentValidationState
       - LocalSnackbarDispatcher
       - LocalCameraPositionState
+      - LocalMapTilerConfig
       - LocalMediaItemPresenterFactories
       - LocalTimelineItemPresenterFactories
       - LocalRoomMemberProfilesCache
@@ -238,6 +241,8 @@ Compose:
       - LocalBuildMeta
       - LocalUiTestMode
       - LocalSdkIntVersionProvider
+      - LocalTimelineEventRendererConfig
+      - LocalMentionDisplayNames
   CompositionLocalNaming:
     active: true
   ContentEmitterReturningValues:
