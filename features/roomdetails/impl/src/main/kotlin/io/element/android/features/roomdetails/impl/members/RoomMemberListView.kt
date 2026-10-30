@@ -27,7 +27,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -338,12 +337,20 @@ private fun RoomMemberListItem(
                         color = ElementTheme.colors.textSecondary,
                     )
                 }
+
+                if (roomMemberWithIdentity.isInCall) {
+                    Icon(
+                        modifier = Modifier.size(20.dp),
+                        imageVector = CompoundIcons.VideoCallSolid(),
+                        contentDescription = stringResource(CommonStrings.action_video_call),
+                        tint = ElementTheme.colors.iconSuccessPrimary
+                    )
+                }
             }
         }
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun RoomMemberListTopBar(
     canInvite: Boolean,
@@ -366,7 +373,7 @@ private fun RoomMemberListTopBar(
 
 @PreviewsDayNight
 @Composable
-internal fun RoomMemberListViewPreview(@PreviewParameter(RoomMemberListStateProvider::class) state: RoomMemberListState) = ElementPreview {
+internal fun RoomMemberListViewPreview(@PreviewParameter(RoomMemberListStatePreviewParam::class) state: RoomMemberListState) = ElementPreview {
     RoomMemberListView(
         state = state,
         navigator = object : RoomMemberListNavigator {

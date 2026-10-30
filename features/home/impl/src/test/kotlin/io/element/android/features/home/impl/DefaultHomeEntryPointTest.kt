@@ -11,7 +11,10 @@ package io.element.android.features.home.impl
 import com.bumble.appyx.core.modality.BuildContext
 import com.google.common.truth.Truth.assertThat
 import io.element.android.features.home.api.HomeEntryPoint
+import io.element.android.features.invite.test.declineandblock.FakeDeclineInviteAndBlockEntryPoint
+import io.element.android.libraries.matrix.api.core.EventId
 import io.element.android.libraries.matrix.api.core.RoomId
+import io.element.android.libraries.matrix.api.core.SessionId
 import io.element.android.libraries.matrix.api.room.JoinedRoom
 import io.element.android.libraries.matrix.test.FakeMatrixClient
 import io.element.android.services.analytics.test.FakeAnalyticsService
@@ -34,16 +37,15 @@ class DefaultHomeEntryPointTest : RobolectricTest() {
                 inviteFriendsUseCase = { lambdaError() },
                 analyticsService = FakeAnalyticsService(),
                 acceptDeclineInviteView = { _, _, _, _ -> lambdaError() },
-                directLogoutView = { _ -> lambdaError() },
                 reportRoomEntryPoint = { _, _, _ -> lambdaError() },
-                declineInviteAndBlockUserEntryPoint = { _, _, _ -> lambdaError() },
+                declineInviteAndBlockUserEntryPoint = FakeDeclineInviteAndBlockEntryPoint(),
                 changeRoomMemberRolesEntryPoint = { _, _, _, _ -> lambdaError() },
                 leaveRoomRenderer = { _, _, _ -> lambdaError() },
                 sessionCoroutineScope = backgroundScope,
             )
         }
         val callback = object : HomeEntryPoint.Callback {
-            override fun navigateToRoom(roomId: RoomId, joinedRoom: JoinedRoom?) = lambdaError()
+            override fun navigateToRoom(roomId: RoomId, eventId: EventId?, joinedRoom: JoinedRoom?) = lambdaError()
             override fun navigateToCreateRoom() = lambdaError()
             override fun navigateToCreateSpace() = lambdaError()
             override fun navigateToSettings() = lambdaError()
@@ -51,6 +53,8 @@ class DefaultHomeEntryPointTest : RobolectricTest() {
             override fun navigateToEnterRecoveryKey() = lambdaError()
             override fun navigateToRoomSettings(roomId: RoomId) = lambdaError()
             override fun navigateToBugReport() = lambdaError()
+            override fun navigateToAddAccount() = lambdaError()
+            override fun navigateToSession(sessionId: SessionId) = lambdaError()
         }
         val result = entryPoint.createNode(
             parentNode = parentNode,

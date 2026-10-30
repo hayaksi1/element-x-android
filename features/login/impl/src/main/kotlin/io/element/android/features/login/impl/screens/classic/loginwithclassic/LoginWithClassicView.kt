@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -56,7 +55,6 @@ import io.element.android.libraries.testtags.TestTags
 import io.element.android.libraries.testtags.testTag
 import io.element.android.libraries.ui.strings.CommonStrings
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoginWithClassicView(
     state: LoginWithClassicState,
@@ -64,7 +62,6 @@ fun LoginWithClassicView(
     onOAuthDetails: (OAuthDetails) -> Unit,
     onNeedLoginPassword: () -> Unit,
     onLearnMoreClick: () -> Unit,
-    onCreateAccountContinue: (url: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val isLoading by remember(state.loginModeState.loginMode) {
@@ -204,7 +201,6 @@ fun LoginWithClassicView(
         onLearnMoreClick = onLearnMoreClick,
         onOAuthDetails = onOAuthDetails,
         onNeedLoginPassword = onNeedLoginPassword,
-        onCreateAccountContinue = onCreateAccountContinue,
     )
     LocalNetworkPermissionDialogView(
         dialog = state.loginModeState.localNetworkPermissionDialog,
@@ -219,13 +215,12 @@ fun LoginWithClassicView(
 
 @PreviewsDayNight
 @Composable
-internal fun LoginWithClassicViewPreview(@PreviewParameter(LoginWithClassicStateProvider::class) state: LoginWithClassicState) = ElementPreview {
+internal fun LoginWithClassicViewPreview(@PreviewParameter(LoginWithClassicStatePreviewParam::class) state: LoginWithClassicState) = ElementPreview {
     LoginWithClassicView(
         state = state,
         onOtherOptionsClick = {},
         onOAuthDetails = {},
         onNeedLoginPassword = {},
         onLearnMoreClick = {},
-        onCreateAccountContinue = {},
     )
 }

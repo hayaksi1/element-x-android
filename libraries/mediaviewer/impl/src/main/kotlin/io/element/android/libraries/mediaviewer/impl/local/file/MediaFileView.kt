@@ -71,7 +71,6 @@ fun MediaFileView(
                 modifier = Modifier.align(Alignment.CenterHorizontally),
                 style = BigIcon.Style.Default(
                     vectorIcon = icon,
-                    usePrimaryTint = true,
                 ),
             )
             if (info != null) {
@@ -114,7 +113,7 @@ fun MediaFileView(
 @PreviewsDayNight
 @Composable
 internal fun MediaFileViewPreview(
-    @PreviewParameter(MediaInfoFileProvider::class) info: MediaInfo
+    @PreviewParameter(MediaInfoFilePreviewParam::class) info: MediaInfo
 ) = ElementPreview {
     MediaFileView(
         modifier = Modifier.fillMaxSize(),

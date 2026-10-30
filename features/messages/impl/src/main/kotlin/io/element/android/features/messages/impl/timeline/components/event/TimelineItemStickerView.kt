@@ -28,7 +28,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.PreviewParameter
 import coil3.compose.AsyncImage
 import io.element.android.features.messages.impl.timeline.model.event.TimelineItemStickerContent
-import io.element.android.features.messages.impl.timeline.model.event.TimelineItemStickerContentProvider
+import io.element.android.features.messages.impl.timeline.model.event.TimelineItemStickerContentPreviewParam
 import io.element.android.features.messages.impl.timeline.protection.ProtectedView
 import io.element.android.features.messages.impl.timeline.protection.coerceRatioWhenHidingContent
 import io.element.android.features.messages.impl.timeline.util.handleAsyncImageStateChange
@@ -37,10 +37,10 @@ import io.element.android.libraries.designsystem.modifiers.onKeyboardContextMenu
 import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
 import io.element.android.libraries.designsystem.theme.components.CircularProgressIndicator
-import io.element.android.libraries.matrix.ui.media.MediaRequestData
 import io.element.android.libraries.matrix.ui.media.contentvalidation.ContentValidationState
 import io.element.android.libraries.matrix.ui.media.contentvalidation.NoopContentValidationState
 import io.element.android.libraries.matrix.ui.media.contentvalidation.collectOverallState
+import io.element.android.libraries.matrixmedia.api.MediaRequestData
 import io.element.android.libraries.ui.strings.CommonStrings
 
 private const val STICKER_SIZE_IN_DP = 128
@@ -123,7 +123,9 @@ fun TimelineItemStickerView(
 
 @PreviewsDayNight
 @Composable
-internal fun TimelineItemStickerViewPreview(@PreviewParameter(TimelineItemStickerContentProvider::class) content: TimelineItemStickerContent) = ElementPreview {
+internal fun TimelineItemStickerViewPreview(@PreviewParameter(
+    TimelineItemStickerContentPreviewParam::class
+) content: TimelineItemStickerContent) = ElementPreview {
     TimelineItemStickerView(
         content = content,
         hideMediaContent = false,

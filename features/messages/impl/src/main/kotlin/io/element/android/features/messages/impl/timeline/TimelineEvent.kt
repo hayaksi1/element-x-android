@@ -28,11 +28,18 @@ sealed interface TimelineEvent {
     data object HideShieldDialog : TimelineEvent
 
     data object MarkAllAsRead : TimelineEvent
+    data class EnterSelectionMode(val action: SelectionAction, val eventId: EventId) : TimelineEvent
+    data class ToggleSelection(val eventId: EventId) : TimelineEvent
+    data object ExitSelectionMode : TimelineEvent
+    data class CopyToClipboard(val text: String) : TimelineEvent
 
     /**
      * Events coming from a timeline item.
      */
     sealed interface TimelineItemEvent : TimelineEvent
+
+    data class ShowSendFailureDialog(val event: TimelineItem.Event) : TimelineItemEvent
+    data object HideSendFailureDialog : TimelineEvent
 
     data class ComputeVerifiedUserSendFailure(val event: TimelineItem.Event) : TimelineItemEvent
     data class ShowShieldDialog(val messageShieldData: MessageShieldData) : TimelineItemEvent
@@ -49,9 +56,9 @@ sealed interface TimelineEvent {
      */
     sealed interface TimelineItemPollEvent : TimelineItemEvent
 
-    data class SelectPollAnswer(
+    data class SendPollResponse(
         val pollStartId: EventId,
-        val answerId: String
+        val answerIds: List<String>
     ) : TimelineItemPollEvent
 
     data class EndPoll(

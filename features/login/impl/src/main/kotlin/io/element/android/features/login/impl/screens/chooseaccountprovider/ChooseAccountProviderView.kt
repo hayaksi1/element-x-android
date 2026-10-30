@@ -6,8 +6,6 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-@file:OptIn(ExperimentalMaterial3Api::class)
-
 package io.element.android.features.login.impl.screens.chooseaccountprovider
 
 import androidx.compose.foundation.layout.Box
@@ -21,7 +19,6 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -57,7 +54,6 @@ fun ChooseAccountProviderView(
     onOAuthDetails: (OAuthDetails) -> Unit,
     onNeedLoginPassword: () -> Unit,
     onLearnMoreClick: () -> Unit,
-    onCreateAccountContinue: (url: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val isLoading by remember(state.loginModeState.loginMode) {
@@ -97,19 +93,11 @@ fun ChooseAccountProviderView(
                 )
 
                 state.accountProviders.forEach { item ->
-                    val alteredItem = if (item.isMatrixOrg) {
-                        // Set the subtitle from the resource
-                        item.copy(
-                            subtitle = stringResource(id = R.string.screen_change_account_provider_matrix_org_subtitle),
-                        )
-                    } else {
-                        item
-                    }
                     AccountProviderView(
-                        item = alteredItem,
+                        item = item,
                         selected = item == state.selectedAccountProvider,
                         onClick = {
-                            state.eventSink(ChooseAccountProviderEvents.SelectAccountProvider(item))
+                            state.eventSink(ChooseAccountProviderEvent.SelectAccountProvider(item))
                         }
                     )
                 }
@@ -120,7 +108,7 @@ fun ChooseAccountProviderView(
                     text = stringResource(id = CommonStrings.action_continue),
                     showProgress = isLoading,
                     onClick = {
-                        state.eventSink(ChooseAccountProviderEvents.Continue)
+                        state.eventSink(ChooseAccountProviderEvent.Continue)
                     },
                     enabled = state.submitEnabled || isLoading,
                     modifier = Modifier
@@ -132,12 +120,11 @@ fun ChooseAccountProviderView(
             LoginModeView(
                 loginMode = state.loginModeState.loginMode,
                 onClearError = {
-                    state.eventSink(ChooseAccountProviderEvents.ClearError)
+                    state.eventSink(ChooseAccountProviderEvent.ClearError)
                 },
                 onLearnMoreClick = onLearnMoreClick,
                 onOAuthDetails = onOAuthDetails,
                 onNeedLoginPassword = onNeedLoginPassword,
-                onCreateAccountContinue = onCreateAccountContinue,
             )
         }
     }
@@ -154,13 +141,14 @@ fun ChooseAccountProviderView(
 
 @PreviewsDayNight
 @Composable
-internal fun ChooseAccountProviderViewPreview(@PreviewParameter(ChooseAccountProviderStateProvider::class) state: ChooseAccountProviderState) = ElementPreview {
+internal fun ChooseAccountProviderViewPreview(@PreviewParameter(
+    ChooseAccountProviderStatePreviewParam::class
+) state: ChooseAccountProviderState) = ElementPreview {
     ChooseAccountProviderView(
         state = state,
         onBackClick = { },
         onLearnMoreClick = { },
         onOAuthDetails = { },
         onNeedLoginPassword = { },
-        onCreateAccountContinue = { },
     )
 }
