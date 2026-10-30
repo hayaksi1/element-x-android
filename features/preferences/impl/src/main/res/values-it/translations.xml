@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
-  <string name="full_screen_intent_banner_message">"Per non perdere mai una chiamata importante, modifica le impostazioni per consentire le notifiche a schermo intero quando il telefono è bloccato."</string>
-  <string name="full_screen_intent_banner_title">"Migliora la tua esperienza di chiamata"</string>
+  <string name="full_screen_intent_banner_message_android">"Per non perdere mai una chiamata importante, modifica le impostazioni per consentire le notifiche a schermo intero quando il telefono è bloccato."</string>
+  <string name="full_screen_intent_banner_title_android">"Migliora la tua esperienza di chiamata"</string>
   <string name="screen_advanced_settings_choose_distributor_dialog_title_android">"Scegli come ricevere le notifiche"</string>
   <string name="screen_advanced_settings_developer_mode">"Modalità sviluppatore"</string>
   <string name="screen_advanced_settings_developer_mode_description">"Attiva per avere accesso alle funzionalità per sviluppatori."</string>
@@ -75,7 +75,7 @@ Se procedi, alcune delle tue impostazioni potrebbero cambiare."</string>
   <string name="screen_notification_settings_failed_fixing_configuration">"La configurazione non è stata corretta, riprova."</string>
   <string name="screen_notification_settings_group_chats">"Chat di gruppo"</string>
   <string name="screen_notification_settings_invite_for_me_label">"Inviti"</string>
-  <string name="screen_notification_settings_mentions_only_disclaimer">"Il tuo homeserver non supporta questa opzione nelle stanze crifrate, quindi potresti non ricevere notifiche in alcune stanze."</string>
+  <string name="screen_notification_settings_mentions_only_disclaimer">"Il tuo gestore dell\'account non supporta questa opzione nelle conversazioni cifrate, pertanto potresti non ricevere notifiche in alcune conversazioni."</string>
   <string name="screen_notification_settings_mentions_section_title">"Menzioni"</string>
   <string name="screen_notification_settings_message_sound_dialog_choose_other">"Scegli un altro suono…"</string>
   <string name="screen_notification_settings_message_sound_dialog_current_subtitle">"Attualmente si utilizza %1$s"</string>
@@ -101,6 +101,14 @@ Se procedi, alcune delle tue impostazioni potrebbero cambiare."</string>
   <string name="screen_notification_settings_system_notifications_action_required_content_link">"impostazioni di sistema"</string>
   <string name="screen_notification_settings_system_notifications_turned_off">"Notifiche di sistema disattivate"</string>
   <string name="screen_notification_settings_title">"Notifiche"</string>
+  <string name="screen_settings_user_status_away">"Assente"</string>
+  <string name="screen_settings_user_status_be_right_back">"Torno subito"</string>
+  <string name="screen_settings_user_status_custom">"Personalizzato…"</string>
+  <string name="screen_settings_user_status_custom_hint">"Stato personalizzato…"</string>
+  <string name="screen_settings_user_status_focus_time">"Mi sto concentrando"</string>
+  <string name="screen_settings_user_status_in_a_meeting">"In una riunione"</string>
+  <string name="screen_settings_user_status_on_the_road">"In viaggio"</string>
+  <string name="screen_settings_user_status_placeholder">"Quale è il tuo stato?"</string>
   <string name="theme_black">"Nero"</string>
   <string name="theme_dark">"Scuro"</string>
   <string name="theme_light">"Chiaro"</string>
