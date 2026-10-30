@@ -22,7 +22,7 @@ interface MessagesNavigator {
     fun forwardEvents(eventIds: List<EventId>, timelineProvider: TimelineProvider)
     fun navigateToReportMessage(eventId: EventId, senderId: UserId)
     fun navigateToEditPoll(eventId: EventId)
-    fun navigateToPreviewAttachments(attachments: ImmutableList<Attachment>, inReplyToEventId: EventId?)
+    fun navigateToPreviewAttachments(attachments: ImmutableList<Attachment>, inReplyToEventId: EventId?, caption: String?)
     fun navigateToRoom(roomId: RoomId, eventId: EventId?, serverNames: List<String>)
     fun navigateToMember(userId: UserId)
     fun navigateToThread(threadRootId: ThreadId, focusedEventId: EventId?)
