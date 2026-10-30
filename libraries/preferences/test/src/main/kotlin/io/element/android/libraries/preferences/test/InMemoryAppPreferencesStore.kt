@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.updateAndGet
 
 class InMemoryAppPreferencesStore(
     isDeveloperModeEnabled: Boolean = false,
+    isOtherAccountsExpanded: Boolean = true,
     hideSpaceRooms: Boolean = false,
     customElementCallBaseUrl: String? = null,
     hideInviteAvatars: Boolean? = null,
@@ -38,6 +39,7 @@ class InMemoryAppPreferencesStore(
     callRingtoneDisplayName: String? = null,
 ) : AppPreferencesStore {
     private val isDeveloperModeEnabled = MutableStateFlow(isDeveloperModeEnabled)
+    private val isOtherAccountsExpanded = MutableStateFlow(isOtherAccountsExpanded)
     private val hideSpaceRooms = MutableStateFlow(hideSpaceRooms)
     private val customElementCallBaseUrl = MutableStateFlow(customElementCallBaseUrl)
     private val theme = MutableStateFlow(theme)
@@ -60,6 +62,14 @@ class InMemoryAppPreferencesStore(
 
     override fun isDeveloperModeEnabledFlow(): Flow<Boolean> {
         return isDeveloperModeEnabled
+    }
+
+    override suspend fun setOtherAccountsExpanded(expanded: Boolean) {
+        isOtherAccountsExpanded.value = expanded
+    }
+
+    override fun isOtherAccountsExpandedFlow(): Flow<Boolean> {
+        return isOtherAccountsExpanded
     }
 
     override suspend fun setHideSpaceRooms(hide: Boolean) {
