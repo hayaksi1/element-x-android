@@ -44,6 +44,7 @@ interface AppPreferencesStore {
 
     /** Whether room notifications are published as Android conversations; defaults to `true`. */
     fun isConversationNotificationsEnabledFlow(): Flow<Boolean>
+
     /**
      * @param show true to list the developer options entry in the settings.
      */

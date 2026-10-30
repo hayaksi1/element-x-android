@@ -811,6 +811,7 @@ internal fun MessagesViewSelectionModePreview() = ElementPreview {
         knockRequestsBannerView = {},
         customReactionBottomSheet = {},
         onThreadsListClick = {},
+        onSearchClick = {},
     )
 }
 

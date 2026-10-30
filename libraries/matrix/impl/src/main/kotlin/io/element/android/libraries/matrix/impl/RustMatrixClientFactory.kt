@@ -205,7 +205,7 @@ class RustMatrixClientFactory(
             .withOfflineMode()
             .finish()
 
-        innerMatrixClientFactory.create(
+        return innerMatrixClientFactory.create(
             sessionPaths = sessionData.getSessionPaths(),
             innerClient = client,
             innerSyncService = syncService,

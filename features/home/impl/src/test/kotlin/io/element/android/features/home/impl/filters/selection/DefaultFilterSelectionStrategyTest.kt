@@ -12,7 +12,6 @@ import io.element.android.features.home.impl.filters.RoomListFilter
 import io.element.android.libraries.preferences.test.InMemorySessionPreferencesStore
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
 
@@ -22,7 +21,7 @@ class DefaultFilterSelectionStrategyTest {
         val store = InMemorySessionPreferencesStore()
         val strategy = createStrategy(store)
         strategy.select(RoomListFilter.Rooms)
-        advanceUntilIdle()
+        testScheduler.advanceUntilIdle()
         assertThat(store.getSelectedRoomListFilters().first()).containsExactly(RoomListFilter.Rooms.name)
     }
 
@@ -30,9 +29,9 @@ class DefaultFilterSelectionStrategyTest {
     fun `deselecting a filter removes it from the store`() = runTest {
         val store = InMemorySessionPreferencesStore(selectedRoomListFilters = setOf(RoomListFilter.Rooms.name))
         val strategy = createStrategy(store)
-        advanceUntilIdle()
+        testScheduler.advanceUntilIdle()
         strategy.deselect(RoomListFilter.Rooms)
-        advanceUntilIdle()
+        testScheduler.advanceUntilIdle()
         assertThat(store.getSelectedRoomListFilters().first()).isEmpty()
     }
 
@@ -40,7 +39,7 @@ class DefaultFilterSelectionStrategyTest {
     fun `the filters selected last time are restored`() = runTest {
         val store = InMemorySessionPreferencesStore(selectedRoomListFilters = setOf(RoomListFilter.Favourites.name))
         val strategy = createStrategy(store)
-        advanceUntilIdle()
+        testScheduler.advanceUntilIdle()
         assertThat(strategy.isSelected(RoomListFilter.Favourites)).isTrue()
     }
 
@@ -48,7 +47,7 @@ class DefaultFilterSelectionStrategyTest {
     fun `a stored filter which is no longer known is ignored`() = runTest {
         val store = InMemorySessionPreferencesStore(selectedRoomListFilters = setOf("NotAFilter"))
         val strategy = createStrategy(store)
-        advanceUntilIdle()
+        testScheduler.advanceUntilIdle()
         assertThat(strategy.filterSelectionStates.value.none { it.isSelected }).isTrue()
     }
 
@@ -58,7 +57,7 @@ class DefaultFilterSelectionStrategyTest {
             selectedRoomListFilters = setOf(RoomListFilter.Rooms.name, RoomListFilter.People.name),
         )
         val strategy = createStrategy(store)
-        advanceUntilIdle()
+        testScheduler.advanceUntilIdle()
         assertThat(strategy.isSelected(RoomListFilter.Rooms) && strategy.isSelected(RoomListFilter.People)).isFalse()
     }
 

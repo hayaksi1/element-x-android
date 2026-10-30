@@ -94,7 +94,7 @@ class TimelineItemsFactory(
             }
         }
         val renderableItems = newTimelineItemStates.filterNot {
-            it.isStateEventWithBlankBody() || (!renderRedactedMessages && it.isRedactedEvent())
+            it.isStateEventWithBlankBody() || !renderRedactedMessages && it.isRedactedEvent()
         }
         val result = timelineItemGrouper.group(renderableItems).toImmutableList()
         this._timelineItems.emit(result)

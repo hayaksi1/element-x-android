@@ -2113,7 +2113,7 @@ class TimelinePresenterTest {
             loadedState.eventSink(TimelineEvent.OnScrollFinished(0))
             advanceUntilIdle()
             loadedState.eventSink(TimelineEvent.FocusOnEvent(replyTargetId, fromReply = true))
-            advanceUntilIdle()
+            runCurrent()
             assertThat(expectMostRecentItem().canJumpBack).isTrue()
 
             loadedState.eventSink(TimelineEvent.JumpBack)
@@ -2135,7 +2135,7 @@ class TimelinePresenterTest {
             loadedState.eventSink(TimelineEvent.OnScrollFinished(0))
             advanceUntilIdle()
             loadedState.eventSink(TimelineEvent.FocusOnEvent(targetId))
-            advanceUntilIdle()
+            runCurrent()
             assertThat(expectMostRecentItem().canJumpBack).isFalse()
             cancelAndIgnoreRemainingEvents()
         }
@@ -2153,7 +2153,7 @@ class TimelinePresenterTest {
             loadedState.eventSink(TimelineEvent.OnScrollFinished(0))
             advanceUntilIdle()
             loadedState.eventSink(TimelineEvent.FocusOnEvent(replyTargetId, fromReply = true))
-            advanceUntilIdle()
+            runCurrent()
             assertThat(expectMostRecentItem().canJumpBack).isTrue()
 
             loadedState.eventSink(TimelineEvent.JumpToLive)

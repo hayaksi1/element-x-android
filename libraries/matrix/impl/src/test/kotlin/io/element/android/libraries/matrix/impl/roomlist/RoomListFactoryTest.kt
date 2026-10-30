@@ -15,6 +15,7 @@ import io.element.android.libraries.matrix.impl.fixtures.fakes.FakeFfiRoomListEn
 import io.element.android.libraries.matrix.impl.fixtures.fakes.FakeFfiRoomListService
 import io.element.android.services.analytics.test.FakeAnalyticsService
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.test.runCurrent
@@ -22,6 +23,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Test
 import kotlin.coroutines.EmptyCoroutineContext
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class RoomListFactoryTest {
     @Test
     fun `createRoomList should work`() = runTest {

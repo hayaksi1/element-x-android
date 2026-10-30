@@ -144,9 +144,10 @@ class DefaultVoiceMessageComposerPresenterTest {
             initialState.eventSink(VoiceMessageComposerEvent.RecorderEvent(VoiceMessageRecorderEvent.Start))
             initialState.eventSink(VoiceMessageComposerEvent.RecorderEvent(VoiceMessageRecorderEvent.Start))
 
+            assertThat(awaitItem().voiceMessageState).isEqualTo(FIRST_RECORDING_STATE)
             val finalState = awaitItem()
             assertThat(finalState.voiceMessageState).isEqualTo(RECORDING_STATE)
-            voiceRecorder.assertCalls(started = 1)
+            startRecordResult.assertions().isCalledOnce()
 
             testPauseAndDestroy(finalState)
         }
@@ -162,9 +163,12 @@ class DefaultVoiceMessageComposerPresenterTest {
             awaitItem().eventSink(VoiceMessageComposerEvent.RecorderEvent(VoiceMessageRecorderEvent.Cancel))
             awaitItem().eventSink(VoiceMessageComposerEvent.RecorderEvent(VoiceMessageRecorderEvent.Start))
 
+            assertThat(awaitItem().voiceMessageState).isEqualTo(FIRST_RECORDING_STATE)
             val finalState = awaitItem()
             assertThat(finalState.voiceMessageState).isEqualTo(RECORDING_STATE)
-            voiceRecorder.assertCalls(started = 2, stopped = 1, deleted = 1)
+            startRecordResult.assertions().isCalledExactly(2)
+            stopRecordResult.assertions().isCalledOnce()
+            deleteRecordingResult.assertions().isCalledOnce()
 
             testPauseAndDestroy(finalState)
         }
