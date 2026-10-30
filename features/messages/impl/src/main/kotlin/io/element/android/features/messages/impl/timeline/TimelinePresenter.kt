@@ -45,8 +45,12 @@ import io.element.android.features.messages.impl.voicemessages.timeline.Redacted
 import io.element.android.features.poll.api.actions.EndPollAction
 import io.element.android.features.poll.api.actions.SendPollResponseAction
 import io.element.android.features.roomcall.api.RoomCallState
+import io.element.android.libraries.androidutils.clipboard.ClipboardHelper
+import io.element.android.libraries.androidutils.toast.ToastHelper
 import io.element.android.libraries.architecture.Presenter
 import io.element.android.libraries.core.coroutine.CoroutineDispatchers
+import io.element.android.libraries.designsystem.utils.snackbar.SnackbarDispatcher
+import io.element.android.libraries.designsystem.utils.snackbar.SnackbarMessage
 import io.element.android.libraries.di.annotations.SessionCoroutineScope
 import io.element.android.libraries.featureflag.api.FeatureFlagService
 import io.element.android.libraries.featureflag.api.FeatureFlags
@@ -61,6 +65,7 @@ import io.element.android.libraries.matrix.api.timeline.Timeline
 import io.element.android.libraries.matrix.api.timeline.item.event.LocalEventSendState
 import io.element.android.libraries.matrix.api.timeline.item.event.TimelineItemEventOrigin
 import io.element.android.libraries.preferences.api.store.SessionPreferencesStore
+import io.element.android.libraries.ui.strings.CommonStrings
 import io.element.android.services.analytics.api.AnalyticsLongRunningTransaction.DisplayFirstTimelineItems
 import io.element.android.services.analytics.api.AnalyticsLongRunningTransaction.NotificationToMessage
 import io.element.android.services.analytics.api.AnalyticsLongRunningTransaction.OpenRoom
@@ -69,13 +74,16 @@ import io.element.android.services.analytics.api.finishLongRunningTransaction
 import io.element.android.services.analyticsproviders.api.AnalyticsUserData
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.collections.immutable.toImmutableList
+import kotlinx.collections.immutable.toImmutableSet
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -102,10 +110,13 @@ class TimelinePresenter(
     private val typingNotificationPresenter: Presenter<TypingNotificationState>,
     private val roomCallStatePresenter: Presenter<RoomCallState>,
     private val featureFlagService: FeatureFlagService,
+    private val snackbarDispatcher: SnackbarDispatcher,
     private val analyticsService: AnalyticsService,
     private val liveLocationShareManager: ActiveLiveLocationShareManager,
     private val markAsFullyRead: MarkAsFullyRead,
     private val timelineProtectionPresenter: Presenter<TimelineProtectionState>,
+    private val clipboardHelper: ClipboardHelper,
+    private val toastHelper: ToastHelper,
 ) : Presenter<TimelineState> {
     private val tag = "TimelinePresenter"
 
@@ -116,7 +127,6 @@ class TimelinePresenter(
             navigator: MessagesNavigator
         ): TimelinePresenter
     }
-
     private val timelineItemsFactory: TimelineItemsFactory = timelineItemsFactoryCreator.create(
         config = TimelineItemsFactoryConfig(
             computeReadReceipts = true,
@@ -130,6 +140,19 @@ class TimelinePresenter(
     // Where to come back to after following one or more replies.
     private val returnAnchors = mutableStateListOf<EventId>()
     private var firstVisibleEventId: EventId? = null
+
+    /**
+     * Selection is held by the presenter instance, and not by the composition, so that it survives
+     * this timeline being stashed while another screen (i.e. the forward screen) is on top of it.
+     */
+    private val selectionState: MutableState<SelectionState> = mutableStateOf(SelectionState.Disabled)
+
+    /**
+     * Exit the selection mode. Can be called from outside the composition, see [TimelineSelectionOwner].
+     */
+    fun exitSelectionMode() {
+        selectionState.value = SelectionState.Disabled
+    }
 
     @Composable
     override fun present(): TimelineState {
@@ -168,6 +191,20 @@ class TimelinePresenter(
         }
         val displayJumpToUnread by produceState(false) {
             value = featureFlagService.isFeatureEnabled(FeatureFlags.JumpToUnread)
+        }
+        val useNewTimelineEventRenderer by produceState(false) {
+            value = featureFlagService.isFeatureEnabled(FeatureFlags.NewTimelineEventRenderer)
+        }
+
+        val isMultiSelectEnabled by produceState(false) {
+            featureFlagService.isFeatureEnabledFlow(FeatureFlags.MessageMultiSelect)
+                .collect { isEnabled ->
+                    value = isEnabled
+                    // When the feature flag is turned off, clear any active selection.
+                    if (!isEnabled) {
+                        exitSelectionMode()
+                    }
+                }
         }
 
         val timelineProtectionState = timelineProtectionPresenter.present()
@@ -233,7 +270,7 @@ class TimelinePresenter(
                 is TimelineEvent.StopLiveLocationShare -> sessionCoroutineScope.launch {
                     liveLocationShareManager.stopShare(room.roomId)
                 }
-                is TimelineEvent.FocusOnEvent -> sessionCoroutineScope.launch {
+                is TimelineEvent.FocusOnEvent -> room.roomCoroutineScope.launch {
                     if (event.fromReply) {
                         firstVisibleEventId?.takeIf { it != event.eventId }?.let(returnAnchors::add)
                     }
@@ -258,11 +295,31 @@ class TimelinePresenter(
                 is TimelineEvent.JumpBack -> {
                     val anchor = returnAnchors.removeLastOrNull()
                     if (anchor != null) {
-                        sessionCoroutineScope.launch {
+                        room.roomCoroutineScope.launch {
                             focusRequestState.value = FocusRequestState.Requested(anchor, Duration.ZERO)
                             focusOnEvent(anchor, focusRequestState)
                         }.start()
                     }
+                }
+                is TimelineEvent.EnterSelectionMode -> {
+                    if (!isMultiSelectEnabled) return
+                    selectionState.value = SelectionState.Active(event.action, persistentSetOf(event.eventId))
+                }
+                is TimelineEvent.ToggleSelection -> {
+                    val current = selectionState.value as? SelectionState.Active ?: return
+                    val selected = current.selectedEventIds
+                    selectionState.value = when {
+                        // Deselecting the last event does not exit selection mode: it is only left explicitly, as on iOS.
+                        event.eventId in selected -> current.deselect(setOf(event.eventId))
+                        selected.size >= MAX_SELECTION_COUNT -> {
+                            snackbarDispatcher.post(SnackbarMessage(CommonStrings.screen_room_maximum_messages_selected))
+                            current
+                        }
+                        else -> current.copy(selectedEventIds = (selected + event.eventId).toImmutableSet())
+                    }
+                }
+                is TimelineEvent.ExitSelectionMode -> {
+                    exitSelectionMode()
                 }
                 TimelineEvent.HideShieldDialog -> messageShieldDialogData.value = null
                 TimelineEvent.MarkAllAsRead -> sessionCoroutineScope.launch {
@@ -275,7 +332,9 @@ class TimelinePresenter(
                 }
                 is TimelineEvent.ShowShieldDialog -> messageShieldDialogData.value = event.messageShieldData
                 is TimelineEvent.ShowSendFailureDialog -> {
-                    val sendStateFailure = event.event.localSendState as? LocalEventSendState.Failed ?: return
+                    val (_, sendStateFailure) = event.event.pendingSend() ?: return
+                    if (sendStateFailure !is LocalEventSendState.Failed) return
+
                     when (sendStateFailure) {
                         is LocalEventSendState.Failed.VerifiedUser -> {
                             // defer to the resolveVerifiedUserSendFailureState to handle this case,
@@ -332,6 +391,11 @@ class TimelinePresenter(
                 is TimelineEvent.ValidateMedia -> {
                     timelineProtectionState.eventSink(TimelineProtectionEvent.ValidateContent(event.mediaSources, event.validationState))
                 }
+                is TimelineEvent.CopyToClipboard -> {
+                    clipboardHelper.copyPlainText(event.text) {
+                        toastHelper.show(CommonStrings.common_copied_to_clipboard)
+                    }
+                }
             }
         }
 
@@ -348,22 +412,22 @@ class TimelinePresenter(
                 }
                 .launchIn(this)
 
-            combine(
-                timelineController.timelineItems(),
-                room.membersStateFlow,
-                sessionPreferencesStore.isRenderReadReceiptsEnabled(),
-            ) { items, membersState, renderReadReceipts ->
-                val parent = analyticsService.getLongRunningTransaction(DisplayFirstTimelineItems)
-                val transaction = parent?.startChild("timelineItemsFactory.replaceWith", "Processing timeline items")
-                transaction?.putExtraData(AnalyticsUserData.TIMELINE_ITEM_COUNT, items.count().toString())
-                timelineItemsFactory.replaceWith(
-                    timelineItems = items,
-                    roomMembers = membersState.roomMembers().orEmpty(),
-                    renderReadReceipts = renderReadReceipts,
-                )
-                transaction?.finish()
-                items
-            }
+            // Drop the selected events which the action cannot be applied to anymore, for instance because the message has been deleted.
+            timelineItemsFactory.timelineItems
+                .map { items -> selectionState.value.eventIdsToDeselect(items) }
+                .filter { eventIdsToDeselect -> eventIdsToDeselect.isNotEmpty() }
+                .flowOn(dispatchers.computation)
+                .onEach { eventIdsToDeselect -> selectionState.value = selectionState.value.deselect(eventIdsToDeselect) }
+                .launchIn(this)
+
+            timelineController.timelineItems()
+                .onEach { items ->
+                    val parent = analyticsService.getLongRunningTransaction(DisplayFirstTimelineItems)
+                    val transaction = parent?.startChild("timelineItemsFactory.replaceWith", "Processing timeline items")
+                    transaction?.putExtraData(AnalyticsUserData.TIMELINE_ITEM_COUNT, items.count().toString())
+                    timelineItemsFactory.replaceWith(timelineItems = items)
+                    transaction?.finish()
+                }
                 .onEach(redactedVoiceMessageManager::onEachMatrixTimelineItem)
                 .flowOn(dispatchers.computation)
                 .launchIn(this)
@@ -451,11 +515,14 @@ class TimelinePresenter(
         val userEventPermissions by room.permissionsAsState(UserEventPermissions.DEFAULT) { perms ->
             perms.userEventPermissions()
         }
-        val timelineRoomInfo by remember(typingNotificationState, roomCallState, roomInfo) {
+        val renderReadReceipts by sessionPreferencesStore.isRenderReadReceiptsEnabled().collectAsState(initial = true)
+        val timelineRoomInfo by remember(typingNotificationState, roomCallState, roomInfo, renderReadReceipts) {
             derivedStateOf {
                 TimelineRoomInfo(
+                    currentUserId = room.sessionId,
                     name = roomInfo.name,
                     isDm = roomInfo.isDm,
+                    renderReadReceipts = renderReadReceipts,
                     userHasPermissionToSendMessage = userEventPermissions.canSendMessage,
                     userHasPermissionToSendReaction = userEventPermissions.canSendReaction,
                     roomCallState = roomCallState,
@@ -484,6 +551,8 @@ class TimelinePresenter(
             displayJumpToUnread = displayJumpToUnread,
             jumpToUnread = jumpToUnread.value,
             canJumpBack = returnAnchors.isNotEmpty(),
+            selectionState = selectionState.value,
+            useNewTimelineEventRenderer = useNewTimelineEventRenderer,
             eventSink = ::handleEvent,
         )
     }
