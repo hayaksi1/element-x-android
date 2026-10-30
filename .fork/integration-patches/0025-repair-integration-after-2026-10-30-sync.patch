@@ -1,0 +1,446 @@
+From 270239ef997597c9d6696bf59b56ae8bca2ca02a Mon Sep 17 00:00:00 2001
+From: hayaksi1 <193020925+hayaksi1@users.noreply.github.com>
+Date: Fri, 30 Oct 2026 21:50:58 +0300
+Subject: [PATCH] Repair the integration after the 2026-10-30 upstream sync
+
+Compile, unit-test and style repairs needed once every branch is merged
+onto the new develop:
+
+- drop the duplicate MessageSearchStateProvider that MessageSearchStatePreviewParam replaces
+- call the inner factory from RustMatrixClientFactory.create
+- pass onSearchClick in the MessagesView selection-mode preview
+- remove the duplicate appPreferencesStore argument in RoomListPresenterTest
+- rename onSendMessage to onMessageInRoom in the conversation service test
+- add the missing opt-ins for the coroutines test APIs
+- run the focus-on-event and voice recorder tests against the current scope and recorder flow
+- fix detekt and ktlint findings in TimelineItemsFactory and AppPreferencesStore
+
+Fork-Feature: integration
+---
+ .../impl/ForwardMessagesPresenterTest.kt      |  3 +
+ .../DefaultFilterSelectionStrategyTest.kt     | 13 ++-
+ .../impl/roomlist/RoomListPresenterTest.kt    |  1 -
+ .../features/messages/impl/MessagesView.kt    |  1 +
+ .../factories/TimelineItemsFactory.kt         |  2 +-
+ .../impl/threads/ThreadedMessagesNodeTest.kt  |  2 +-
+ .../impl/timeline/TimelinePresenterTest.kt    |  6 +-
+ ...efaultVoiceMessageComposerPresenterTest.kt |  8 +-
+ .../impl/MessageSearchStateProvider.kt        | 87 -------------------
+ .../impl/RoomMemberModerationPresenterTest.kt |  3 +
+ .../matrix/impl/RustMatrixClientFactory.kt    |  2 +-
+ .../impl/roomlist/RoomListFactoryTest.kt      |  2 +
+ .../api/store/AppPreferencesStore.kt          |  1 +
+ ...aultNotificationConversationServiceTest.kt | 10 +--
+ 14 files changed, 33 insertions(+), 108 deletions(-)
+ delete mode 100644 features/messagesearch/impl/src/main/kotlin/io/element/android/features/messagesearch/impl/MessageSearchStateProvider.kt
+
+diff --git a/features/forward/impl/src/test/kotlin/io/element/android/features/forward/impl/ForwardMessagesPresenterTest.kt b/features/forward/impl/src/test/kotlin/io/element/android/features/forward/impl/ForwardMessagesPresenterTest.kt
+index a80835b94f..7b15c37c06 100644
+--- a/features/forward/impl/src/test/kotlin/io/element/android/features/forward/impl/ForwardMessagesPresenterTest.kt
++++ b/features/forward/impl/src/test/kotlin/io/element/android/features/forward/impl/ForwardMessagesPresenterTest.kt
+@@ -6,6 +6,8 @@
+  * Please see LICENSE files in the repository root for full details.
+  */
+ 
++@file:OptIn(ExperimentalCoroutinesApi::class)
++
+ package io.element.android.features.forward.impl
+ 
+ import app.cash.molecule.RecompositionMode
+@@ -24,6 +26,7 @@ import io.element.android.libraries.matrix.test.timeline.FakeTimeline
+ import io.element.android.libraries.matrix.test.timeline.LiveTimelineProvider
+ import io.element.android.tests.testutils.WarmUpRule
+ import io.element.android.tests.testutils.lambda.lambdaRecorder
++import kotlinx.coroutines.ExperimentalCoroutinesApi
+ import kotlinx.coroutines.flow.MutableStateFlow
+ import kotlinx.coroutines.test.TestScope
+ import kotlinx.coroutines.test.advanceUntilIdle
+diff --git a/features/home/impl/src/test/kotlin/io/element/android/features/home/impl/filters/selection/DefaultFilterSelectionStrategyTest.kt b/features/home/impl/src/test/kotlin/io/element/android/features/home/impl/filters/selection/DefaultFilterSelectionStrategyTest.kt
+index 5d94a0a196..9356945b24 100644
+--- a/features/home/impl/src/test/kotlin/io/element/android/features/home/impl/filters/selection/DefaultFilterSelectionStrategyTest.kt
++++ b/features/home/impl/src/test/kotlin/io/element/android/features/home/impl/filters/selection/DefaultFilterSelectionStrategyTest.kt
+@@ -12,7 +12,6 @@ import io.element.android.features.home.impl.filters.RoomListFilter
+ import io.element.android.libraries.preferences.test.InMemorySessionPreferencesStore
+ import kotlinx.coroutines.flow.first
+ import kotlinx.coroutines.test.TestScope
+-import kotlinx.coroutines.test.advanceUntilIdle
+ import kotlinx.coroutines.test.runTest
+ import org.junit.Test
+ 
+@@ -22,7 +21,7 @@ class DefaultFilterSelectionStrategyTest {
+         val store = InMemorySessionPreferencesStore()
+         val strategy = createStrategy(store)
+         strategy.select(RoomListFilter.Rooms)
+-        advanceUntilIdle()
++        testScheduler.advanceUntilIdle()
+         assertThat(store.getSelectedRoomListFilters().first()).containsExactly(RoomListFilter.Rooms.name)
+     }
+ 
+@@ -30,9 +29,9 @@ class DefaultFilterSelectionStrategyTest {
+     fun `deselecting a filter removes it from the store`() = runTest {
+         val store = InMemorySessionPreferencesStore(selectedRoomListFilters = setOf(RoomListFilter.Rooms.name))
+         val strategy = createStrategy(store)
+-        advanceUntilIdle()
++        testScheduler.advanceUntilIdle()
+         strategy.deselect(RoomListFilter.Rooms)
+-        advanceUntilIdle()
++        testScheduler.advanceUntilIdle()
+         assertThat(store.getSelectedRoomListFilters().first()).isEmpty()
+     }
+ 
+@@ -40,7 +39,7 @@ class DefaultFilterSelectionStrategyTest {
+     fun `the filters selected last time are restored`() = runTest {
+         val store = InMemorySessionPreferencesStore(selectedRoomListFilters = setOf(RoomListFilter.Favourites.name))
+         val strategy = createStrategy(store)
+-        advanceUntilIdle()
++        testScheduler.advanceUntilIdle()
+         assertThat(strategy.isSelected(RoomListFilter.Favourites)).isTrue()
+     }
+ 
+@@ -48,7 +47,7 @@ class DefaultFilterSelectionStrategyTest {
+     fun `a stored filter which is no longer known is ignored`() = runTest {
+         val store = InMemorySessionPreferencesStore(selectedRoomListFilters = setOf("NotAFilter"))
+         val strategy = createStrategy(store)
+-        advanceUntilIdle()
++        testScheduler.advanceUntilIdle()
+         assertThat(strategy.filterSelectionStates.value.none { it.isSelected }).isTrue()
+     }
+ 
+@@ -58,7 +57,7 @@ class DefaultFilterSelectionStrategyTest {
+             selectedRoomListFilters = setOf(RoomListFilter.Rooms.name, RoomListFilter.People.name),
+         )
+         val strategy = createStrategy(store)
+-        advanceUntilIdle()
++        testScheduler.advanceUntilIdle()
+         assertThat(strategy.isSelected(RoomListFilter.Rooms) && strategy.isSelected(RoomListFilter.People)).isFalse()
+     }
+ 
+diff --git a/features/home/impl/src/test/kotlin/io/element/android/features/home/impl/roomlist/RoomListPresenterTest.kt b/features/home/impl/src/test/kotlin/io/element/android/features/home/impl/roomlist/RoomListPresenterTest.kt
+index f15dcd8965..2093d49b19 100644
+--- a/features/home/impl/src/test/kotlin/io/element/android/features/home/impl/roomlist/RoomListPresenterTest.kt
++++ b/features/home/impl/src/test/kotlin/io/element/android/features/home/impl/roomlist/RoomListPresenterTest.kt
+@@ -965,7 +965,6 @@ class RoomListPresenterTest {
+         appPreferencesStore: AppPreferencesStore = InMemoryAppPreferencesStore(),
+         markRoomAsRead: MarkRoomAsRead? = null,
+         sessionStore: SessionStore = InMemorySessionStore(),
+-        appPreferencesStore: AppPreferencesStore = InMemoryAppPreferencesStore(),
+     ) = RoomListPresenter(
+         client = client,
+         leaveRoomPresenter = { leaveRoomState },
+diff --git a/features/messages/impl/src/main/kotlin/io/element/android/features/messages/impl/MessagesView.kt b/features/messages/impl/src/main/kotlin/io/element/android/features/messages/impl/MessagesView.kt
+index bc865e5aec..f7acff7a61 100644
+--- a/features/messages/impl/src/main/kotlin/io/element/android/features/messages/impl/MessagesView.kt
++++ b/features/messages/impl/src/main/kotlin/io/element/android/features/messages/impl/MessagesView.kt
+@@ -811,6 +811,7 @@ internal fun MessagesViewSelectionModePreview() = ElementPreview {
+         knockRequestsBannerView = {},
+         customReactionBottomSheet = {},
+         onThreadsListClick = {},
++        onSearchClick = {},
+     )
+ }
+ 
+diff --git a/features/messages/impl/src/main/kotlin/io/element/android/features/messages/impl/timeline/factories/TimelineItemsFactory.kt b/features/messages/impl/src/main/kotlin/io/element/android/features/messages/impl/timeline/factories/TimelineItemsFactory.kt
+index 8104d415d6..3e1abf282c 100644
+--- a/features/messages/impl/src/main/kotlin/io/element/android/features/messages/impl/timeline/factories/TimelineItemsFactory.kt
++++ b/features/messages/impl/src/main/kotlin/io/element/android/features/messages/impl/timeline/factories/TimelineItemsFactory.kt
+@@ -94,7 +94,7 @@ class TimelineItemsFactory(
+             }
+         }
+         val renderableItems = newTimelineItemStates.filterNot {
+-            it.isStateEventWithBlankBody() || (!renderRedactedMessages && it.isRedactedEvent())
++            it.isStateEventWithBlankBody() || !renderRedactedMessages && it.isRedactedEvent()
+         }
+         val result = timelineItemGrouper.group(renderableItems).toImmutableList()
+         this._timelineItems.emit(result)
+diff --git a/features/messages/impl/src/test/kotlin/io/element/android/features/messages/impl/threads/ThreadedMessagesNodeTest.kt b/features/messages/impl/src/test/kotlin/io/element/android/features/messages/impl/threads/ThreadedMessagesNodeTest.kt
+index b724d97533..3c4d45ab06 100644
+--- a/features/messages/impl/src/test/kotlin/io/element/android/features/messages/impl/threads/ThreadedMessagesNodeTest.kt
++++ b/features/messages/impl/src/test/kotlin/io/element/android/features/messages/impl/threads/ThreadedMessagesNodeTest.kt
+@@ -136,7 +136,7 @@ class ThreadedMessagesNodeTest : RobolectricTest() {
+ private class FakeThreadedMessagesNodeCallback : ThreadedMessagesNode.Callback {
+     override fun handleEventClick(timelineMode: Timeline.Mode, event: TimelineItem.Event, canUseOverlay: Boolean) = false
+     override fun handleGalleryItemClick(timelineMode: Timeline.Mode, event: TimelineItem.Event, galleryItemIndex: Int, canUseOverlay: Boolean) = false
+-    override fun navigateToPreviewAttachments(attachments: ImmutableList<Attachment>, inReplyToEventId: EventId?) = Unit
++    override fun navigateToPreviewAttachments(attachments: ImmutableList<Attachment>, inReplyToEventId: EventId?, caption: String?) = Unit
+     override fun navigateToRoomMemberDetails(userId: UserId) = Unit
+     override fun handlePermalinkClick(data: PermalinkData) = Unit
+     override fun navigateToEventDebugInfo(eventId: EventId?, debugInfo: TimelineItemDebugInfo) = Unit
+diff --git a/features/messages/impl/src/test/kotlin/io/element/android/features/messages/impl/timeline/TimelinePresenterTest.kt b/features/messages/impl/src/test/kotlin/io/element/android/features/messages/impl/timeline/TimelinePresenterTest.kt
+index b121518209..5b2a6ac7c5 100644
+--- a/features/messages/impl/src/test/kotlin/io/element/android/features/messages/impl/timeline/TimelinePresenterTest.kt
++++ b/features/messages/impl/src/test/kotlin/io/element/android/features/messages/impl/timeline/TimelinePresenterTest.kt
+@@ -2113,7 +2113,7 @@ class TimelinePresenterTest {
+             loadedState.eventSink(TimelineEvent.OnScrollFinished(0))
+             advanceUntilIdle()
+             loadedState.eventSink(TimelineEvent.FocusOnEvent(replyTargetId, fromReply = true))
+-            advanceUntilIdle()
++            runCurrent()
+             assertThat(expectMostRecentItem().canJumpBack).isTrue()
+ 
+             loadedState.eventSink(TimelineEvent.JumpBack)
+@@ -2135,7 +2135,7 @@ class TimelinePresenterTest {
+             loadedState.eventSink(TimelineEvent.OnScrollFinished(0))
+             advanceUntilIdle()
+             loadedState.eventSink(TimelineEvent.FocusOnEvent(targetId))
+-            advanceUntilIdle()
++            runCurrent()
+             assertThat(expectMostRecentItem().canJumpBack).isFalse()
+             cancelAndIgnoreRemainingEvents()
+         }
+@@ -2153,7 +2153,7 @@ class TimelinePresenterTest {
+             loadedState.eventSink(TimelineEvent.OnScrollFinished(0))
+             advanceUntilIdle()
+             loadedState.eventSink(TimelineEvent.FocusOnEvent(replyTargetId, fromReply = true))
+-            advanceUntilIdle()
++            runCurrent()
+             assertThat(expectMostRecentItem().canJumpBack).isTrue()
+ 
+             loadedState.eventSink(TimelineEvent.JumpToLive)
+diff --git a/features/messages/impl/src/test/kotlin/io/element/android/features/messages/impl/voicemessages/composer/DefaultVoiceMessageComposerPresenterTest.kt b/features/messages/impl/src/test/kotlin/io/element/android/features/messages/impl/voicemessages/composer/DefaultVoiceMessageComposerPresenterTest.kt
+index 2592a829f5..4208f54cc7 100644
+--- a/features/messages/impl/src/test/kotlin/io/element/android/features/messages/impl/voicemessages/composer/DefaultVoiceMessageComposerPresenterTest.kt
++++ b/features/messages/impl/src/test/kotlin/io/element/android/features/messages/impl/voicemessages/composer/DefaultVoiceMessageComposerPresenterTest.kt
+@@ -144,9 +144,10 @@ class DefaultVoiceMessageComposerPresenterTest {
+             initialState.eventSink(VoiceMessageComposerEvent.RecorderEvent(VoiceMessageRecorderEvent.Start))
+             initialState.eventSink(VoiceMessageComposerEvent.RecorderEvent(VoiceMessageRecorderEvent.Start))
+ 
++            assertThat(awaitItem().voiceMessageState).isEqualTo(FIRST_RECORDING_STATE)
+             val finalState = awaitItem()
+             assertThat(finalState.voiceMessageState).isEqualTo(RECORDING_STATE)
+-            voiceRecorder.assertCalls(started = 1)
++            startRecordResult.assertions().isCalledOnce()
+ 
+             testPauseAndDestroy(finalState)
+         }
+@@ -162,9 +163,12 @@ class DefaultVoiceMessageComposerPresenterTest {
+             awaitItem().eventSink(VoiceMessageComposerEvent.RecorderEvent(VoiceMessageRecorderEvent.Cancel))
+             awaitItem().eventSink(VoiceMessageComposerEvent.RecorderEvent(VoiceMessageRecorderEvent.Start))
+ 
++            assertThat(awaitItem().voiceMessageState).isEqualTo(FIRST_RECORDING_STATE)
+             val finalState = awaitItem()
+             assertThat(finalState.voiceMessageState).isEqualTo(RECORDING_STATE)
+-            voiceRecorder.assertCalls(started = 2, stopped = 1, deleted = 1)
++            startRecordResult.assertions().isCalledExactly(2)
++            stopRecordResult.assertions().isCalledOnce()
++            deleteRecordingResult.assertions().isCalledOnce()
+ 
+             testPauseAndDestroy(finalState)
+         }
+diff --git a/features/messagesearch/impl/src/main/kotlin/io/element/android/features/messagesearch/impl/MessageSearchStateProvider.kt b/features/messagesearch/impl/src/main/kotlin/io/element/android/features/messagesearch/impl/MessageSearchStateProvider.kt
+deleted file mode 100644
+index 9e6bcb19bb..0000000000
+--- a/features/messagesearch/impl/src/main/kotlin/io/element/android/features/messagesearch/impl/MessageSearchStateProvider.kt
++++ /dev/null
+@@ -1,87 +0,0 @@
+-/*
+- * Copyright (c) 2026 Element Creations Ltd.
+- *
+- * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
+- * Please see LICENSE files in the repository root for full details.
+- */
+-
+-package io.element.android.features.messagesearch.impl
+-
+-import androidx.compose.ui.tooling.preview.PreviewParameterProvider
+-import io.element.android.libraries.designsystem.components.avatar.AvatarData
+-import io.element.android.libraries.designsystem.components.avatar.AvatarSize
+-import io.element.android.libraries.matrix.api.core.EventId
+-import io.element.android.libraries.matrix.api.core.RoomId
+-import kotlinx.collections.immutable.ImmutableList
+-import kotlinx.collections.immutable.persistentListOf
+-import kotlinx.collections.immutable.toImmutableList
+-
+-open class MessageSearchStateProvider : PreviewParameterProvider<MessageSearchState> {
+-    override val values: Sequence<MessageSearchState>
+-        get() = sequenceOf(
+-            // Nothing typed yet.
+-            aMessageSearchState(),
+-            // Typing, first search still pending.
+-            aMessageSearchState(query = "hello", isSearching = true),
+-            // Results.
+-            aMessageSearchState(query = "hello", results = aMessageSearchResultItemList(), endReached = true),
+-            // Results, with the next page on its way. The footer spinner is tied to a page being in
+-            // flight, so this is the only state that renders it.
+-            aMessageSearchState(query = "hello", results = aMessageSearchResultItemList(), isPaginating = true),
+-            // Genuinely nothing found.
+-            aMessageSearchState(query = "hello", endReached = true),
+-            // Search failed.
+-            aMessageSearchState(query = "hello", hasError = true),
+-            // Room-scoped, nothing to show yet while the walk over the global results runs.
+-            aMessageSearchState(query = "hello", isRoomScoped = true),
+-        )
+-}
+-
+-fun aMessageSearchState(
+-    query: String = "",
+-    results: ImmutableList<MessageSearchResultItem> = persistentListOf(),
+-    isSearching: Boolean = false,
+-    isPaginating: Boolean = false,
+-    endReached: Boolean = false,
+-    isRoomScoped: Boolean = false,
+-    hasError: Boolean = false,
+-    eventSink: (MessageSearchEvents) -> Unit = {},
+-) = MessageSearchState(
+-    query = query,
+-    results = results,
+-    isSearching = isSearching,
+-    isPaginating = isPaginating,
+-    endReached = endReached,
+-    isRoomScoped = isRoomScoped,
+-    hasError = hasError,
+-    eventSink = eventSink,
+-)
+-
+-fun aMessageSearchResultItem(
+-    eventId: EventId = EventId("\$anEventId"),
+-    senderName: String = "Alice",
+-    preview: String = "Hello world, this is a message that matched the search query",
+-    formattedDate: String = "12:34",
+-) = MessageSearchResultItem(
+-    roomId = RoomId("!aRoomId:domain"),
+-    eventId = eventId,
+-    senderAvatarData = AvatarData(
+-        id = "@alice:domain",
+-        name = senderName,
+-        url = null,
+-        size = AvatarSize.UserListItem,
+-    ),
+-    senderName = senderName,
+-    preview = preview,
+-    formattedDate = formattedDate,
+-)
+-
+-fun aMessageSearchResultItemList() = listOf(
+-    aMessageSearchResultItem(),
+-    aMessageSearchResultItem(
+-        eventId = EventId("\$anotherEventId"),
+-        senderName = "Bob",
+-        preview = "Another matching message",
+-        formattedDate = "Yesterday",
+-    ),
+-).toImmutableList()
+diff --git a/features/roommembermoderation/impl/src/test/kotlin/io/element/android/features/roommembermoderation/impl/RoomMemberModerationPresenterTest.kt b/features/roommembermoderation/impl/src/test/kotlin/io/element/android/features/roommembermoderation/impl/RoomMemberModerationPresenterTest.kt
+index bff6600b2d..3dc6fe8388 100644
+--- a/features/roommembermoderation/impl/src/test/kotlin/io/element/android/features/roommembermoderation/impl/RoomMemberModerationPresenterTest.kt
++++ b/features/roommembermoderation/impl/src/test/kotlin/io/element/android/features/roommembermoderation/impl/RoomMemberModerationPresenterTest.kt
+@@ -42,6 +42,7 @@ import io.element.android.tests.testutils.testCoroutineDispatchers
+ import kotlinx.collections.immutable.persistentListOf
+ import kotlinx.collections.immutable.persistentMapOf
+ import kotlinx.collections.immutable.toImmutableList
++import kotlinx.coroutines.ExperimentalCoroutinesApi
+ import kotlinx.coroutines.test.TestScope
+ import kotlinx.coroutines.test.advanceUntilIdle
+ import kotlinx.coroutines.test.runTest
+@@ -415,6 +416,7 @@ class RoomMemberModerationPresenterTest {
+         }
+     }
+ 
++    @OptIn(ExperimentalCoroutinesApi::class)
+     @Test
+     fun `present - changing a role is not offered without the power levels permission`() = runTest {
+         val room = aJoinedRoom(
+@@ -456,6 +458,7 @@ class RoomMemberModerationPresenterTest {
+         }
+     }
+ 
++    @OptIn(ExperimentalCoroutinesApi::class)
+     @Test
+     fun `present - confirming a role change applies it once`() = runTest {
+         val updateUsersRolesLambda = lambdaRecorder<List<UserRoleChange>, Result<Unit>> { Result.success(Unit) }
+diff --git a/libraries/matrix/impl/src/main/kotlin/io/element/android/libraries/matrix/impl/RustMatrixClientFactory.kt b/libraries/matrix/impl/src/main/kotlin/io/element/android/libraries/matrix/impl/RustMatrixClientFactory.kt
+index db554557ec..670e6c457c 100644
+--- a/libraries/matrix/impl/src/main/kotlin/io/element/android/libraries/matrix/impl/RustMatrixClientFactory.kt
++++ b/libraries/matrix/impl/src/main/kotlin/io/element/android/libraries/matrix/impl/RustMatrixClientFactory.kt
+@@ -205,7 +205,7 @@ class RustMatrixClientFactory(
+             .withOfflineMode()
+             .finish()
+ 
+-        innerMatrixClientFactory.create(
++        return innerMatrixClientFactory.create(
+             sessionPaths = sessionData.getSessionPaths(),
+             innerClient = client,
+             innerSyncService = syncService,
+diff --git a/libraries/matrix/impl/src/test/kotlin/io/element/android/libraries/matrix/impl/roomlist/RoomListFactoryTest.kt b/libraries/matrix/impl/src/test/kotlin/io/element/android/libraries/matrix/impl/roomlist/RoomListFactoryTest.kt
+index 8716a62fc2..307ba0353c 100644
+--- a/libraries/matrix/impl/src/test/kotlin/io/element/android/libraries/matrix/impl/roomlist/RoomListFactoryTest.kt
++++ b/libraries/matrix/impl/src/test/kotlin/io/element/android/libraries/matrix/impl/roomlist/RoomListFactoryTest.kt
+@@ -15,6 +15,7 @@ import io.element.android.libraries.matrix.impl.fixtures.fakes.FakeFfiRoomListEn
+ import io.element.android.libraries.matrix.impl.fixtures.fakes.FakeFfiRoomListService
+ import io.element.android.services.analytics.test.FakeAnalyticsService
+ import kotlinx.coroutines.CoroutineScope
++import kotlinx.coroutines.ExperimentalCoroutinesApi
+ import kotlinx.coroutines.Job
+ import kotlinx.coroutines.cancel
+ import kotlinx.coroutines.test.runCurrent
+@@ -22,6 +23,7 @@ import kotlinx.coroutines.test.runTest
+ import org.junit.Test
+ import kotlin.coroutines.EmptyCoroutineContext
+ 
++@OptIn(ExperimentalCoroutinesApi::class)
+ class RoomListFactoryTest {
+     @Test
+     fun `createRoomList should work`() = runTest {
+diff --git a/libraries/preferences/api/src/main/kotlin/io/element/android/libraries/preferences/api/store/AppPreferencesStore.kt b/libraries/preferences/api/src/main/kotlin/io/element/android/libraries/preferences/api/store/AppPreferencesStore.kt
+index 8908260823..bb33c1e261 100644
+--- a/libraries/preferences/api/src/main/kotlin/io/element/android/libraries/preferences/api/store/AppPreferencesStore.kt
++++ b/libraries/preferences/api/src/main/kotlin/io/element/android/libraries/preferences/api/store/AppPreferencesStore.kt
+@@ -44,6 +44,7 @@ interface AppPreferencesStore {
+ 
+     /** Whether room notifications are published as Android conversations; defaults to `true`. */
+     fun isConversationNotificationsEnabledFlow(): Flow<Boolean>
++
+     /**
+      * @param show true to list the developer options entry in the settings.
+      */
+diff --git a/libraries/push/impl/src/test/kotlin/io/element/android/libraries/push/impl/notifications/conversations/DefaultNotificationConversationServiceTest.kt b/libraries/push/impl/src/test/kotlin/io/element/android/libraries/push/impl/notifications/conversations/DefaultNotificationConversationServiceTest.kt
+index ba06100434..caee53ae39 100644
+--- a/libraries/push/impl/src/test/kotlin/io/element/android/libraries/push/impl/notifications/conversations/DefaultNotificationConversationServiceTest.kt
++++ b/libraries/push/impl/src/test/kotlin/io/element/android/libraries/push/impl/notifications/conversations/DefaultNotificationConversationServiceTest.kt
+@@ -23,6 +23,7 @@ import io.element.android.libraries.matrix.test.A_SESSION_ID
+ import io.element.android.libraries.matrix.test.A_SESSION_ID_2
+ import io.element.android.libraries.matrix.test.FakeMatrixClientProvider
+ import io.element.android.libraries.matrixmedia.test.FakeImageLoaderHolder
++import io.element.android.libraries.preferences.test.InMemoryAppPreferencesStore
+ import io.element.android.libraries.push.impl.notifications.factories.FakeIntentProvider
+ import io.element.android.libraries.push.impl.notifications.shortcut.createShortcutId
+ import io.element.android.libraries.push.test.notifications.push.FakeNotificationBitmapLoader
+@@ -34,7 +35,7 @@ import kotlinx.coroutines.test.runCurrent
+ import kotlinx.coroutines.test.runTest
+ import org.junit.Test
+ import org.robolectric.annotation.Config
+-import io.element.android.libraries.preferences.test.InMemoryAppPreferencesStore
++
+ @Config(sdk = [Build.VERSION_CODES.TIRAMISU])
+ class DefaultNotificationConversationServiceTest : RobolectricTest() {
+     @Test
+@@ -59,7 +60,7 @@ class DefaultNotificationConversationServiceTest : RobolectricTest() {
+         val context = InstrumentationRegistry.getInstrumentation().context
+         val service = createService(context)
+ 
+-        service.onSendMessage(
++        service.onMessageInRoom(
+             sessionId = A_SESSION_ID,
+             roomId = A_ROOM_ID,
+             roomName = "Room title",
+@@ -195,16 +196,15 @@ class DefaultNotificationConversationServiceTest : RobolectricTest() {
+         assertThat(shortcuts.first().id).startsWith(A_SESSION_ID_2.value)
+     }
+ 
+-
+     @Test
+-    fun `onSendMessage adds no shortcut when conversation notifications are off`() = runTest {
++    fun `onMessageInRoom adds no shortcut when conversation notifications are off`() = runTest {
+         val context = InstrumentationRegistry.getInstrumentation().context
+         val service = createService(
+             context = context,
+             appPreferencesStore = InMemoryAppPreferencesStore(isConversationNotificationsEnabled = false),
+         )
+ 
+-        service.onSendMessage(
++        service.onMessageInRoom(
+             sessionId = A_SESSION_ID,
+             roomId = A_ROOM_ID,
+             roomName = "Room title",
+-- 
+2.52.0
+
