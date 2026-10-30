@@ -300,6 +300,7 @@ private fun RoomsViewList(
                     state.seenRoomInvites.contains(room.roomId),
                 showUnreadCount = state.showUnreadCount,
                 showAllActivity = state.showAllActivity,
+                activityVisibility = state.activityVisibility,
                 onClick = onRoomClick,
                 eventSink = eventSink,
             )

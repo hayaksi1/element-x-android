@@ -68,6 +68,10 @@ class AppDeveloperSettingsPresenter(
             appPreferencesStore.getTracingLogLevelFlow().map { AsyncData.Success(it.toLogLevelItem()) }
         }
         val tracingLogLevel by tracingLogLevelFlow.collectAsState(initial = AsyncData.Uninitialized)
+        val roomListActivityVisibility by remember {
+            appPreferencesStore.getRoomListActivityVisibilityFlow().map { it.toRoomListActivityVisibilityItem() }
+        }.collectAsState(initial = RoomListActivityVisibilityItem.CURRENT)
+
         val tracingLogPacks by produceState(persistentListOf()) {
             appPreferencesStore.getTracingLogPacksFlow()
                 // Sort the entries alphabetically by its title
@@ -99,6 +103,9 @@ class AppDeveloperSettingsPresenter(
                     val urlToSave = event.baseUrl.takeIf { !it.isNullOrEmpty() }
                     appPreferencesStore.setCustomElementCallBaseUrl(urlToSave)
                 }
+                is AppDeveloperSettingsEvent.SetRoomListActivityVisibility -> coroutineScope.launch {
+                    appPreferencesStore.setRoomListActivityVisibility(event.visibility.toRoomListActivityVisibility())
+                }
                 is AppDeveloperSettingsEvent.SetTracingLogLevel -> coroutineScope.launch {
                     appPreferencesStore.setTracingLogLevel(event.logLevel.toLogLevel())
                 }
@@ -129,6 +136,7 @@ class AppDeveloperSettingsPresenter(
             ),
             tracingLogLevel = tracingLogLevel,
             tracingLogPacks = tracingLogPacks,
+            roomListActivityVisibility = roomListActivityVisibility,
             gitBranch = buildMeta.gitBranchName,
             gitSha = buildMeta.gitRevision,
             eventSink = ::handleEvent,

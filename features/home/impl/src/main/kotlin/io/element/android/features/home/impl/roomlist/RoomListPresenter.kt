@@ -54,6 +54,8 @@ import io.element.android.libraries.matrix.api.encryption.RecoveryState
 import io.element.android.libraries.matrix.api.roomlist.RoomList
 import io.element.android.libraries.matrix.api.roomlist.RoomListFilter
 import io.element.android.libraries.matrix.ui.safety.rememberHideInvitesAvatar
+import io.element.android.libraries.preferences.api.store.AppPreferencesStore
+import io.element.android.libraries.preferences.api.store.RoomListActivityVisibility
 import io.element.android.libraries.preferences.api.store.SessionPreferencesStore
 import io.element.android.libraries.push.api.battery.BatteryOptimizationState
 import io.element.android.libraries.sessionstorage.api.SessionStore
@@ -94,6 +96,7 @@ class RoomListPresenter(
     private val featureFlagService: FeatureFlagService,
     private val sessionPreferencesStore: SessionPreferencesStore,
     private val sessionStore: SessionStore,
+    private val appPreferencesStore: AppPreferencesStore,
 ) : Presenter<RoomListState> {
     private val encryptionService = client.encryptionService
 
@@ -197,12 +200,16 @@ class RoomListPresenter(
             featureFlagService.isFeatureEnabledFlow(FeatureFlags.UnreadIndicatorCount).collect { value = it }
         }
 
+        val activityVisibility by appPreferencesStore.getRoomListActivityVisibilityFlow()
+            .collectAsState(RoomListActivityVisibility.CURRENT)
+
         val contentState = roomListContentState(
             securityBannerDismissed,
             showNewNotificationSoundBanner,
             showSwipeAvatarBanner,
             showUnreadCount,
             showAllActivity,
+            activityVisibility,
         )
 
         return RoomListState(
@@ -263,6 +270,7 @@ class RoomListPresenter(
         showSwipeAvatarBanner: Boolean,
         showUnreadCount: Boolean,
         showAllActivity: Boolean,
+        activityVisibility: RoomListActivityVisibility,
     ): RoomListContentState {
         val roomSummaries by produceState(initialValue = AsyncData.Loading()) {
             roomListDataSource.roomSummariesFlow.collect { value = AsyncData.Success(it) }
@@ -293,6 +301,7 @@ class RoomListPresenter(
                     showNewNotificationSoundBanner = showNewNotificationSoundBanner,
                     showSwipeAvatarBanner = showSwipeAvatarBanner,
                     showUnreadCount = showUnreadCount,
+                    activityVisibility = activityVisibility,
                     fullScreenIntentPermissionsState = fullScreenIntentPermissionsPresenter.present(),
                     batteryOptimizationState = batteryOptimizationPresenter.present(),
                     summaries = roomSummaries.dataOrNull().orEmpty().toImmutableList(),

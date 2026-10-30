@@ -13,6 +13,7 @@ import io.element.android.features.home.impl.model.RoomListRoomSummary
 import io.element.android.libraries.fullscreenintent.api.FullScreenIntentPermissionsState
 import io.element.android.libraries.fullscreenintent.api.aFullScreenIntentPermissionsState
 import io.element.android.libraries.matrix.api.core.RoomId
+import io.element.android.libraries.preferences.api.store.RoomListActivityVisibility
 import io.element.android.libraries.push.api.battery.BatteryOptimizationState
 import io.element.android.libraries.push.api.battery.aBatteryOptimizationState
 import kotlinx.collections.immutable.ImmutableList
@@ -41,6 +42,7 @@ internal fun aRoomsContentState(
     showNewNotificationSoundBanner: Boolean = false,
     showSwipeAvatarBanner: Boolean = false,
     showUnreadCount: Boolean = false,
+    activityVisibility: RoomListActivityVisibility = RoomListActivityVisibility.CURRENT,
     summaries: ImmutableList<RoomListRoomSummary> = aRoomListRoomSummaryList(),
     fullScreenIntentPermissionsState: FullScreenIntentPermissionsState = aFullScreenIntentPermissionsState(),
     batteryOptimizationState: BatteryOptimizationState = aBatteryOptimizationState(),
@@ -51,6 +53,7 @@ internal fun aRoomsContentState(
     showNewNotificationSoundBanner = showNewNotificationSoundBanner,
     showSwipeAvatarBanner = showSwipeAvatarBanner,
     showUnreadCount = showUnreadCount,
+    activityVisibility = activityVisibility,
     fullScreenIntentPermissionsState = fullScreenIntentPermissionsState,
     batteryOptimizationState = batteryOptimizationState,
     summaries = summaries,
