@@ -23,6 +23,7 @@ import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.matrix.api.timeline.TimelineProvider
 import io.element.android.libraries.matrix.api.timeline.getActiveTimeline
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import timber.log.Timber
 
@@ -39,9 +40,10 @@ class ForwardMessagesPresenter(
     }
 
     private val forwardingActionState: MutableState<AsyncAction<List<RoomId>>> = mutableStateOf(AsyncAction.Uninitialized)
+    private var forwardingJob: Job? = null
 
     fun onRoomSelected(roomIds: List<RoomId>) {
-        sessionCoroutineScope.forwardEvents(eventIds, roomIds)
+        forwardingJob = sessionCoroutineScope.forwardEvents(eventIds, roomIds)
     }
 
     @Composable
@@ -49,6 +51,11 @@ class ForwardMessagesPresenter(
         fun handleEvent(event: ForwardMessagesEvent) {
             when (event) {
                 ForwardMessagesEvent.ClearError -> forwardingActionState.value = AsyncAction.Uninitialized
+                ForwardMessagesEvent.Cancel -> {
+                    forwardingJob?.cancel()
+                    forwardingJob = null
+                    forwardingActionState.value = AsyncAction.Uninitialized
+                }
             }
         }
 
